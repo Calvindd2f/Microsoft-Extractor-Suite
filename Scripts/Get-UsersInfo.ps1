@@ -43,10 +43,7 @@ function Get-Users {
         [switch]$Application
     )
 
-    #Assert-Application($Application)
-    #Assert-Connection -Cmdlet Get-MgUser
-    #Assert-Encoding
-    #Assert-OutputDir -OutputDir ".\Output\" -filename "UserInfo"
+    #Assertions -Application -Encoding, -OutputDir -filename "UserInfo"
 
     Write-logFile -Message "[INFO] Running Get-Users" -Color "Green"
 

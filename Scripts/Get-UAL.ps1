@@ -84,10 +84,7 @@ function Get-UALAll
 		[string]$ApiUrl
 	)
 
-	Assert-Connection
-	Assert-UserIds
-	Assert-Interval
-	Assert-Encoding
+	#Assert-Connection,UserIds,Interval,ENcoding
 	if ([string]::IsNullOrEmpty($Output)){
 		$Output = "CSV"
 	}

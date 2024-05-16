@@ -1,8 +1,8 @@
-function CacheObject ($Object) {
-    if ($Object) {
-        if (-not $script:ObjectByObjectClassId.ContainsKey($Object.ObjectType)) {
-            $script:ObjectByObjectClassId[$Object.ObjectType] = @{}
-        }
+function CacheObject($Object)
+{
+    if ($Object -and -not $script:ObjectByObjectId.ContainsKey($Object.ObjectId)) 
+	{
+        $script:ObjectByObjectClassId[$Object.ObjectType] = @{ }
         $script:ObjectByObjectClassId[$Object.ObjectType][$Object.ObjectId] = $Object
         $script:ObjectByObjectId[$Object.ObjectId] = $Object
     }
@@ -42,7 +42,36 @@ function GetOAuth2PermissionGrants ([switch]$FastMode) {
     }
 }
 
+function GetOAuth2PermissionGrants ([switch]$FastMode) {
+	#(find-MgGraphCommand -Command Get-AzureADOAuth2PermissionGrant).Command -eq 'Get-MgOauth2PermissionGrant'
+	if ($FastMode) {
+		$baseUri='https://graph.microsoft.com/v1.0'
+		$resourcePath=(Find-MgGraphCommand -Command Get-MgOauth2PermissionGrant).URI[1]
+		$baseUri="$baseUri$resourcePath`?";
+
+
+        Get-AzureADOAuth2PermissionGrant -All $true
+    } else {
+        $script:ObjectByObjectClassId['ServicePrincipal'].GetEnumerator() | ForEach-Object { $i = 0 } {
+            if ($ShowProgress) {
+                Write-Progress -Activity "Retrieving delegated permissions..." `
+                               -Status ("Checked {0}/{1} apps" -f $i++, $servicePrincipalCount) `
+                               -PercentComplete (($i / $servicePrincipalCount) * 100)
+            }
+
+            $client = $_.Value
+            Get-AzureADServicePrincipalOAuth2PermissionGrant -ObjectId $client.ObjectId
+        }
+    }
+}
+
+
 function GetAzureADServicePrincipal ($ObjectId) {
+	#(find-MgGraphCommand -Command Get-AzureADServicePrincipal).Command -eq 'Get-MgServicePrincipal'
+	$baseUri='https://graph.microsoft.com/v1.0';
+	$resourcePath=(find-MgGraphCommand -Command Get-AzureADServicePrincipal).URI[1]
+	$baseUri="$baseUri$resourcePath`?";
+
 	Get-AzureADServicePrincipal -ObjectId $ObjectId | ForEach-Object {
 		$Output = $_
 		$script:homepage = $Output.Homepage

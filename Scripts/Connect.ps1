@@ -1,26 +1,3 @@
-#read_only
-#####################################################
-##########  INPUT
-#####################################################
-
-$my_input = "";
-
-#####################################################
-##########  OUTPUT ##################################
-
-$variableProps = @{my_output = $null;}
-
-$outputProps = @{out = $(New-Object psobject - Property $variableProps);success = $false;}
-
-$activityOutput = New-Object psobject -Property $outputProps;
-
-#/read_only
-
-
-
-
-
-
 Function Connect-M365
 {
     versionCheck
@@ -44,21 +21,30 @@ Function Connect-ExtractorSuite([bool]$Application = $false, [bool]$DeviceCode =
 {
     versionCheck
 
-    if ($Application)
+    if ($Application -eq $true)
     {
+        $appID = "$env:AppId"
+        $appSecret = "$env:AppSecret"
+        $appThumbprint = "$env:AppThumbprint"
+        $tenantID = "$env:TenantId"
+
         Get-Token -scope 'https://graph.microsoft.com/.default'
         Check-Token -token $token
     }
-    elseif ($DeviceCode)
+    elseif ($DeviceCode -eq $true)
     {
         Connect-DeviceCode
     }
-    elseif ($Delegate)
+    elseif ($Delegate -eq $true)
     {
         $delegate_scopes = @('AuditLogsQuery.Read.All', 'UserAuthenticationMethod.Read.All', 'User.Read.All', 'Mail.ReadBasic.All', 'Mail.ReadWrite', 'Mail.Read', 'Mail.ReadBasic', 'Policy.Read.All', 'Directory.Read.All')
+
         Connect-MgGraph -Scopes $delegate_scopes
     }
-    Connect-DeviceCode
+    else
+    {
+        Connect-DeviceCode
+    }
 }
 
 Function Get-Token($scope = ('https://graph.microsoft.com/.default', 'https://outlook.office365.com/.default'))
@@ -106,32 +92,35 @@ function Connect-DeviceCode
     param
     (
         [Parameter(Mandatory = $False)]
-        [string]$ClientId = '00000003-0000-0000-c000-000000000000',
+        [string]$ClientID = '00000003-0000-0000-c000-000000000000',
         [Parameter(Mandatory = $False)]
         [String]$Resource = 'https://graph.microsoft.com',
         [Parameter(Mandatory = $False)]
         [ValidateSet('Outlook', 'MSTeams', 'Graph', 'AzureCoreManagement', 'AzureManagement', 'MSGraph', 'DODMSGraph', 'Custom', 'Substrate')]
         [String[]]$Client = 'MSGraph'
     )
-    # Credit to the GraphRunner guy. This has been the only way so far I have found to get the access token from delegate connection without much shit hassel.
+
+
+    $body = @{
+        'client_id' = $ClientID
+        'resource'  = $Resource
+    }
 
     $authResponse = Invoke-RestMethod `
         -UseBasicParsing `
         -Method Post `
         -Uri 'https://login.microsoftonline.com/common/oauth2/devicecode?api-version=1.0' `
-        -Body @{
-            'client_id' = $ClientId
-            'resource'  = $Resource
-        }
+        -Body $body
 
-    Write-Host -ForegroundColor Yellow $authResponse.Message
+    Write-Host -ForegroundColor yellow $authResponse.Message
 
     $continue = 'authorization_pending'
 
     while ($continue)
     {
+
         $body = @{
-            'client_id'  = $ClientId
+            'client_id'  = $ClientID
             'grant_type' = 'urn:ietf:params:oauth:grant-type:device_code'
             'code'       = $authResponse.device_code
             'scope'      = 'openid'
@@ -144,14 +133,17 @@ function Connect-DeviceCode
             if ($tokens)
             {
                 $tokenPayload = $tokens.access_token.Split('.')[1].Replace('-', '+').Replace('_', '/')
-                while ($tokenPayload.Length % 4) { $tokenPayload += '=' }
+                while ($tokenPayload.Length % 4) { Write-Verbose 'Invalid length for a Base-64 char array or string, adding ='; $tokenPayload += '=' }
                 $tokenByteArray = [System.Convert]::FromBase64String($tokenPayload)
                 $tokenArray = [System.Text.Encoding]::ASCII.GetString($tokenByteArray)
-                $tokObj = $tokenArray | ConvertFrom-Json
-                $global:TenantId = $tokObj.tid
-                $tokenExpire = (Get-Date -Date '01-01-1970').AddSeconds($tokObj.exp).ToLocalTime()
-                Write-Host -ForegroundColor Green 'Successful authentication. Access and refresh tokens have been written to the global $tokens variable.'
-                Write-Host -ForegroundColor Yellow "Your access token is set to expire on: $tokenExpire"
+                $tokobj = $tokenArray | ConvertFrom-Json
+                $global:tenantid = $tokobj.tid
+                Write-Output 'Decoded JWT payload:'
+                $tokobj
+                $baseDate = Get-Date -Date '01-01-1970'
+                $tokenExpire = $baseDate.AddSeconds($tokobj.exp).ToLocalTime()
+                Write-Host -ForegroundColor Green '["*"] Successful authentication. Access and refresh tokens have been written to the global $tokens variable. To use them with other GraphRunner modules use the Tokens flag (Example. Invoke-DumpApps -Tokens $tokens)'
+                Write-Host -ForegroundColor Yellow "[!] Your access token is set to expire on: $tokenExpire"
                 $continue = $null
             }
         }
@@ -169,7 +161,7 @@ function Connect-DeviceCode
     }
     else
     {
-        $global:Tokens = $tokens
+        $global:tokens = $tokens
     }
 }
 
