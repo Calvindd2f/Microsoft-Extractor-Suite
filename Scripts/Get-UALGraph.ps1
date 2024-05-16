@@ -4,7 +4,7 @@ Function Get-UALGraph {
     Gets all the unified audit log entries.
 
     .DESCRIPTION
-    Makes it possible to extract all unified audit data out of a Microsoft 365 environment. 
+    Makes it possible to extract all unified audit data out of a Microsoft 365 environment.
 	The output will be written to: Output\UnifiedAuditLog\
 
 	.PARAMETER UserIds
@@ -47,22 +47,22 @@ Function Get-UALGraph {
 
     .PARAMETER IPAddress
     The IP address parameter is used to filter the logs by specifying the desired IP address.
-	
+
 	.PARAMETER SearchName
     Specifies the name of the search query. This parameter is required.
-    
+
     .EXAMPLE
-    Get-UALGraph -SearchName Test 
+    Get-UALGraph -SearchName Test
 	Gets all the unified audit log entries.
-	
+
 	.EXAMPLE
 	Get-UALGraph -SearchName Test -UserIds Test@invictus-ir.com
 	Gets all the unified audit log entries for the user Test@invictus-ir.com.
-	
+
 	.EXAMPLE
 	Get-UALGraph -SearchName Scan1GraphAPI -startDate "2024-03-10T09:28:56Z" -endDate "2024-03-20T09:28:56Z" -Service Exchange
     Retrieves audit log data for the specified time range March 10, 2024 to March 20, 2024 and filters the results to include only events related to the Exchange service.
-	
+
 	.EXAMPLE
 	Get-UALGraph -searchName scan1 -startDate "2024-03-01" -endDate "2024-03-10" -IPAddress 182.74.242.26
 	Retrieve audit log data for the specified time range March 1, 2024 to March 10, 2024 and filter the results to include only entries associated with the IP address 182.74.242.26.
@@ -89,31 +89,15 @@ Function Get-UALGraph {
     }
 
     try {
-        $areYouConnected = Get-MgBetaSecurityAuditLogQuery -ErrorAction stop 
+        $areYouConnected = Get-MgBetaSecurityAuditLogQuery -ErrorAction stop
     }
     catch {
         Write-logFile -Message "[WARNING] You must call Connect-MgGraph -Scopes 'AuditLogsQuery.Read.All' before running this script" -Color "Red"
         break
     }
 
-    if ($OutputDir -eq "" ){
-		$OutputDir = "Output\UnifiedAuditLog\"
-		if (!(test-path $OutputDir)) {
-			write-logFile -Message "[INFO] Creating the following directory: $OutputDir"
-			New-Item -ItemType Directory -Force -Name $OutputDir | Out-Null
-		}
-	}
-
-	else {
-		if (Test-Path -Path $OutputDir) {
-			write-LogFile -Message "[INFO] Custom directory set to: $OutputDir"
-		}
-	
-		else {
-			write-Error "[Error] Custom directory invalid: $OutputDir exiting script" -ErrorAction Stop
-			write-LogFile -Message "[Error] Custom directory invalid: $OutputDir exiting script"
-		}
-	}
+    #Assert-OutputDir
+    #Assert-Encoding
 
     $script:startTime = Get-Date
 
@@ -121,10 +105,6 @@ Function Get-UALGraph {
 	EndDate
 
     write-logFile -Message "[INFO] Running Get-UALGraph" -Color "Green"
-
-    if ($Encoding -eq "" ){
-		$Encoding = "UTF8"
-	}
 
 	$params =
 	@{
@@ -143,43 +123,80 @@ Function Get-UALGraph {
         status = ""
 	}
 
-	$startScan = New-MgBetaSecurityAuditLogQuery -BodyParameter $params
-    write-logFile -Message "[INFO] New Unfied Audit Log Search started with the name: $searchName and Id: $($startScan.Id)" -Color "Green"    
-	Start-Sleep -Seconds 10
+    $queryString = @{
+        "auditLogQueryId" = $startScan.Id
+    } | ConvertTo-Json -Compress
 
-	do {
-		$auditLogQuery = Get-MgBetaSecurityAuditLogQuery -AuditLogQueryId $startScan.Id
-        $scanId = $startScan.Id
-		
-		if ($auditLogQuery.Status -eq "running") {
-            write-logFile -Message "[INFO] Unified Audit Log search is stil running. Waiting..."
-			Start-Sleep -Seconds 10
-		}
-		elseif ($auditLogQuery.Status -eq "failed") {
+    do {
+        try {
+            $auditLogQuery = Invoke-MgGraphRequest -Method GET -Uri "beta/security/auditLogs/queries/$($startScan.Id)" -ErrorAction Stop
+            $scanId = $startScan.Id
+        }
+        catch {
+            write-logFile -Message "[ERROR] Failed to get Unified Audit Log search status. $_" -Color "Red"
+            break
+        }
+
+        if ($auditLogQuery.Status -eq "running") {
+            write-logFile -Message "[INFO] Unified Audit Log search is still running. Waiting..."
+            Start-Sleep -Seconds 10
+        }
+        elseif ($auditLogQuery.Status -eq "failed") {
             write-logFile -Message "[INFO] Unified Audit Log search failed." -Color "Red"
-			exit 1 
-		} 
-		elseif ($auditLogQuery.Status -eq "succeeded") {
+            break
+        }
+        elseif ($auditLogQuery.Status -eq "succeeded") {
             write-logFile -Message "[INFO] Unified Audit Log search succeeded." -Color "Green"
-            DownloadUAL $scanId $searchName $Encoding $OutputDir
-		}
-		else {
-			write-logFile -Message "[INFO] Unified Audit Log search is stil running. Waiting..."
-			Start-Sleep -Seconds 10
-		}
-	} until ($auditLogQuery.Status -eq "succeeded")	
+
+            $continueQuery = $true
+            $pageNumber = 1
+            $nextLink = "beta/security/auditLogs/queries/$($startScan.Id)/results?`$top=1000"
+
+            while ($continueQuery) {
+                try {
+                    $response = Invoke-MgGraphRequest -Method GET -Uri $nextLink -ErrorAction Stop
+                }
+                catch {
+                    write-logFile -Message "[ERROR] Failed to get Unified Audit Log results. $_" -Color "Red"
+                    break
+                }
+
+                $response.Value | ForEach-Object {
+                    $_ | ConvertTo-Json -Depth 100 -Compress | Add-Content -Path "$OutputDir\$($date)-$searchName-UnifiedAuditLog.json" -Encoding $Encoding
+                }
+
+                if (-not [string]::IsNullOrEmpty($response.'@odata.nextLink')) {
+                    $pageNumber++
+                    $nextLink = $response.'@odata.nextLink' -replace '\$skip=\d+', "`$skip=$($pageNumber * 1000)"
+                }
+                else {
+                    $continueQuery = $false
+                }
+            }
+
+            Clear-Variable -Name response, nextLink, pageNumber, continueQuery
+        }
+        else {
+            write-logFile -Message "[INFO] Unified Audit Log search is still running. Waiting..."
+            Start-Sleep -Seconds 10
+        }
+    } until ($auditLogQuery.Status -eq "succeeded")
 }
 
 Function DownloadUAL($scanId, $searchName, $Encoding, $OutputDir) {
     $date = Get-Date -Format "yyyyMMddHHmm"
     $outputFilePath = "$($date)-$searchName-UnifiedAuditLog.json"
+
+    $pageSize = 1000
+    $nextLink = "beta/security/auditLogs/queries/$scanId/results?`$top=$pageSize"
     $customObjects = @()
 
-    Get-MgBetaSecurityAuditLogQueryRecord -AuditLogQueryId $scanId -All |
-        ForEach-Object {	
-            $customObject = New-Object PSObject -Property @{
+    do {
+        $response = Invoke-MgGraphRequest -Method GET -Uri $nextLink
+        $customObjects += $response.Value | ForEach-Object {
+            [PSCustomObject]@{
                 AdministrativeUnits = $_.AdministrativeUnits
-                AuditData = $_ | Select-Object -ExpandProperty AuditData
+                AuditData = $_.AuditData
                 AuditLogRecordType = $_.AuditLogRecordType
                 ClientIP = $_.ClientIP
                 CreatedDateTime = $_.CreatedDateTime
@@ -193,17 +210,20 @@ Function DownloadUAL($scanId, $searchName, $Encoding, $OutputDir) {
                 UserType = $_.UserType
                 AdditionalProperties = $_.AdditionalProperties
             }
-            
-            $customObjects += $customObject
-        } 
+        }
 
-        $customObjects | ConvertTo-Json -Depth 100 | Out-File -Append "$OutputDir/$($date)-$searchName-UnifiedAuditLog.json" -Encoding $Encoding
+        if (-not [string]::IsNullOrEmpty($response.'@odata.nextLink')) {
+            $nextLink = $response.'@odata.nextLink'
+        }
+        else {
+            $nextLink = $null
+        }
+    } while ($nextLink)
+
+    $customObjects | ConvertTo-Json -Depth 100 | Out-File -Append "$OutputDir/$($date)-$searchName-UnifiedAuditLog.json" -Encoding $Encoding
 
     write-logFile -Message "[INFO] Audit log records have been saved to $outputFilePath" -Color "Green"
     $endTime = Get-Date
     $runtime = $endTime - $script:startTime
     write-logFile -Message "[INFO] Total runtime (HH:MM:SS): $($runtime.Hours):$($runtime.Minutes):$($runtime.Seconds)" -Color "Green"
 }
-
-
-

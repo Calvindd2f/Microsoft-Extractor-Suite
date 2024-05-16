@@ -1,7 +1,7 @@
 function Get-RiskyUsers {
 <#
     .SYNOPSIS
-    Retrieves the risky users. 
+    Retrieves the risky users.
 
     .DESCRIPTION
     Retrieves the risky users from the Entra ID Identity Protection, which marks an account as being at risk based on the pattern of activity for the account.
@@ -18,7 +18,7 @@ function Get-RiskyUsers {
     .PARAMETER Application
     Application is the parameter specifying App-only access (access without a user) for authentication and authorization.
     Default: Delegated access (access on behalf a user)
-    
+
     .EXAMPLE
     Get-RiskyUsers
     Retrieves all risky users.
@@ -26,14 +26,14 @@ function Get-RiskyUsers {
     .EXAMPLE
     Get-RiskyUsers -Application
     Retrieves all risky users via application authentication.
-	
+
     .EXAMPLE
     Get-RiskyUsers -Encoding utf32
     Retrieves all risky users and exports the output to a CSV file with UTF-32 encoding.
-		
+
     .EXAMPLE
     Get-RiskyUsers -OutputDir C:\Windows\Temp
-    Retrieves all risky users and saves the output to the C:\Windows\Temp folder.	
+    Retrieves all risky users and saves the output to the C:\Windows\Temp folder.
 #>
     [CmdletBinding()]
     param(
@@ -42,40 +42,10 @@ function Get-RiskyUsers {
         [switch]$Application
     )
 
-    if ($Encoding -eq "" ){
-        $Encoding = "UTF8"
-    }
-
-    if (!($Application.IsPresent)) {
-        Connect-MgGraph -Scopes IdentityRiskEvent.Read.All -NoWelcome
-    }
-
-    try {
-        $areYouConnected = Get-MgRiskyUser -ErrorAction stop
-    }
-    catch {
-        Write-logFile -Message "[WARNING] You must call Connect-GraphAPI -Scopes IdentityRiskyUser.Read.All before running this script" -Color "Red"
-        break
-    }
-
-    if ($OutputDir -eq "" ){
-        $OutputDir = "Output\UserInfo"
-        if (!(test-path $OutputDir)) {
-            New-Item -ItemType Directory -Force -Name $OutputDir | Out-Null
-            write-logFile -Message "[INFO] Creating the following directory: $OutputDir"
-        }
-    }
-
-    else {
-		if (Test-Path -Path $OutputDir) {
-			write-LogFile -Message "[INFO] Custom directory set to: $OutputDir"
-		}
-	
-		else {
-			write-Error "[Error] Custom directory invalid: $OutputDir exiting script" -ErrorAction Stop
-			write-LogFile -Message "[Error] Custom directory invalid: $OutputDir exiting script"
-		}
-	}
+    #Assert-Encoding
+    #Assert-IsConnected
+    #Assert-Connection -Cmdlet Get-MgRiskyUser
+    #Assert-OutputDir -OutputDir "Output\UserInfo"
 
     Write-logFile -Message "[INFO] Running Get-RiskyUsers" -Color "Green"
     $results=@();
@@ -139,7 +109,7 @@ function Get-RiskyDetections {
     .PARAMETER Application
     Application is the parameter specifying App-only access (access without a user) for authentication and authorization.
     Default: Delegated access (access on behalf a user)
-        
+
     .EXAMPLE
     Get-RiskyDetections
     Retrieves all the risky detections.
@@ -147,14 +117,14 @@ function Get-RiskyDetections {
     .EXAMPLE
     Get-RiskyDetections -Application
     Retrieves all the risky detections via application authentication.
-	
+
     .EXAMPLE
     Get-RiskyDetections -Encoding utf32
     Retrieves the risky detections and exports the output to a CSV file with UTF-32 encoding.
-		
+
     .EXAMPLE
     Get-RiskyDetections -OutputDir C:\Windows\Temp
-    Retrieves the risky detections and saves the output to the C:\Windows\Temp folder.	
+    Retrieves the risky detections and saves the output to the C:\Windows\Temp folder.
 #>
     [CmdletBinding()]
     param(
@@ -162,41 +132,9 @@ function Get-RiskyDetections {
         [string]$Encoding,
         [switch]$Application
     )
-
-    if (!($Application.IsPresent)) {
-        Connect-MgGraph -Scopes IdentityRiskEvent.Read.All -NoWelcome
-    }
-
-    try {
-        $areYouConnected = Get-MgRiskDetection -ErrorAction stop
-    }
-    catch {
-        Write-logFile -Message "[WARNING] You must call Connect-GraphAPI -Scopes IdentityRiskEvent.Read.All before running this script" -Color "Red"
-        break
-    }
-
-    if ($Encoding -eq "" ){
-        $Encoding = "UTF8"
-    }
-
-    if ($OutputDir -eq "" ){
-        $OutputDir = "Output\UserInfo"
-        if (!(test-path $OutputDir)) {
-            New-Item -ItemType Directory -Force -Name $OutputDir | Out-Null
-            write-logFile -Message "[INFO] Creating the following directory: $OutputDir"
-        }
-    }
-
-    else {
-		if (Test-Path -Path $OutputDir) {
-			write-LogFile -Message "[INFO] Custom directory set to: $OutputDir"
-		}
-	
-		else {
-			write-Error "[Error] Custom directory invalid: $OutputDir exiting script" -ErrorAction Stop
-			write-LogFile -Message "[Error] Custom directory invalid: $OutputDir exiting script"
-		}
-	}
+    #Assert-Encoding
+   #Assert-IsConnected -Cmdlet Get-MgRiskDetection
+    #Assert-OutputDir -OutputDir "Output\UserInfo"
 
     Write-logFile -Message "[INFO] Running Get-RiskyDetections" -Color "Green"
     $results=@();

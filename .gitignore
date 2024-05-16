@@ -154,3 +154,16 @@ dmypy.json
 cython_debug/
 
 # End of https://www.toptal.com/developers/gitignore/api/python,jupyternotebooks
+Scripts\Igore
+Scripts\Igore\*
+Scripts/Igore/Connection.psm1
+Scripts/Igore/ConnectHelpers.psm1
+Scripts/Igore/Dependencies.ps1
+Scripts/Igore/orchestr8.psm1
+Scripts/Igore/RequiredVersions.ps1
+Scripts/Igore/.github/FUNDING.yml
+Scripts/Igore/.github/lint_powershell.yaml
+Scripts/Igore/.github/lint_yaml.yaml
+Scripts/Igore/.github/run_module_version_bump.yml
+Scripts/Igore/.github/run_pipeline.yaml
+/.vs

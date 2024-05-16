@@ -18,7 +18,7 @@ function Get-AdminAuditLog {
 	.PARAMETER OutputDir
     OutputDir is the parameter specifying the output directory.
 	Default: Output\AdminAuditLog
-    
+
     .EXAMPLE
     Get-AdminAuditLog
 	Displays the total number of logs within the admin audit log.
@@ -44,29 +44,9 @@ function Get-AdminAuditLog {
 
     write-logFile -Message "[INFO] Running Get-AdminAuditLog" -Color "Green"
 
-	$date = [datetime]::Now.ToString('yyyyMMddHHmmss') 
-    $outputFile = "$($date)-AdminAuditLog.csv"
+	$date = [datetime]::Now.ToString('yyyyMMddHHmmss')
+	#Assert-OutputDir -OutputDir "Output\AdminAuditLog" -filename "$($date)-AdminAuditLog.csv"
 
-	if ($OutputDir -eq "" ){
-		$OutputDir = "Output\AdminAuditLog"
-		if (!(test-path $OutputDir)) {
-			New-Item -ItemType Directory -Force -Name $outputDir | Out-Null
-			write-LogFile -Message "[INFO] Creating the following directory: $outputDir"
-		}
-	}
-	
-	else {
-		if (Test-Path -Path $OutputDir) {
-			write-LogFile -Message "[INFO] Custom directory set to: $OutputDir"
-		}
-	
-		else {
-			write-Error "[Error] Custom directory invalid: $OutputDir exiting script" -ErrorAction Stop
-			write-LogFile -Message "[Error] Custom directory invalid: $OutputDir exiting script"
-		}
-	}
-
-	$outputDirectory = Join-Path $OutputDir $outputFile
 
 	StartDate
 	EndDate
@@ -76,5 +56,5 @@ function Get-AdminAuditLog {
     $results = Search-AdminAuditLog -ResultSize 250000 -StartDate $script:startDate -EndDate $script:EndDate
     $results | Export-Csv $outputDirectory -NoTypeInformation -Append -Encoding UTF8
 
-    write-logFile -Message "[INFO] Output is written to: $outputDirectory" -Color "Green"
+    write-logFile -Message "[INFO] Output is written to: $(Join-Path $OutputDir $outputFile)" -Color "Green"
 }

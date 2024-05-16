@@ -19,7 +19,7 @@ function Get-Users {
     .PARAMETER Application
     Application is the parameter specifying App-only access (access without a user) for authentication and authorization.
     Default: Delegated access (access on behalf a user)
-    
+
     .EXAMPLE
     Get-Users
     Retrieves the creation time and date of the last password change for all users.
@@ -27,14 +27,14 @@ function Get-Users {
     .EXAMPLE
     Get-Users -Application
     Retrieves the creation time and date of the last password change for all users via application authentication.
-	
+
     .EXAMPLE
     Get-Users -Encoding utf32
     Retrieves the creation time and date of the last password change for all users and exports the output to a CSV file with UTF-32 encoding.
-		
+
     .EXAMPLE
     Get-Users -OutputDir C:\Windows\Temp
-    Retrieves the creation time and date of the last password change for all users and saves the output to the C:\Windows\Temp folder.	
+    Retrieves the creation time and date of the last password change for all users and saves the output to the C:\Windows\Temp folder.
 #>
     [CmdletBinding()]
     param(
@@ -43,84 +43,38 @@ function Get-Users {
         [switch]$Application
     )
 
-    if (!($Application.IsPresent)) {
-        Connect-MgGraph -Scopes User.Read.All, Directory.AccessAsUser.All, User.ReadBasic.All, Directory.Read.All -NoWelcome
-    }
-
-    try {
-        $areYouConnected = Get-MgUser -ErrorAction stop
-    }
-    catch {
-        Write-logFile -Message "[WARNING] You must call Connect-MgGraph -Scopes 'User.Read.All, Directory.AccessAsUser.All, User.ReadBasic.All, Directory.Read.All' before running this script" -Color "Red"
-        break
-    }
-
-    if ($Encoding -eq "" ){
-		$Encoding = "UTF8"
-	}
-
-    if ($OutputDir -eq "" ){
-        $OutputDir = "Output\UserInfo"
-        if (!(test-path $OutputDir)) {
-            New-Item -ItemType Directory -Force -Name $OutputDir | Out-Null
-            write-logFile -Message "[INFO] Creating the following directory: $OutputDir"
-        }
-    }
-
-    else {
-		if (Test-Path -Path $OutputDir) {
-			write-LogFile -Message "[INFO] Custom directory set to: $OutputDir"
-		}
-	
-		else {
-			write-Error "[Error] Custom directory invalid: $OutputDir exiting script" -ErrorAction Stop
-			write-LogFile -Message "[Error] Custom directory invalid: $OutputDir exiting script"
-		}
-	}
+    #Assert-Application($Application)
+    #Assert-Connection -Cmdlet Get-MgUser
+    #Assert-Encoding
+    #Assert-OutputDir -OutputDir ".\Output\" -filename "UserInfo"
 
     Write-logFile -Message "[INFO] Running Get-Users" -Color "Green"
 
     $selectobjects = "Id","AccountEnabled","DisplayName","UserPrincipalName","Mail","CreatedDateTime","LastPasswordChangeDateTime","DeletedDateTime","JobTitle","Department","OfficeLocation","City","State","Country"
-    $mgUsers = Get-MgUser -All -Select $selectobjects 
-    write-host "A total of $($mgUsers.count) users found:" 
 
-    $date = (Get-Date).AddDays(-7)
-    $oneweekold = $mgUsers | Where-Object {
-        $_.CreatedDateTime -gt $date
-    }
-    write-host "  - $($oneweekold.count) users created within the last 7 days."
+    $mgUsers = Get-MgUser -All -Select $selectobjects
+    [console]::writeline( "A total of $($mgUsers.count) users found:")
 
-    $date = (Get-Date).AddDays(-30)
-    $onemonthold = $mgUsers | Where-Object {
-        $_.CreatedDateTime -gt $date
+    $dates = @((Get-Date).AddDays(-7), (Get-Date).AddDays(-30), (Get-Date).AddDays(-90), (Get-Date).AddDays(-180), (Get-Date).AddDays(-360))
+    $mgUsers | ForEach-Object {
+        for ($i = 0; $i -lt $dates.count; $i++) {
+            if ($_.CreatedDateTime -gt $dates[$i]) {
+                $counts[$i] += 1
+                break
+            }
+        }
     }
-    write-host "  - $($onemonthold.count) users created within the last 30 days."
-
-    $date = (Get-Date).AddDays(-90)
-    $threemonthold = $mgUsers | Where-Object {
-        $_.CreatedDateTime -gt $date
+    for ($i = 0; $i -lt $dates.count; $i++) {
+        [console]::writeline("  - $($counts[$i]) users created within the last $($dates[$i].Days) days.")
     }
-    write-host "  - $($threemonthold.count) users created within the last 90 days."
-
-    $date = (Get-Date).AddDays(-180)
-    $sixmonthold = $mgUsers | Where-Object {
-        $_.CreatedDateTime -gt $date
-    }
-    write-host "  - $($sixmonthold.count) users created within the last 6 months."
-
-    $date = (Get-Date).AddDays(-360)
-    $sixmonthold = $mgUsers | Where-Object {
-        $_.CreatedDateTime -gt $date
-    }
-    write-host "  - $($sixmonthold.count) users created within the last 1 year."
 
     Get-MgUser | Get-Member | out-null
 
     $date = Get-Date -Format "yyyyMMddHHmm"
-    $filePath = "$OutputDir\$($date)-Users.csv"
-    
+    $filePath = "$OutputDir"
+
     $mgUsers | select-object $selectobjects | Export-Csv -Path $filePath -NoTypeInformation -Encoding $Encoding
-    
+
     Write-logFile -Message "[INFO] Output written to $filePath" -Color "Green"
 }
 
@@ -144,11 +98,11 @@ Function Get-AdminUsers {
     .PARAMETER Application
     Application is the parameter specifying App-only access (access without a user) for authentication and authorization.
     Default: Delegated access (access on behalf a user)
-    
+
     .EXAMPLE
     Get-AdminUsers
 	Retrieves Administrator directory roles, including the identification of users associated with each specific role.
-	
+
     .EXAMPLE
     Get-AdminUsers -Application
     Retrieves Administrator directory roles, including the identification of users associated with each specific role via application authentication.
@@ -156,11 +110,11 @@ Function Get-AdminUsers {
 	.EXAMPLE
 	Get-AdminUsers -Encoding utf32
 	Retrieves Administrator directory roles, including the identification of users associated with each specific role and exports the output to a CSV file with UTF-32 encoding.
-		
+
 	.EXAMPLE
 	Get-AdminUsers -OutputDir C:\Windows\Temp
-	Retrieves Administrator directory roles, including the identification of users associated with each specific role and saves the output to the C:\Windows\Temp folder.	
-#>    
+	Retrieves Administrator directory roles, including the identification of users associated with each specific role and saves the output to the C:\Windows\Temp folder.
+#>
 
     [CmdletBinding()]
     param(
@@ -169,41 +123,8 @@ Function Get-AdminUsers {
         [switch]$Application
     )
 
-    if (!($Application.IsPresent)) {
-        Connect-MgGraph -Scopes User.Read.All, Directory.AccessAsUser.All, Directory.Read.All -NoWelcome
-    }
+    Assertion -Application -Encoding -OutputDir "$OutputDir\$($date)-$roleName.csv"
 
-    try {
-        $areYouConnected = Get-MgDirectoryRole -ErrorAction stop
-    }
-    catch {
-        Write-logFile -Message "[WARNING] You must call Connect-MgGraph -Scopes 'User.Read.All, Directory.AccessAsUser.All, Directory.Read.All' before running this script" -Color "Red"
-        break
-    }
-    
-    if ($Encoding -eq "" ){
-        $Encoding = "UTF8"
-    }
-
-    if ($OutputDir -eq "" ){
-        $OutputDir = "Output\UserInfo"
-        if (!(test-path $OutputDir)) {
-            New-Item -ItemType Directory -Force -Name $OutputDir | Out-Null
-            write-logFile -Message "[INFO] Creating the following directory: $OutputDir"
-        }
-    }
-
-    else {
-		if (Test-Path -Path $OutputDir) {
-			write-LogFile -Message "[INFO] Custom directory set to: $OutputDir"
-		}
-	
-		else {
-			write-Error "[Error] Custom directory invalid: $OutputDir exiting script" -ErrorAction Stop
-			write-LogFile -Message "[Error] Custom directory invalid: $OutputDir exiting script"
-		}
-	}
-    
     Write-logFile -Message "[INFO] Running Get-AdminUsers" -Color "Green"
 
     $getRoles = Get-MgDirectoryRole -all
@@ -215,7 +136,7 @@ Function Get-AdminUsers {
             $areThereUsers = Get-MgDirectoryRoleMember -DirectoryRoleId $roleId
 
             if ($null -eq $areThereUsers) {
-                write-host "[INFO] $roleName - No users found"
+                [console]::writeline("[INFO] $roleName - No users found")
             }
 
             else {
@@ -233,9 +154,9 @@ Function Get-AdminUsers {
                     $userid = $_.Id
 
                     if ($userid -eq ".") {
-                        write-host "."
+                        [console]::writeline(".")
                     }
-                    
+
                     else {
                         $count = $count +1
                         try{
@@ -267,7 +188,7 @@ Function Get-AdminUsers {
         Write-LogFile -Message "[INFO] Creating the following directory: $outputDirMerged"
         New-Item -ItemType Directory -Force -Path $outputDirMerged | Out-Null
     }
-    
+
     Write-LogFile -Message "[INFO] Merging Administrator CSV Ouput Files" -Color "Green"
-    Get-ChildItem $OutputDir -Filter "*Administrator.csv" | Select-Object -ExpandProperty FullName | Import-Csv | Export-Csv "$outputDirMerged/All-Administrators.csv" -NoTypeInformation -Append  
+    Get-ChildItem $OutputDir -Filter "*Administrator.csv" | Select-Object -ExpandProperty FullName | Import-Csv | Export-Csv "$outputDirMerged/All-Administrators.csv" -NoTypeInformation -Append
 }
