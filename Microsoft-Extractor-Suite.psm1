@@ -188,17 +188,47 @@ Get-ModuleVersion
 
 ##########################################################################
 # PR Functions
-function Set-OutputEncoding {
-    if ($PSVersionTable.PSVersion.Major -lt 6) {
+function Set-OutputEncoding 
+{
+    if ($PSVersionTable.PSVersion.Major -lt 6) 
+    {
         # For PowerShell versions less than 6, set to UTF8
         [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-    } else {
+    } 
+    else 
+    {
         # For PowerShell 6 and above, set to UTF8 without BOM
         [System.Text.Encoding]::UTF8NoBOM = New-Object System.Text.UTF8Encoding($false)
         [Console]::OutputEncoding = [System.Text.Encoding]::UTF8NoBOM
     }
 }
+function Merge-OutputFiles
+{
+    param(
+        [string]$OutputDir,
+        [string]$Encoding,
+        [string]$mergedFile,
+    )
+    
+    $mergedFilePath = Join-Path -Path $OutputDir -ChildPath $mergedFile
+    
+    $allLogs = Get-ChildItem -Path $OutputDir -Filter '*.json' | ForEach-Object {
+        $content = [System.IO.File]::ReadAllText($_.FullName)
+        [System.Text.Json.JsonSerializer]::Deserialize($content, [object].GetType())
+    }
+    
+    $jsonOutput = [System.Text.Json.JsonSerializer]::Serialize($allLogs, [object].GetType(), [System.Text.Json.JsonSerializer]::GetOptions())
+    [System.IO.File]::WriteAllText($mergedFilePath, $jsonOutput, [System.Text.Encoding]::$Encoding)
+    
+    Write-Host "[INFO] All logs merged into $mergedFilePath" -ForegroundColor Green
+}
+Set-OutputFormat([alias]$format)
+{
+    'JSON'
+    'HASHTABLE'
+    ;
 
+        }
 ##########################################################################
 # PR Assertions
 # Filters to assert and set default values for various parameters

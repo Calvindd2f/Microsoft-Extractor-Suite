@@ -1,4 +1,4 @@
-using "$PSScriptRoot\Microsoft-Extractor-Suite.psm1";
+using module  "$PSScriptRoot\Microsoft-Extractor-Suite.psm1";
 
 # This contains a function for getting Mailbox Audit logging
 

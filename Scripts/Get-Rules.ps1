@@ -1,4 +1,4 @@
-using "$PSScriptRoot\Microsoft-Extractor-Suite.psm1";
+using module  "$PSScriptRoot\Microsoft-Extractor-Suite.psm1";
 
 # This contains functions to display or collect the inbox and transport rules.
 

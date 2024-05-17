@@ -1,4 +1,4 @@
-using "$PSScriptRoot\Microsoft-Extractor-Suite.psm1";
+using module  "$PSScriptRoot\Microsoft-Extractor-Suite.psm1";
 
 Function Get-Sessions {
 <#
