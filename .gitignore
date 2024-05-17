@@ -167,3 +167,6 @@ Scripts/Igore/.github/lint_yaml.yaml
 Scripts/Igore/.github/run_module_version_bump.yml
 Scripts/Igore/.github/run_pipeline.yaml
 /.vs
+/Scripts/param(.ps1
+/Scripts/Invoke-Aquisition.ps1
+/Scripts/Invoke-AppRegistrationAquisition.ps1
