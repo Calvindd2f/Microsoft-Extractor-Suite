@@ -75,7 +75,7 @@ function Write-LogFile([string]$message, [string]$severity, [string]$logFile = '
     try {
         [System.IO.File]::AppendAllText($logFile, $logEntry + [Environment]::NewLine)
     } catch {
-        # Handle exception
+        # exception
     }
     
     $foregroundColor = switch ($severity) {
