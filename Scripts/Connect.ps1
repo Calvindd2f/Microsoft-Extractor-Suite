@@ -1,3 +1,5 @@
+using "$PSScriptRoot\Microsoft-Extractor-Suite.psm1";
+
 Function Connect-M365
 {
     versionCheck

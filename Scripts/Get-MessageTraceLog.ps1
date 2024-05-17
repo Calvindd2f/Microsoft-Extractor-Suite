@@ -1,3 +1,5 @@
+using "$PSScriptRoot\Microsoft-Extractor-Suite.psm1";
+
 # This contains a function to collect the Message Trace logging.
 Function StartDateMTL
 {

@@ -1,3 +1,5 @@
+using "$PSScriptRoot\Microsoft-Extractor-Suite.psm1";
+
 function Get-Users {
 <#
     .SYNOPSIS

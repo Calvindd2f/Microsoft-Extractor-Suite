@@ -1,3 +1,5 @@
+using "$PSScriptRoot\Microsoft-Extractor-Suite.psm1";
+
 # This contains functions for getting Azure AD logging
 
 function Get-ADSignInLogs

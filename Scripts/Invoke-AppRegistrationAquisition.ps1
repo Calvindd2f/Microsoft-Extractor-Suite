@@ -1,3 +1,5 @@
+using "$PSScriptRoot\Microsoft-Extractor-Suite.psm1";
+
 <#┌────────────────────────────────────────────────────────┐
   │ Calvin appreg Workflow [Create,ApplyPerms,SPOs,GDAP]   │
   │ VERSION 3 - Released Sept 1 , 2023                     │

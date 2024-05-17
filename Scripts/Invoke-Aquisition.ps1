@@ -1,3 +1,5 @@
+using "$PSScriptRoot\Microsoft-Extractor-Suite.psm1";
+
 using namespace System.Net
 
 function Invoke-Aquisition([string]$user, [string]$OutputDir, [string]$Encoding)

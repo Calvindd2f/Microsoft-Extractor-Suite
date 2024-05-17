@@ -1,21 +1,3 @@
-#read_only
-#####################################################
-##########  INPUT
-#####################################################
-
-$my_input = "";
-
-#####################################################
-##########  OUTPUT ##################################
-
-$variableProps = @{my_output = $null;}
-
-$outputProps = @{out = $(New-Object psobject - Property $variableProps);success = $false;}
-
-$activityOutput = New-Object psobject -Property $outputProps;
-
-#/read_only
-
 # Set supported TLS methods
 [Net.ServicePointManager]::SecurityProtocol = 'Tls12, Tls13'
 
@@ -35,193 +17,128 @@ Created by Joey Rentenaar & Korstiaan Stam
 [console]::WriteLine("$logo")
 [console]::ForegroundColor = 'White'
 
-$outputDir = 'Output'
-if (!(Test-Path $outputDir))
-{
-	New-Item -ItemType Directory -Force -Name $Outputdir >$Null
+$Parameters = @{
+	OutputDir = $global:OutputDir
 }
+Assert-GlobalVariables @Parameters
 
 $Global:retryCount = 0
 
 Function StartDate
 {
-	if ([string]::IsNullOrWhiteSpace($startDate))
- {
-		#Commit 1. The compairson was driving me nuts when there is method for the check
-		$script:StartDate = [datetime]::Now.ToUniversalTime().AddDays(-90)
-		write-LogFile -Message "[INFO] No start date provived by user setting the start date to: $($script:StartDate.ToString('yyyy-MM-ddTHH:mm:ssK'))" -Color 'Yellow'
-	}
-	else
-	{
-		$script:startDate = $startDate -as [datetime]
-		if (!$script:startDate )
-		{
-			write-LogFile -Message '[WARNING] Not A valid start date and time, make sure to use YYYY-MM-DD' -Color 'Red'
-		}
-	}
-}
-Function StartDateAz
-{
-	if ([string]::IsNullOrWhiteSpace($startDate))
- {
-		#Commit 1. The compairson was driving me nuts when there is method for the check
-		$script:StartDate = [datetime]::Now.ToUniversalTime().AddDays(-30)
-		write-LogFile -Message "[INFO] No start date provived by user setting the start date to: $($script:StartDate.ToString('yyyy-MM-ddTHH:mm:ssK'))" -Color 'Yellow'
-	}
-	else
-	{
-		$script:startDate = $startDate -as [datetime]
-		if (!$script:startDate )
-		{
-			write-LogFile -Message '[WARNING] Not A valid start date and time, make sure to use YYYY-MM-DD' -Color 'Red'
-		}
-	}
+    if ([string]::IsNullOrWhiteSpace($startDate))
+    {
+        $daysToAdd = -90
+        $message = "[INFO] No start date provided by user setting the start date to: {0}" -f ([datetime]::Now.ToUniversalTime().AddDays($daysToAdd).ToString('yyyy-MM-ddTHH:mm:ssK'))
+        $color = 'Yellow'
+    }
+    else
+    {
+        $daysToAdd = -30
+        $message = "[INFO] No start date provided by user setting the start date to: {0}" -f ($startDate -as [datetime]).ToString('yyyy-MM-ddTHH:mm:ssK')
+        $color = 'Yellow'
+    }
+    
+    $Global:StartDate = [datetime]::Now.ToUniversalTime().AddDays($daysToAdd)
+    
+    write-LogFile -Message $message -Color $color
+    return $Global:StartDate;
 }
 function EndDate
 {
-	if ([string]::IsNullOrWhiteSpace($endDate))
- {
-		#Commit 1. The compairson was driving me nuts when there is method for the check
-		$script:EndDate = [datetime]::Now.ToUniversalTime()
-		write-LogFile -Message "[INFO] No end date provived by user setting the end date to: $($script:EndDate.ToString('yyyy-MM-ddTHH:mm:ssK'))" -Color 'Yellow'
-	}
-
-	else
-	{
-		$script:endDate = $endDate -as [datetime]
-		if (!$endDate)
-		{
-			write-LogFile -Message '[WARNING] Not A valid end date and time, make sure to use YYYY-MM-DD' -Color 'Red'
-		}
-	}
-}
-function EndDateAz
-{
-	if ([string]::IsNullOrWhiteSpace($endDate))
- {
-		#Commit 1. The compairson was driving me nuts when there is method for the check
-		$script:EndDate = [datetime]::Now.ToUniversalTime()
-		write-LogFile -Message "[INFO] No end date provived by user setting the end date to: $($script:EndDate.ToString('yyyy-MM-ddTHH:mm:ssK'))" -Color 'Yellow'
-	}
-
-	else
-	{
-		$script:endDate = $endDate -as [datetime]
-		if (!$endDate)
-		{
-			write-LogFile -Message '[WARNING] Not A valid end date and time, make sure to use YYYY-MM-DD' -Color 'Red'
-		}
-	}
+    if ([string]::IsNullOrWhiteSpace($endDate))
+    {
+        $script:EndDate = [datetime]::UtcNow
+        $message = "[INFO] No end date provided by user; setting the end date to: $($script:EndDate.ToString('yyyy-MM-ddTHH:mm:ssK'))"
+        $color = 'Yellow'
+    }
+    else
+    {
+        if (-not ($endDate -as [datetime]))
+        {
+            $message = '[WARNING] Not a valid end date and time; make sure to use YYYY-MM-DD'
+            $color = 'Red'
+        }
+        else
+        {
+            $script:EndDate = $endDate
+            return
+        }
+    }
+    write-LogFile -Message $message -Color $color
+    $Global:EndDate = $endDate
+    return $Global:EndDate;
 }
 
+function Write-LogFile([string]$message, [string]$severity, [string]$logFile = 'Output\LogFile.txt') {
+    $logEntry = [DateTime]::Now.ToString() + ': ' + $severity.ToUpper() + ' ' + $message
+    try {
+        [System.IO.File]::AppendAllText($logFile, $logEntry + [Environment]::NewLine)
+    } catch {
+        # Handle exception
+    }
+    
+    $foregroundColor = switch ($severity) {
+        'WARNING'  { 'Yellow' }
+        'W'        { 'Yellow' }
+        '?'        { 'Yellow' }
+        'ERROR'    { 'Red' }
+        'E'        { 'Red' }
+        '!'        { 'Red' }
+        'SUCCESS'  { 'Green' }
+        'S'        { 'Green' }
+        '+'        { 'Green' }
+        Default    { 'White' }
+    }
 
-function Write-LogFile([string]$message, [string]$color, [string]$logFile = 'Output\LogFile.txt')
-{
-	switch ($color)
-	{
-		'Yellow'
-		{
-			[console]::ForegroundColor = 'Yellow' 	# Warning / Verbose / Debug
-			[console]::writefile("[WARNING] $message")
-			[console]::ForegroundColor = 'White'
-		}
-		'Red'
-		{
-			[console]::ForegroundColor = 'Red' 		# Error
-			[console]::writefile("[ERR] $message")
-			[console]::ForegroundColor = 'White'
-		}
-		'Green'
-		{
-			[console]::ForegroundColor = 'Green' 	# Success
-			[console]::writefile("[SUCCESS] $message")
-			[console]::ForegroundColor = 'White'
-		}
-		default
-		{
-			[console]::writefile("[INFO] $message")
-		} 											# Generic Output
-	}
-
-	try
-	{
-		$logToWrite = [DateTime]::Now.ToString() + ': ' + $message
-		[System.IO.StreamWriter]::Synchronized([System.IO.File]::AppendText($logFile)).WriteLine($logToWrite)
-	}
-	catch
-	{
-		# Handle exception
-	}
+    [console]::ForegroundColor = $foregroundColor
+    [console]::WriteLine($logEntry)
+    [console]::ResetColor()
 }
+function Write-Log {
+    param (
+        [Parameter(Mandatory = $true, Position = 0, HelpMessage = 'Log entry')]
+        [ValidateNotNullOrEmpty()]
+        [string]$Entry,
 
-function Write-Log
-{
-	param (
-		[Parameter(Mandatory = $True, Position = 0, HelpMessage = 'Log entry')]
-		[ValidateNotNullOrEmpty()]
-		[String]$Entry,
+        [Parameter(Position = 1, HelpMessage = 'Log file to write into')]
+        [ValidateNotNullOrEmpty()]
+        [Alias('LogFile')]
+        [string]$Logs = 'Output\Log.txt',
 
-		[Parameter(Position = 1, HelpMessage = 'Log file to write into')]
-		[ValidateNotNullOrEmpty()]
-		[Alias('SS')]
-		[IO.FileInfo]$LogFile = 'Output\LogFile.txt',
+        [Parameter(Position = 2, HelpMessage = 'Level')]
+        [ValidateSet('Info', 'Error', 'Process', 'Note', 'Warning')]
+        [string]$Level = 'Info'
+    )
 
-		[Parameter(Position = 3, HelpMessage = 'Level')]
-		[ValidateNotNullOrEmpty()]
-		[String]$Level = ('Info', 'Error', 'Process', 'Note', 'Warning')
-	)
+    $Indicator = switch ($Level) {
+        'Warning' { 'Warning' }
+        'Error'   { 'Error' }
+        'Process' { 'Process' }
+        'Note'    { 'Note' }
+        default   { 'Info' }
+    }
 
-	# Indicator
-	$Indicator = '[+]'
-	if ( $Level -eq 'Warning' -or '[WARNING]' )
-	{
-		$Indicator = '[!]'
-	}
- elseif ( $Level -eq 'Error' -or '[ERR]' )
-	{
-		$Indicator = '[E]'
-	}
- elseif ( $Level -eq 'Process' -or '[SUCCESS]' )
-	{
-		$Indicator = '[.]'
-	}
- elseif ($Level -eq 'Note' -or 'Info' )
-	{
-		$Indicator = '[i]'
-	}
+    $foregroundColor = switch ($Level) {
+        'Warning' { 'Yellow' }
+        'Error'   { 'Red' }
+        'Note'    { 'White' }
+        'Process' { 'Green' }
+        default   { 'White' }
+    }
 
-	# Output Pipe
-	if ( $Level -eq 'Warning' -or '[WARNING]')
-	{
-		[console]::ForegroundColor = 'Yellow'
-		[console]::writefile("$($Indicator) $($Entry)")
-	}
- elseif ( $Level -eq 'Error' -or '[ERR]'  )
-	{
-		[console]::ForegroundColor = 'Red'
-		[console]::writefile("$($Indicator) $($Entry)")
-	}
- elseif ( $Level -eq 'Note' -or 'Info' )
-	{
-		[console]::ForegroundColor = 'White'
-		[console]::writefile("$($Indicator) $($Entry)")
-	}
- elseif ( $Level -eq '[SUCCESS]')
-	{
-		[console]::ForegroundColor = 'Green'
-		[console]::writefile("$($Indicator) $($Entry)")
-	}
- else
-	{
-		[console]::ForegroundColor = 'White'
-		[console]::writefile("$($Indicator) $($Entry)")
-	}
+    $message = "$Indicator : $Entry"
+    [console]::ForegroundColor = $foregroundColor
+    [console]::WriteLine($message)
+    [console]::ForegroundColor = 'White'
 
-	# Log File
-	if ( $global:NoLog -eq $False )
-	{
-		"$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss.fff') : $Entry" | Out-File -FilePath $LogFile -Append
-	}
+    if (-not $global:NoLog) {
+        try {
+            [System.IO.File]::AppendAllText($Log, (Get-Date -Format 'yyyy-MM-dd HH:mm:ss.fff') + ' ' + $message + [Environment]::NewLine)
+        } catch {
+            # Handle exception
+        }
+    }
 }
 
 function Get-ModuleVersion
@@ -271,127 +188,6 @@ Get-ModuleVersion
 
 ##########################################################################
 # PR Functions
-
-Filter Assert-FileEncoding
-{
-	<#
-    .Description
-    This function returns encoding type for setting content.
-    .Functionality
-    Internal
-    #>
-	$PSVersion = $PSVersionTable.PSVersion
-
-	$Encoding = 'utf8'
-
-	if ($PSVersion -ge '6.0')
-	{
-		$Encoding = 'utf8NoBom'
-	}
-
-	return $Encoding
-}
-Filter Assert-UserIds ([Parameter(Mandatory, ValueFromPipeline)][string]$UserIds)
-{
-	if ([string]::IsNullOrEmpty($UserIds))
- {
-		$UserIds = '*'
-	}
-	return $UserIds
-}
-Filter Assert-OutputDir ([Parameter(Mandatory, ValueFromPipeline)][string]$OutputDir = 'Output', [string]$fileName)
-{
-	$outputDir = if ([string]::IsNullOrEmpty($OutputDir)) { $OutputDir = 'Output' }
-	if (!(Test-Path $outputDir))
-	{
-		New-Item -ItemType Directory -Force -Name $outputDir > $null
-	}
-	if (![string]::IsNullOrEmpty($fileName))
-	{
-		if (!(Test-Path $outputDir\$fileName))
-		{
-			New-Item -ItemType File -Force -Name "$outputDir\$fileName" > $null
-		}
-		$output = "$outputDir\$fileName"
-	}
-	return $output
-}
-# Main assertion function
-function Assertion
-{
-	param (
-		[bool]$Output,
-		[bool]$Encoding,
-		[bool]$UserIds,
-		[bool]$Interval,
-		[string]$OutputFileName
-	)
-
-	if ($Output)
-	{
-		$outputDir = Assert-OutputDir -fileName $OutputFileName
-	}
-
-	if ($Encoding)
-	{
-		$encoding = Assert-Encoding -Encoding $Encoding
-	}
-
-	if ($UserIds)
-	{
-		$userIds = Assert-UserIds -UserIds $UserIds
-	}
-
-}
-# Example in each .ps1 file instead of the manual isnullorempty / isnullorwhitespace assertions
-Assertion -Output $true -Encoding $true -UserIds $true -Interval $true -OutputFileName 'OutputFileName.txt'
-
-
-
-
-
-##########################################################################
-# PR Assertions
-# Filters to assert and set default values for various parameters
-
-function Assertion
-{
-	param (
-		[Parameter(Mandatory = $false)] [bool] $Output = $false,
-		[Parameter(Mandatory = $false)] [bool] $Encoding = $false,
-		[Parameter(Mandatory = $false)] [bool] $UserIds = $false,
-		[Parameter(Mandatory = $false)] [bool] $Interval = $false,
-		[Parameter(Mandatory = $false)] [string] $OutputFileName = '',
-		[Parameter(Mandatory = $false)] [string] $Command = ''
-	)
-
-	if ($Output)
-	{
-		$OutputDir = Assert-OutputDir -fileName $OutputFileName
-	}
-
-	if ($Encoding)
-	{
-		$Encoding = Assert-Encoding
-	}
-
-	if ($UserIds)
-	{
-		$UserIds = Assert-UserIds
-	}
-
-	if ($Interval)
-	{
-		$Interval = Assert-Interval
-	}
-
-	if ($Command)
-	{
-		Assert-Connection -Cmdlet $Command
-	}
-}
-Assertion -Output $true -Encoding $true -UserIds $true -Interval $true -OutputFileName 'OutputFileName.txt'
-
 function Set-OutputEncoding {
     if ($PSVersionTable.PSVersion.Major -lt 6) {
         # For PowerShell versions less than 6, set to UTF8
@@ -402,5 +198,44 @@ function Set-OutputEncoding {
         [Console]::OutputEncoding = [System.Text.Encoding]::UTF8NoBOM
     }
 }
+
+##########################################################################
+# PR Assertions
+# Filters to assert and set default values for various parameters
+function Assert-GlobalVariables {
+    param (
+        [string]$OutputDir,
+        [string]$FileEncoding,
+        [int[]]$UserIds
+    )
+
+    if (-not [System.IO.Directory]::Exists($OutputDir)) {
+        Write-Host "Output directory does not exist, creating: $OutputDir">>null
+        [void]New-Item -ItemType Directory -Path $OutputDir -Force >>null
+    } else {
+        [void]Write-Host "Output directory already exists: $OutputDir"  >>null
+    }
+
+    if ($null -eq $FileEncoding -or $FileEncoding.Trim() -eq '') {
+        Set-OutputEncoding >> null
+    }
+
+    if ($null -eq $UserIds -or $UserIds.Count -eq 0) {
+        $UserIds >>null
+    }
+
+    # Additional checks can be added here if needed
+}
+
+<# Example usage at the start of a script:
+try {
+    Assert-GlobalVariables -OutputDir $global:OutputDir -FileEncoding $global:FileEncoding -UserIds $global:UserIds
+} catch {
+    Write-Error $_.Exception.Message
+    exit
+}#>
+
+
+
 
 Export-ModuleMember -Function * -Alias * -Variable * -Cmdlet *

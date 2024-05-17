@@ -1,3 +1,5 @@
+using "$PSScriptRoot\Microsoft-Extractor-Suite.psm1";
+
 # This contains functions for getting the unified audit log entries
 function Get-UALAll
 {

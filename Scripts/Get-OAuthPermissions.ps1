@@ -1,3 +1,5 @@
+using "$PSScriptRoot\Microsoft-Extractor-Suite.psm1";
+
 function CacheObject($Object)
 {
     if ($Object -and -not $script:ObjectByObjectId.ContainsKey($Object.ObjectId)) 

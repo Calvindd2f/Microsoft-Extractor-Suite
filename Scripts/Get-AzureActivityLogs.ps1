@@ -1,3 +1,5 @@
+using "$PSScriptRoot\Microsoft-Extractor-Suite.psm1";
+
 Function StartDateAzure
 {
 	if ([string]::IsNullOrWhiteSpace($startDate)) {	# Pull Request

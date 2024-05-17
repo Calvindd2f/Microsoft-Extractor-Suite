@@ -1,3 +1,4 @@
+using "$PSScriptRoot\Microsoft-Extractor-Suite.psm1";
 
 Function Get-ConditionalAccessPolicies {
 <#

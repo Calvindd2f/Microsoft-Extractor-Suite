@@ -1,3 +1,5 @@
+using "$PSScriptRoot\Microsoft-Extractor-Suite.psm1";
+
 # This contains function for getting Admin Audit Log
 
 function Get-AdminAuditLog {
@@ -34,22 +36,10 @@ function Get-AdminAuditLog {
 		[string]$outputDir
 	)
 
-	try {
-		$areYouConnected = Get-AdminAuditLogConfig -ErrorAction stop
-	}
-	catch {
-		write-logFile -Message "[WARNING] You must call Connect-M365 before running this script" -Color "Red"
-		break
-	}
-
     write-logFile -Message "[INFO] Running Get-AdminAuditLog" -Color "Green"
 
 	$date = [datetime]::Now.ToString('yyyyMMddHHmmss')
 	#Assert-OutputDir -OutputDir "Output\AdminAuditLog" -filename "$($date)-AdminAuditLog.csv"
-
-
-	StartDate
-	EndDate
 
     Write-LogFile -Message "[INFO] Extracting all available Admin Audit Logs between $($script:StartDate.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssK")) and $($script:EndDate.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssK"))" -Color "Green"
 
