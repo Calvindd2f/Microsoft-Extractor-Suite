@@ -1,50 +1,42 @@
 using module  "$PSScriptRoot\Microsoft-Extractor-Suite.psm1";
 
-# This contains function for getting Admin Audit Log
-
-function Get-AdminAuditLog {
-<#
-    .SYNOPSIS
-    Search the contents of the administrator audit log.
-
-    .DESCRIPTION
-    Administrator audit logging records when a user or administrator makes a change in your organization (in the Exchange admin center or by using cmdlets).
-	The output will be written to a CSV file called "AdminAuditLog.csv".
-
-	.PARAMETER StartDate
-    startDate is the parameter specifying the start date of the date range.
-
-	.PARAMETER EndDate
-    endDate is the parameter specifying the end date of the date range.
-
-	.PARAMETER OutputDir
-    OutputDir is the parameter specifying the output directory.
-	Default: Output\AdminAuditLog
-
-    .EXAMPLE
-    Get-AdminAuditLog
-	Displays the total number of logs within the admin audit log.
-
-	.EXAMPLE
-	Get-AdminAuditLog -StartDate 1/4/2023 -EndDate 5/4/2023
-	Collects the admin audit log between 1/4/2023 and 5/4/2023
-#>
+function Get-AdminAuditLogs {
     [CmdletBinding()]
-	param (
-		[string]$StartDate,
-		[string]$EndDate,
-		[string]$outputDir
-	)
+    param (
+        [Parameter(Mandatory)]
+        [string]$StartDate,
 
-    write-logFile -Message "[INFO] Running Get-AdminAuditLog" -Color "Green"
+        [Parameter(Mandatory)]
+        [string]$EndDate,
 
-	$date = [datetime]::Now.ToString('yyyyMMddHHmmss')
-	#Assert-OutputDir -OutputDir "Output\AdminAuditLog" -filename "$($date)-AdminAuditLog.csv"
+        [Parameter(Mandatory)]
+        [string]$OutputDirectory
+    )
 
-    Write-LogFile -Message "[INFO] Extracting all available Admin Audit Logs between $($script:StartDate.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssK")) and $($script:EndDate.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssK"))" -Color "Green"
+    # Generate output file name
+    $outputFileName = "{0}-AdminAuditLog.csv" -f [datetime]::Now.ToString('yyyyMMddHHmmss')
+    $outputPath = Join-Path $OutputDirectory $outputFileName
 
-    $results = Search-AdminAuditLog -ResultSize 250000 -StartDate $script:startDate -EndDate $script:EndDate
-    $results | Export-Csv $outputDirectory -NoTypeInformation -Append -Encoding UTF8
+    # Write log messages
+    Write-LogFile -Message "[INFO] Running Get-AdminAuditLogs" -Color "Green"
+    Write-LogFile -Message "[INFO] Extracting all available Admin Audit Logs between $($StartDate.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssK")) and $($EndDate.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssK"))" -Color "Green"
 
-    write-logFile -Message "[INFO] Output is written to: $(Join-Path $OutputDir $outputFile)" -Color "Green"
+    # Set initial API URL
+    $apiUrl = "https://graph.microsoft.com/beta/auditLogs/directoryAudits?`$filter=activityDateTime ge '$StartDate' and activityDateTime le '$EndDate'"
+
+    # Retrieve and export audit logs
+    do {
+        $response = Invoke-RestMethod -Headers @{Authorization = "Bearer $token"} -Uri $apiUrl -Method Get -ContentType 'application/json'
+        $auditLogs = $response.value
+
+        if ($auditLogs) {
+            $auditLogs | Export-Csv $outputPath -NoTypeInformation -Append -Encoding UTF8
+            $apiUrl = $response.'@odata.nextLink'
+        }
+    } while ($apiUrl)
+
+    Write-LogFile -Message "[INFO] Output is written to: $outputPath" -Color "Green"
 }
+
+
+#Convert this powershell Get-AdminAuditLog to use either the exchange or microsoft graph API to do tdo the operations. It needs pagination and memory management. It uses .NET objects directly from pwoershell to stream the logs into a file (csv)

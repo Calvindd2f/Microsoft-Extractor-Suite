@@ -1,85 +1,7 @@
 using module  "$PSScriptRoot\Microsoft-Extractor-Suite.psm1";
 
-Function StartDateAzure
-{
-	if ([string]::IsNullOrWhiteSpace($startDate)) {	# Pull Request
-		$startDate = [datetime]::Now.ToUniversalTime().AddDays(-89)
-		$startDate = $startDate.ToString("yyyy-MM-dd HH:mm:ss")
-		[console]::writeline("[INFO] No start date provived by user setting the start date to: $startDate")
-		$script:StartDate = $startDate
-	}
-
-	else {
-		$script:startDate = $startDate -as [datetime]
-		if (!$script:startDate ) {
-		[console]::writeline( "[WARNING] Not A valid start date and time, make sure to use YYYY-MM-DD")
-		}
-	}
-}
-
-function EndDateAzure
-{
-	if ([string]::IsNullOrWhiteSpace($endDate)) {	# Pull Request
-		$endDate = [datetime]::Now.ToUniversalTime()
-		$endDate = $endDate.ToString("yyyy-MM-dd HH:mm:ss")
-		[console]::writeline( "[INFO] No end date provived by user setting the end date to: $endDate")
-
-		$script:endDate = $endDate
-	}
-
-	else {
-		$script:endDate = $endDate -as [datetime]
-		if (!$endDate) {
-			[console]::writeline("[WARNING] Not A valid end date and time, make sure to use YYYY-MM-DD")
-		}
-	}
-}
-
 function Get-ActivityLogs {
-	<#
-    .SYNOPSIS
-    Retrieves the Activity logs.
-
-    .DESCRIPTION
-    The Get-ActivityLogs cmdlet collects the Azure Activity logs.
-	The output will be written to: Output\AzureAD\$date\$iD-ActivityLog.json
-
-	.PARAMETER StartDate
-    startDate is the parameter specifying the start date of the date range.
-	Default: Today -89 days
-
-	.PARAMETER EndDate
-    endDate is the parameter specifying the end date of the date range.
-	Default: Now
-
-	.PARAMETER SubscriptionID
-    SubscriptionID is the parameter specifies the subscription ID for which the collection of Activity logs is required.
-    Default: All subscriptions
-
-	.PARAMETER OutputDir
-    OutputDir is the parameter specifying the output directory.
-	Default: Output\AzureActivityLogs
-
-	.PARAMETER Encoding
-    Encoding is the parameter specifying the encoding of the JSON output file.
-	Default: UTF8
-
-    .EXAMPLE
-    Get-ActivityLogs
-	Get all the activity logs for all subscriptions connected to the logged-in user account for the last 89 days.
-
-	.EXAMPLE
-    Get-ActivityLogs -EndDate 2023-04-12
-	Get all the activity logs before 2023-04-12.
-
-	.EXAMPLE
-    Get-ActivityLogs -StartDate 2023-04-12
-	Get all the activity logs after 2023-04-12.
-
-	.EXAMPLE
-    Get-ActivityLogs -SubscriptionID "4947f939-cf12-4329-960d-4dg68a3eb66f"
-	Get all the activity logs for the subscription 4947f939-cf12-4329-960d-4dg68a3eb66f
-#>
+	<#_removed for brevity_#>
 	[CmdletBinding()]
 	param(
 		[string]$StartDate,
@@ -228,3 +150,71 @@ function Get-ActivityLogs {
 	}
 
 }
+function Get-ActivityLogsPaginated {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string]$StartDate,
+        [Parameter(Mandatory)]
+        [string]$EndDate,
+        [Parameter(Mandatory)]
+        [string]$OutputDir,
+        [Parameter(Mandatory)]
+        [string]$Encoding,
+        [Parameter(Mandatory)]
+        [string]$token
+    )
+    
+    # Ensure the output directory exists
+    if (-not (Test-Path -Path $OutputDir)) {
+        New-Item -ItemType Directory -Path $OutputDir | Out-Null
+        Write-LogFile -Message "[INFO] Created output directory: $OutputDir" -Color "Green"
+    }
+
+    # Get all subscriptions if the user is connected to Azure
+    try {
+        $subscriptions = (Get-AzSubscription -ErrorAction Stop).Id
+    }
+    catch {
+        Write-LogFile -Message "[WARNING] You must call Connect-AzureAZ before running this script" -Color "Red"
+        return
+    }
+
+    foreach ($subscriptionId in $subscriptions) {
+        # Construct the initial API URL
+        $url = "https://management.azure.com/subscriptions/$subscriptionId/providers/microsoft.insights/eventtypes/management/values?api-version=2015-04-01&`$filter=eventTimestamp ge $StartDate and eventTimestamp le $EndDate"
+
+        # Initialize an empty array to hold all results for this subscription
+        $allResults = @()
+        $date = [datetime]::Now.ToString('yyyyMMddHHmmss')
+        $filePath = Join-Path $OutputDir "$($date)-$subscriptionId-ActivityLog.json"
+
+        do {
+            # Call the Azure REST API
+            $response = Invoke-RestMethod -Headers @{Authorization = "Bearer $token"} -Uri $url -Method Get -ContentType 'application/json'
+
+            # Add the current batch of results to the allResults array
+            $allResults += $response.value
+
+            # Write the batch to the file
+            $response.value | ConvertTo-Json -Depth 100 | Out-File -FilePath $filePath -Append -Encoding $Encoding
+
+            # Check if there is a nextLink to follow for more results
+            if ($response.'nextLink') {
+                $url = $response.'nextLink'
+            } else {
+                # If there is no nextLink, we have reached the end of the data for this subscription
+                $url = $null
+            }
+        } while ($url)
+
+        Write-LogFile -Message "[INFO] Done collecting logs for subscription $subscriptionId" -Color "Green"
+    }
+}
+
+
+
+
+
+#startDateAzure and endDateAzure removed...
+# Get-ActivityLogs will be replaced with get-activitylogspaginated after testing commences
