@@ -1,4 +1,4 @@
-using module  "$PSScriptRoot\Microsoft-Extractor-Suite.psm1";
+#Requires -module "Microsoft.Office.ManagementAPI";
 
 # This contains functions for getting the unified audit log entries
 function Get-UALAll {
@@ -9,7 +9,8 @@ function Get-UALAll {
         [int]$Interval = 720,
         [string]$Output = "CSV",
         [string]$OutputDir = "Output\UnifiedAuditLog",
-        [string]$Encoding = "UTF8"
+        [string]$Encoding = "UTF8",
+        [switch]$MergeOutput
     )
 
     # Convert dates to the correct format
@@ -21,7 +22,10 @@ function Get-UALAll {
         [void](New-Item -ItemType Directory -Force -Path $OutputDir)
     }
 
-    # Set the Microsoft Graph API URL
+    # Import the Microsoft Office Management API
+    Import-Module -Name Microsoft.Office.ManagementAPI
+
+    # Set the Unified Audit Log URL
     $apiUrl = "https://graph.microsoft.com/v1.0/auditLogs/directoryAudits"
 
     $currentStart = $startDate
@@ -38,7 +42,7 @@ function Get-UALAll {
             $skipToken = $null
             do {
                 $batchGraphApiUrl = "$graphApiUrl&`$top=$batchSize&`$skip=$skipToken"
-                $results = Invoke-MgGraphRequest -Uri $batchGraphApiUrl -Method GET -ContentType "application/json"
+                $results = Search-UnifiedAuditLog -StartDate $currentStart -EndDate $currentEnd -ResultSize $batchSize -SkipToken $skipToken
 
                 # Stream the results directly to the file
                 if ($results.Count -gt 0) {
@@ -65,7 +69,7 @@ function Get-UALAll {
                         }
                     }
                     # Prepare for next batch
-                    $skipToken = $results.'@odata.nextLink'
+                    $skipToken = $results.SkipToken
                     Write-LogFile -Message "[INFO] Retrieved batch of records starting $currentStart" -Color Green
                 } else {
                     Write-LogFile -Message "[INFO] No records found for interval starting $currentStart" -Color Yellow
@@ -82,6 +86,9 @@ function Get-UALAll {
 
     Write-LogFile -Message "[INFO] Acquisition complete, check the Output directory for your files.." -Color Green
 }
+
+
+
 <#
 Here are the changes made to the original script:
 
@@ -998,155 +1005,155 @@ function Merge-CsvFiles {
 <# UAL TEMPLATE #>
 
 function Get-UALGroupNew {
-  [CmdletBinding()]
-  param(
-    [string]$StartDate,
-    [string]$EndDate,
-    [string]$UserIds,
-    [string]$Interval,
-    [string]$Group,
-    [string]$Output,
-    [switch]$MergeOutput,
-    [string]$OutputDir,
-    [string]$Encoding
-  )
+ï¿½ï¿½[CmdletBinding()]
+ï¿½ï¿½param(
+ï¿½ï¿½ï¿½ï¿½[string]$StartDate,
+ï¿½ï¿½ï¿½ï¿½[string]$EndDate,
+ï¿½ï¿½ï¿½ï¿½[string]$UserIds,
+ï¿½ï¿½ï¿½ï¿½[string]$Interval,
+ï¿½ï¿½ï¿½ï¿½[string]$Group,
+ï¿½ï¿½ï¿½ï¿½[string]$Output,
+ï¿½ï¿½ï¿½ï¿½[switch]$MergeOutput,
+ï¿½ï¿½ï¿½ï¿½[string]$OutputDir,
+ï¿½ï¿½ï¿½ï¿½[string]$Encoding
+ï¿½ï¿½)
 
-  Assert-Connection
-  Assert-UserIds
-  Assert-Interval
+ï¿½ï¿½Assert-Connection
+ï¿½ï¿½Assert-UserIds
+ï¿½ï¿½Assert-Interval
 
-  if ($Group -eq "Exchange") {
-    $recordTypes = "ExchangeAdmin","ExchangeAggregatedOperation","ExchangeItem","ExchangeItemGroup","ExchangeItemAggregated","ComplianceDLPExchange","ComplianceSupervisionExchange","MipAutoLabelExchangeItem"
-    $recordFile = "Exchange"
-  }
-  elseif ($Group -eq "Azure") {
-    $recordTypes = "AzureActiveDirectory","AzureActiveDirectoryAccountLogon","AzureActiveDirectoryStsLogon"
-    $recordFile = "Azure"
-  }
-  elseif ($Group -eq "Sharepoint") {
-    $recordTypes = "ComplianceDLPSharePoint","SharePoint","SharePointFileOperation","SharePointSharingOperation","SharepointListOperation", "ComplianceDLPSharePointClassification","SharePointCommentOperation", "SharePointListItemOperation", "SharePointContentTypeOperation", "SharePointFieldOperation","MipAutoLabelSharePointItem","MipAutoLabelSharePointPolicyLocation"
-    $recordFile = "Sharepoint"
-  }
-  elseif ($Group -eq "Skype") {
-    $recordTypes = "SkypeForBusinessCmdlets","SkypeForBusinessPSTNUsage","SkypeForBusinessUsersBlocked"
-    $recordFile = "Skype"
-  }
-  elseif ($Group -eq "Defender") {
-    $recordTypes = "ThreatIntelligence", "ThreatFinder","ThreatIntelligenceUrl","ThreatIntelligenceAtpContent","Campaign","AirInvestigation","WDATPAlerts","AirManualInvestigation","AirAdminActionInvestigation","MSTIC","MCASAlerts"
-    $recordFile = "Defender"
-  }
-  else {
-    Write-LogFile -Message "[WARNING] Invalid input. Select Exchange, Azure, Sharepoint, Defender or Skype" -Color red
-  }
+ï¿½ï¿½if ($Group -eq "Exchange") {
+ï¿½ï¿½ï¿½ï¿½$recordTypes = "ExchangeAdmin","ExchangeAggregatedOperation","ExchangeItem","ExchangeItemGroup","ExchangeItemAggregated","ComplianceDLPExchange","ComplianceSupervisionExchange","MipAutoLabelExchangeItem"
+ï¿½ï¿½ï¿½ï¿½$recordFile = "Exchange"
+ï¿½ï¿½}
+ï¿½ï¿½elseif ($Group -eq "Azure") {
+ï¿½ï¿½ï¿½ï¿½$recordTypes = "AzureActiveDirectory","AzureActiveDirectoryAccountLogon","AzureActiveDirectoryStsLogon"
+ï¿½ï¿½ï¿½ï¿½$recordFile = "Azure"
+ï¿½ï¿½}
+ï¿½ï¿½elseif ($Group -eq "Sharepoint") {
+ï¿½ï¿½ï¿½ï¿½$recordTypes = "ComplianceDLPSharePoint","SharePoint","SharePointFileOperation","SharePointSharingOperation","SharepointListOperation", "ComplianceDLPSharePointClassification","SharePointCommentOperation", "SharePointListItemOperation", "SharePointContentTypeOperation", "SharePointFieldOperation","MipAutoLabelSharePointItem","MipAutoLabelSharePointPolicyLocation"
+ï¿½ï¿½ï¿½ï¿½$recordFile = "Sharepoint"
+ï¿½ï¿½}
+ï¿½ï¿½elseif ($Group -eq "Skype") {
+ï¿½ï¿½ï¿½ï¿½$recordTypes = "SkypeForBusinessCmdlets","SkypeForBusinessPSTNUsage","SkypeForBusinessUsersBlocked"
+ï¿½ï¿½ï¿½ï¿½$recordFile = "Skype"
+ï¿½ï¿½}
+ï¿½ï¿½elseif ($Group -eq "Defender") {
+ï¿½ï¿½ï¿½ï¿½$recordTypes = "ThreatIntelligence", "ThreatFinder","ThreatIntelligenceUrl","ThreatIntelligenceAtpContent","Campaign","AirInvestigation","WDATPAlerts","AirManualInvestigation","AirAdminActionInvestigation","MSTIC","MCASAlerts"
+ï¿½ï¿½ï¿½ï¿½$recordFile = "Defender"
+ï¿½ï¿½}
+ï¿½ï¿½else {
+ï¿½ï¿½ï¿½ï¿½Write-LogFile -Message "[WARNING] Invalid input. Select Exchange, Azure, Sharepoint, Defender or Skype" -Color red
+ï¿½ï¿½}
 
-  StartDate
-  EndDate
+ï¿½ï¿½StartDate
+ï¿½ï¿½EndDate
 
-  if ($UserIds -eq "") {
-    $UserIds = "*"
-  }
+ï¿½ï¿½if ($UserIds -eq "") {
+ï¿½ï¿½ï¿½ï¿½$UserIds = "*"
+ï¿½ï¿½}
 
-  if ($Interval -eq "") {
-    $Interval = 1440
-    Write-LogFile -Message "[INFO] Setting the Interval to the default value of 1440"
-  }
+ï¿½ï¿½if ($Interval -eq "") {
+ï¿½ï¿½ï¿½ï¿½$Interval = 1440
+ï¿½ï¿½ï¿½ï¿½Write-LogFile -Message "[INFO] Setting the Interval to the default value of 1440"
+ï¿½ï¿½}
 
-  if ($Output -eq "JSON") {
-    $Output = "JSON"
-    Write-LogFile -Message "[INFO] Output type set to JSON"
-  } else {
-    $Output = "CSV"
-    Write-LogFile -Message "[INFO] Output set to CSV"
-  }
+ï¿½ï¿½if ($Output -eq "JSON") {
+ï¿½ï¿½ï¿½ï¿½$Output = "JSON"
+ï¿½ï¿½ï¿½ï¿½Write-LogFile -Message "[INFO] Output type set to JSON"
+ï¿½ï¿½} else {
+ï¿½ï¿½ï¿½ï¿½$Output = "CSV"
+ï¿½ï¿½ï¿½ï¿½Write-LogFile -Message "[INFO] Output set to CSV"
+ï¿½ï¿½}
 
-  if ($Encoding -eq "" ){
-    $Encoding = "UTF8"
-  }
+ï¿½ï¿½if ($Encoding -eq "" ){
+ï¿½ï¿½ï¿½ï¿½$Encoding = "UTF8"
+ï¿½ï¿½}
 
-  if ($OutputDir -eq "" ){
-    $OutputDir = "Output\UnifiedAuditLog\$recordFile"
-    if (!(test-path $OutputDir)) {
-      Write-LogFile -Message "[INFO] Creating the following directory: $OutputDir"
-      New-Item -ItemType Directory -Force -Name $OutputDir | Out-Null
-    }
-  }
-  else {
-    if (Test-Path -Path $OutputDir) {
-      Write-LogFile -Message "[INFO] Custom directory set to: $OutputDir"
-    }
-    else {
-      Write-Error "[Error] Custom directory invalid: $OutputDir exiting script" -ErrorAction Stop
-      Write-LogFile -Message "[Error] Custom directory invalid: $OutputDir exiting script"
-    }
-  }
+ï¿½ï¿½if ($OutputDir -eq "" ){
+ï¿½ï¿½ï¿½ï¿½$OutputDir = "Output\UnifiedAuditLog\$recordFile"
+ï¿½ï¿½ï¿½ï¿½if (!(test-path $OutputDir)) {
+ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Write-LogFile -Message "[INFO] Creating the following directory: $OutputDir"
+ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½New-Item -ItemType Directory -Force -Name $OutputDir | Out-Null
+ï¿½ï¿½ï¿½ï¿½}
+ï¿½ï¿½}
+ï¿½ï¿½else {
+ï¿½ï¿½ï¿½ï¿½if (Test-Path -Path $OutputDir) {
+ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Write-LogFile -Message "[INFO] Custom directory set to: $OutputDir"
+ï¿½ï¿½ï¿½ï¿½}
+ï¿½ï¿½ï¿½ï¿½else {
+ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Write-Error "[Error] Custom directory invalid: $OutputDir exiting script" -ErrorAction Stop
+ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Write-LogFile -Message "[Error] Custom directory invalid: $OutputDir exiting script"
+ï¿½ï¿½ï¿½ï¿½}
+ï¿½ï¿½}
 
-  Write-LogFile -Message "[INFO] Extracting all available audit logs between $($script:StartDate.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss"K")) and $($script:EndDate.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssK"))"
-  Write-LogFile -Message "[INFO] The following RecordType(s) are configured to be extracted:"
+ï¿½ï¿½Write-LogFile -Message "[INFO] Extracting all available audit logs between $($script:StartDate.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss"K")) and $($script:EndDate.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssK"))"
+ï¿½ï¿½Write-LogFile -Message "[INFO] The following RecordType(s) are configured to be extracted:"
 
-  $accessToken = "YOUR_ACCESS_TOKEN" # You must replace this with a valid access token
-  $headers = @{
-    "Authorization" = "Bearer $accessToken"
-    "Content-Type" = "application/json"
-  }
+ï¿½ï¿½$accessToken = "YOUR_ACCESS_TOKEN" # You must replace this with a valid access token
+ï¿½ï¿½$headers = @{
+ï¿½ï¿½ï¿½ï¿½"Authorization" = "Bearer $accessToken"
+ï¿½ï¿½ï¿½ï¿½"Content-Type"ï¿½= "application/json"
+ï¿½ï¿½}
 
-  foreach ($record in $recordTypes) {
-    $resetInterval = $interval
-    [DateTime]$currentStart = $script:StartDate
-    [DateTime]$currentEnd = $script:EndDate
+ï¿½ï¿½foreach ($record in $recordTypes) {
+ï¿½ï¿½ï¿½ï¿½$resetInterval = $interval
+ï¿½ï¿½ï¿½ï¿½[DateTime]$currentStart = $script:StartDate
+ï¿½ï¿½ï¿½ï¿½[DateTime]$currentEnd = $script:EndDate
 
-    while ($currentStart -lt $script:EndDate) {
-      $currentEnd = $currentStart.AddMinutes($Interval)
-      if ($currentEnd -gt $script:EndDate) {
-        $currentEnd = $script:EndDate
-      }
+ï¿½ï¿½ï¿½ï¿½while ($currentStart -lt $script:EndDate) {
+ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½$currentEnd = $currentStart.AddMinutes($Interval)
+ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½if ($currentEnd -gt $script:EndDate) {
+ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½$currentEnd = $script:EndDate
+ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½}
 
-      $apiUrl = "https://graph.microsoft.com/v1.0/auditLogs/directoryAudits"
-      $filter = "activityDateTime ge '$($currentStart.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ"))' and activityDateTime le '$($currentEnd.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ"))' and `{ $recordTypesFilter }`"
-      $graphApiUrl = "$apiUrl?$filter"
+ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½$apiUrl = "https://graph.microsoft.com/v1.0/auditLogs/directoryAudits"
+ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½$filter = "activityDateTime ge '$($currentStart.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ"))' and activityDateTime le '$($currentEnd.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ"))' and `{ $recordTypesFilter }`"
+ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½$graphApiUrl = "$apiUrl?$filter"
 
-      try {
-        $results = Invoke-MgGraphRequest -Uri $graphApiUrl -Headers $headers -Method GET -ContentType "application/json"
-      } catch {
-        Write-LogFile -Message "Failed to get results from Microsoft Graph API: $_" -Color Red
-        break
-      }
+ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½try {
+ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½$results = Invoke-MgGraphRequest -Uri $graphApiUrl -Headers $headers -Method GET -ContentType "application/json"
+ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½} catch {
+ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Write-LogFile -Message "Failed to get results from Microsoft Graph API: $_" -Color Red
+ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½break
+ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½}
 
-      if ($null -ne $results -and $results.Count -gt 0) {
-        $filePath = "$OutputDir/UAL-$($currentStart.ToString('yyyyMMddHHmmss'))"
-        if ($Output -eq "JSON") {
-          $filePath += ".json"
-          $jsonContent = $results | ConvertTo-Json
-          [System.IO.File]::AppendAllText($filePath, $jsonContent)
-        } elseif ($Output -eq "CSV") {
-          $filePath += ".csv"
-          $csvContent = $results | ConvertTo-Csv -NoTypeInformation
-          [System.IO.File]::AppendAllText($filePath, $csvContent)
-        }
-        Write-LogFile -Message "[INFO] Found $($results.Count) audit logs for $record" -Color Green
-      } else {
-        Write-LogFile -Message "[INFO] No audit logs found for $record" -Color Yellow
-      }
+ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½if ($null -ne $results -and $results.Count -gt 0) {
+ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½$filePath = "$OutputDir/UAL-$($currentStart.ToString('yyyyMMddHHmmss'))"
+ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½if ($Output -eq "JSON") {
+ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½$filePath += ".json"
+ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½$jsonContent = $results | ConvertTo-Json
+ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½[System.IO.File]::AppendAllText($filePath, $jsonContent)
+ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½} elseif ($Output -eq "CSV") {
+ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½$filePath += ".csv"
+ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½$csvContent = $results | ConvertTo-Csv -NoTypeInformation
+ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½[System.IO.File]::AppendAllText($filePath, $csvContent)
+ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½}
+ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Write-LogFile -Message "[INFO] Found $($results.Count) audit logs for $record" -Color Green
+ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½} else {
+ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Write-LogFile -Message "[INFO] No audit logs found for $record" -Color Yellow
+ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½}
 
-      $currentStart = $currentEnd
-    }
-  }
+ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½$currentStart = $currentEnd
+ï¿½ï¿½ï¿½ï¿½}
+ï¿½ï¿½}
 
-  if ($Output -eq "CSV" -and $MergeOutput) {
-    Write-LogFile -Message "[INFO] Merging output files into one file"
-    $outputDirMerged = "$OutputDir\Merged\"
-    if (!(test-path $outputDirMerged)) {
-      New-Item -ItemType Directory -Force -Path $outputDirMerged | Out-Null
-    }
+ï¿½ï¿½if ($Output -eq "CSV" -and $MergeOutput) {
+ï¿½ï¿½ï¿½ï¿½Write-LogFile -Message "[INFO] Merging output files into one file"
+ï¿½ï¿½ï¿½ï¿½$outputDirMerged = "$OutputDir\Merged\"
+ï¿½ï¿½ï¿½ï¿½if (!(test-path $outputDirMerged)) {
+ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½New-Item -ItemType Directory -Force -Path $outputDirMerged | Out-Null
+ï¿½ï¿½ï¿½ï¿½}
 
-    $combinedFilePath = Join-Path $outputDirMerged "UAL-Combined.csv"
-    $csvFiles = Get-ChildItem $OutputDir -Filter *.csv
-    foreach ($file in $csvFiles) {
-      $csvContent = [System.IO.File]::ReadAllText($file.FullName)
-      [System.IO.File]::AppendAllText($combinedFilePath, $csvContent)
-    }
-  }
+ï¿½ï¿½ï¿½ï¿½$combinedFilePath = Join-Path $outputDirMerged "UAL-Combined.csv"
+ï¿½ï¿½ï¿½ï¿½$csvFiles = Get-ChildItem $OutputDir -Filter *.csv
+ï¿½ï¿½ï¿½ï¿½foreach ($file in $csvFiles) {
+ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½$csvContent = [System.IO.File]::ReadAllText($file.FullName)
+ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½[System.IO.File]::AppendAllText($combinedFilePath, $csvContent)
+ï¿½ï¿½ï¿½ï¿½}
+ï¿½ï¿½}
 
-  Write-LogFile -Message "[INFO] Acquisition complete, check the Output directory for your files.." -Color Green
+ï¿½ï¿½Write-LogFile -Message "[INFO] Acquisition complete, check the Output directory for your files.." -Color Green
 }
 
 

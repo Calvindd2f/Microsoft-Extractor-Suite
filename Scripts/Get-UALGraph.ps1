@@ -1,8 +1,8 @@
 using module  "$PSScriptRoot\Microsoft-Extractor-Suite.psm1";
 
-Function Get-UALGraph {
-<#
-    .SYNOPSIS
+Function Get-UALGraph 
+{
+    <#    .SYNOPSIS
     Gets all the unified audit log entries.
 
     .DESCRIPTION
@@ -14,7 +14,7 @@ Function Get-UALGraph {
 
 	.PARAMETER StartDate
     startDate is the parameter specifying the start date of the date range.
-	Default: Today -90 days
+	Default: today -90 days
 
 	.PARAMETER EndDate
     endDate is the parameter specifying the end date of the date range.
@@ -63,13 +63,13 @@ Function Get-UALGraph {
 
 	.EXAMPLE
 	Get-UALGraph -SearchName Scan1GraphAPI -startDate "2024-03-10T09:28:56Z" -endDate "2024-03-20T09:28:56Z" -Service Exchange
-    Retrieves audit log data for the specified time range March 10, 2024 to March 20, 2024 and filters the results to include only events related to the Exchange service.
+    Retrieves audit log data for the specified time rangeMarch 10, 2024 to March 20, 2024 and filters the results to include only events related to the Exchange service.
 
 	.EXAMPLE
 	Get-UALGraph -searchName scan1 -startDate "2024-03-01" -endDate "2024-03-10" -IPAddress 182.74.242.26
-	Retrieve audit log data for the specified time range March 1, 2024 to March 10, 2024 and filter the results to include only entries associated with the IP address 182.74.242.26.
+	Retrieve audit log data for the specified time rangeMarch 1, 2024 to March 10, 2024 and filter the results to include only entries associated with the IP address 182.74.242.26.
 
-#>
+    #>
     [CmdletBinding()]
     param(
 		[Parameter(Mandatory=$true)]$searchName,
@@ -104,7 +104,7 @@ Function Get-UALGraph {
     $script:startTime = Get-Date
 
     StartDate
-	EndDate
+    EndDate
 
     write-logFile -Message "[INFO] Running Get-UALGraph" -Color "Green"
 
@@ -112,7 +112,7 @@ Function Get-UALGraph {
 	@{
         "@odata.type" = "#microsoft.graph.security.auditLogQuery"
         displayName = $searchName
-        filterStartDateTime = $script:StartDate
+        filterStartDateTime = $script:startDate
         filterEndDateTime = $script:endDate
         recordTypeFilters = $RecordType
         keywordFilter = $Keyword
@@ -123,7 +123,7 @@ Function Get-UALGraph {
         objectIdFilters = @()
         administrativeUnitIdFilters = @()
         status = ""
-	}
+    }
 
     $queryString = @{
         "auditLogQueryId" = $startScan.Id
@@ -163,9 +163,21 @@ Function Get-UALGraph {
                     break
                 }
 
-                $response.Value | ForEach-Object {
-                    $_ | ConvertTo-Json -Depth 100 -Compress | Add-Content -Path "$OutputDir\$($date)-$searchName-UnifiedAuditLog.json" -Encoding $Encoding
+                $stream = [IO.File]::OpenWrite("$OutputDir\$($date)-$searchName-UnifiedAuditLog.json")
+                $streamWriter = New-Object System.IO.StreamWriter($stream)
+                $jsonWriter = [System.Text.Json.JsonWriter]::Create($streamWriter)
+                foreach ($entry in $response.Value) {
+                    $jsonWriter.WriteStartObject()
+                    foreach ($property in $entry.PSObject.Properties) {
+                        $jsonWriter.WritePropertyName($property.Name)
+                        $jsonWriter.WriteValue($property.Value)
+                    }
+                    $jsonWriter.WriteEndObject()
+                    $jsonWriter.Flush()
                 }
+                $jsonWriter.Dispose()
+                $streamWriter.Dispose()
+                $stream.Dispose()
 
                 if (-not [string]::IsNullOrEmpty($response.'@odata.nextLink')) {
                     $pageNumber++
@@ -191,41 +203,32 @@ Function DownloadUAL($scanId, $searchName, $Encoding, $OutputDir) {
 
     $pageSize = 1000
     $nextLink = "beta/security/auditLogs/queries/$scanId/results?`$top=$pageSize"
-    $customObjects = @()
 
-    do {
-        $response = Invoke-MgGraphRequest -Method GET -Uri $nextLink
-        $customObjects += $response.Value | ForEach-Object {
-            [PSCustomObject]@{
-                AdministrativeUnits = $_.AdministrativeUnits
-                AuditData = $_.AuditData
-                AuditLogRecordType = $_.AuditLogRecordType
-                ClientIP = $_.ClientIP
-                CreatedDateTime = $_.CreatedDateTime
-                Id = $_.Id
-                ObjectId = $_.ObjectId
-                Operation = $_.Operation
-                OrganizationId = $_.OrganizationId
-                Service = $_.Service
-                UserId = $_.UserId
-                UserPrincipalName = $_.UserPrincipalName
-                UserType = $_.UserType
-                AdditionalProperties = $_.AdditionalProperties
+    $outputFileStream = [IO.File]::OpenWrite("$OutputDir/$outputFilePath")
+    try {
+        do {
+            $response = Invoke-MgGraphRequest -Method GET -Uri $nextLink
+            $response.Value | ForEach-Object {
+                [System.Text.Json.JsonSerializer]::SerializeToUtf8Bytes($_) | ForEach-Object {
+                    [void]$outputFileStream.Write($_)
+                }
             }
-        }
 
-        if (-not [string]::IsNullOrEmpty($response.'@odata.nextLink')) {
-            $nextLink = $response.'@odata.nextLink'
-        }
-        else {
-            $nextLink = $null
-        }
-    } while ($nextLink)
-
-    $customObjects | ConvertTo-Json -Depth 100 | Out-File -Append "$OutputDir/$($date)-$searchName-UnifiedAuditLog.json" -Encoding $Encoding
+            if (-not [string]::IsNullOrEmpty($response.'@odata.nextLink')) {
+                $nextLink = $response.'@odata.nextLink'
+            }
+            else {
+                $nextLink = $null
+            }
+        } while ($nextLink)
+    }
+    finally {
+        $outputFileStream.Dispose()
+    }
 
     write-logFile -Message "[INFO] Audit log records have been saved to $outputFilePath" -Color "Green"
     $endTime = Get-Date
     $runtime = $endTime - $script:startTime
     write-logFile -Message "[INFO] Total runtime (HH:MM:SS): $($runtime.Hours):$($runtime.Minutes):$($runtime.Seconds)" -Color "Green"
 }
+
