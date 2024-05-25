@@ -1,5 +1,19 @@
 # Set supported TLS methods
-[Net.ServicePointManager]::SecurityProtocol = 'Tls12, Tls13'
+[System.Net.ServicePointManager]::CertificatePolicy = New-Object TrustAllCertsPolicy
+#Enable TLS, TLS1.1, TLS1.2, TLS1.3 in this session if they are available
+IF([Net.SecurityProtocolType]::Tls) {[Net.ServicePointManager]::SecurityProtocol=[Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls}
+IF([Net.SecurityProtocolType]::Tls11) {[Net.ServicePointManager]::SecurityProtocol=[Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls11}
+IF([Net.SecurityProtocolType]::Tls12) {[Net.ServicePointManager]::SecurityProtocol=[Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12}
+IF([Net.SecurityProtocolType]::Tls13) {[Net.ServicePointManager]::SecurityProtocol=[Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls13}
+
+Function Write-Log([string]$log,[switch]$show){
+    [string]$logtime = $((Get-Date -Format "[dd/MM/yyyy HH:mm:ss zz] |").ToString())
+    foreach($line in $($log -split "`n")){
+        if($VerbosePreference -eq 'Continue' -or $show -eq $true){Write-Host "$logtime $line"}
+      Add-Content -Path "C:\Windows\Temp\pia_agent.log" -Value "$logtime $line"
+    }
+}
+
 
 $manifest = Import-PowerShellDataFile "$PSScriptRoot\Microsoft-Extractor-Suite.psd1"
 $version = $manifest.ModuleVersion
@@ -41,7 +55,7 @@ Function StartDate
     
     $Global:StartDate = [datetime]::Now.ToUniversalTime().AddDays($daysToAdd)
     
-    write-LogFile -Message $message -Color $color
+    write-LogFilew -Message $message -Color $color
     return $Global:StartDate;
 }
 function EndDate
@@ -68,6 +82,14 @@ function EndDate
     write-LogFile -Message $message -Color $color
     $Global:EndDate = $endDate
     return $Global:EndDate;
+}
+Function StdDateTime
+{
+    [string]$logtime = $((Get-Date -Format "[dd/MM/yyyy HH:mm:ss zz] |").ToString())
+    #yyyy-MM-ddTHH:mm:ssK
+    (get-date).GetDateTimeFormats()
+    #2022-07-14T12:30:00Z should be used for filter queries.
+    # $logtime should be used for messages
 }
 
 function Write-LogFile([string]$message, [string]$severity, [string]$logFile = 'Output\LogFile.txt') {
