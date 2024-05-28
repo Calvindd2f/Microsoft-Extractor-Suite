@@ -1,13 +1,7 @@
-# Load required functions from module
-try {
-    Import-Module "$PSScriptRoot\Microsoft-Extractor-Suite.psm1" -ErrorAction Stop
-} catch {
-    Write-Error "Error loading module: $_"
-    exit 1
-}
+using module  "$PSScriptRoot\Microsoft-Extractor-Suite.psm1";
 
 function Get-SpecificEmail {
-    [CmdletBinding(SupportsShouldProcess = $true)]
+    [CmdletBinding()]
     param(
         [Parameter(Mandatory = $true)]
         [string]$UserId,
@@ -21,21 +15,8 @@ function Get-SpecificEmail {
 
         [switch]$IncludeAttachments,
 
-        [string]$Token,
-
-        [ValidateSet('Yes', 'No')]
-        [string]$Confirm = 'No'
+        [string]$Token
     )
-
-    if ($Confirm -eq 'Yes') {
-        $continue = $PSCmdlet.ShouldProcess("Email with InternetMessageId $InternetMessageId")
-    } else {
-        $continue = $true
-    }
-
-    if (-not $continue) {
-        return
-    }
 
     $headers = @{
         "Authorization" = "Bearer $Token"
@@ -73,7 +54,7 @@ function Get-SpecificEmail {
                 "Prefer" = "return=representation"
             }
 
-            $attachmentFile = Join-Path -Path $OutputDirectory -ChildPath "$receivedDateTime-$($attachment.Name)$($attachment.ContentType.Split('/')[1])"
+            $attachmentFile = Join-Path -Path $OutputDirectory -ChildPath "$receivedDateTime-$attachment.${attachment.ContentType.Split('/')[1]}"
 
             Invoke-MgGraphRequest -Uri $attachment.ContentUrl -Headers $attachmentHeaders -OutFile $attachmentFile
             Write-Host "[INFO] Attachment written to $attachmentFile" -ForegroundColor Green
@@ -86,5 +67,4 @@ This function retrieves a specific email and its attachments using Microsoft Gra
 The output format and directory can be specified.
 By default, attachments are not included.
 To include attachments, use the IncludeAttachments switch parameter.
-A confirmation prompt is shown before processing if the Confirm parameter is not specified.
 #>
