@@ -160,53 +160,12 @@ function Export-MailboxAuditLog {
 
             $userIdArray = $UserIds -split ','
             foreach ($userId in $userIdArray) {
-                $outputFile = "$OutputDir\$($date)-mailboxAuditLog-$($userId).csv"
-
-                if ($PSCmdlet.ShouldProcess($outputFile, 'Exporting Mailbox Audit Log')) {
-                    try {
-                        $result = Search-MailboxAuditlog -Identity $userId -LogonTypes Delegate,Admin,Owner -StartDate $StartDate -EndDate $EndDate -ShowDetails -ResultSize 250000 -ErrorAction Stop
-                        $result | Export-Csv -NoTypeInformation -Path $outputFile -Encoding $encoding -WhatIf:$WhatIf -Force
-
-                        Write-Host "##[info] Output is written to: $outputFile"
-                    } catch {
-                        Write-Host "##[error] Failed to export Mailbox Audit Log for user: $userId. Error: $_"
-                    }
-                }
+                Export-SingleUserAuditLog -Identity $userId -OutputDir $OutputDir -Encoding $encoding -StartDate $StartDate -EndDate $EndDate -WhatIf:$WhatIf
             }
         } elseif ($PSCmdlet.ParameterSetName -eq 'AllUsers') {
-            Get-Mailbox -ResultSize unlimited | ForEach-Object {
-                $userId = $_.UserPrincipalName
-
-                $outputFile = "$OutputDir\$($date)-mailboxAuditLog-$($userId).csv"
-
-                if ($PSCmdlet.ShouldProcess($outputFile, 'Exporting Mailbox Audit Log')) {
-                    try {
-                        $result = Search-MailboxAuditlog -Identity $userId -LogonTypes Delegate,Admin,Owner -StartDate $StartDate -EndDate $EndDate -ShowDetails -ResultSize 250000 -ErrorAction Stop
-                        $result | Export-Csv -NoTypeInformation -Path $outputFile -Encoding $encoding -WhatIf:$WhatIf
-
-                        Write-Host "##[info] Output is written to: $outputFile"
-                    } catch {
-                        Write-Host "##[error] Failed to export Mailbox Audit Log for user: $userId. Error: $_"
-                    }
-                }
-            }
+            Export-AllUsersAuditLog -OutputDir $OutputDir -Encoding $encoding
         } elseif ($PSCmdlet.ParameterSetName -eq 'DateRange') {
-            Get-Mailbox -ResultSize unlimited | ForEach-Object {
-                $userId = $_.UserPrincipalName
-
-                $outputFile = "$OutputDir\$($date)-mailboxAuditLog-$($userId).csv"
-
-                if ($PSCmdlet.ShouldProcess($outputFile, 'Exporting Mailbox Audit Log')) {
-                    try {
-                        $result = Search-MailboxAuditlog -Identity $userId -LogonTypes Delegate,Admin,Owner -StartDate $StartDate -EndDate $EndDate -ShowDetails -ResultSize 250000 -ErrorAction Stop
-                        $result | Export-Csv -NoTypeInformation -Path $outputFile -Encoding $encoding -WhatIf:$WhatIf
-
-                        Write-Host "##[info] Output is written to: $outputFile"
-                    } catch {
-                        Write-Host "##[error] Failed to export Mailbox Audit Log for user: $userId. Error: $_"
-                    }
-                }
-            }
+            Export-DateRangeAuditLog -OutputDir $OutputDir -Encoding $encoding -StartDate $StartDate -EndDate $EndDate
         }
     }
 
@@ -215,20 +174,102 @@ function Export-MailboxAuditLog {
     }
 }
 
-function Export-CsvWithEncoding {
+function Export-SingleUserAuditLog {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory=$true)]
-        [string]$InputFile,
+        [string]$Identity,
 
         [Parameter(Mandatory=$true)]
-        [string]$OutputFile,
+        [string]$OutputDir,
+
+        [Parameter(Mandatory=$true)]
+        [string]$Encoding,
+
+        [Parameter()]
+        [string]$StartDate,
+
+        [Parameter()]
+        [string]$EndDate,
+
+        [Parameter()]
+        [switch]$WhatIf
+    )
+
+    $outputFile = "$OutputDir\$($date)-mailboxAuditLog-$($Identity).csv"
+
+    if ($PSCmdlet.ShouldProcess($outputFile, 'Exporting Mailbox Audit Log')) {
+        try {
+            $result = Search-MailboxAuditlog -Identity $Identity -LogonTypes Delegate,Admin,Owner -StartDate $StartDate -EndDate $EndDate -ShowDetails -ResultSize 250000 -ErrorAction Stop
+            $result | Export-Csv -NoTypeInformation -Path $outputFile -Encoding $encoding -WhatIf:$WhatIf -Force
+
+            Write-Host "##[info] Output is written to: $outputFile"
+        } catch {
+            Write-Host "##[error] Failed to export Mailbox Audit Log for user: $Identity. Error: $_"
+        }
+    }
+}
+
+function Export-AllUsersAuditLog {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$OutputDir,
 
         [Parameter(Mandatory=$true)]
         [string]$Encoding
     )
 
-    Get-Content -Path $InputFile -Encoding $Encoding | Export-Csv -Path $OutputFile -NoTypeInformation
+    Get-Mailbox -ResultSize unlimited | ForEach-Object {
+        $userId = $_.UserPrincipalName
+
+        $outputFile = "$OutputDir\$($date)-mailboxAuditLog-$($userId).csv"
+
+        if ($PSCmdlet.ShouldProcess($outputFile, 'Exporting Mailbox Audit Log')) {
+            try {
+                $result = Search-MailboxAuditlog -Identity $userId -LogonTypes Delegate,Admin,Owner -StartDate $StartDate -EndDate $EndDate -ShowDetails -ResultSize 250000 -ErrorAction Stop
+                $result | Export-Csv -NoTypeInformation -Path $outputFile -Encoding $encoding
+
+                Write-Host "##[info] Output is written to: $outputFile"
+            } catch {
+                Write-Host "##[error] Failed to export Mailbox Audit Log for user: $userId. Error: $_"
+            }
+        }
+    }
+}
+
+function Export-DateRangeAuditLog {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$OutputDir,
+
+        [Parameter(Mandatory=$true)]
+        [string]$Encoding,
+
+        [Parameter(Mandatory=$true)]
+        [string]$StartDate,
+
+        [Parameter(Mandatory=$true)]
+        [string]$EndDate
+    )
+
+    Get-Mailbox -ResultSize unlimited | ForEach-Object {
+        $userId = $_.UserPrincipalName
+
+        $outputFile = "$OutputDir\$($date)-mailboxAuditLog-$($userId).csv"
+
+        if ($PSCmdlet.ShouldProcess($outputFile, 'Exporting Mailbox Audit Log')) {
+            try {
+                $result = Search-MailboxAuditlog -Identity $userId -LogonTypes Delegate,Admin,Owner -StartDate $StartDate -EndDate $EndDate -ShowDetails -ResultSize 250000 -ErrorAction Stop
+                $result | Export-Csv -NoTypeInformation -Path $outputFile -Encoding $encoding
+
+                Write-Host "##[info] Output is written to: $outputFile"
+            } catch {
+                Write-Host "##[error] Failed to export Mailbox Audit Log for user: $userId. Error: $_"
+            }
+        }
+    }
 }
 
 function Search-MailboxAuditlog {
@@ -247,7 +288,14 @@ function Search-MailboxAuditlog {
         [string]$EndDate,
 
         [Parameter(Mandatory=$false)]
-        [switch]$ShowDetails
+        [switch]$ShowDetails,
+
+        [Parameter()]
+        [ValidateSet('Stop','Continue','Inquire')]
+        [string]$ErrorAction,
+
+        [Parameter()]
+        [switch]$ErrorVariable
     )
 
     $params = @{
@@ -257,8 +305,25 @@ function Search-MailboxAuditlog {
         EndDate           = $EndDate
         ShowDetails       = $ShowDetails
         ResultSize        = 250000
-        ErrorAction       = 'Stop'
+        ErrorAction       = $ErrorAction
+        ErrorVariable     = $ErrorVariable
     }
 
     Search-MailboxAuditLog @params
+}
+
+function Export-CsvWithEncoding {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$InputFile,
+
+        [Parameter(Mandatory=$true)]
+        [string]$OutputFile,
+
+        [Parameter(Mandatory=$true)]
+        [string]$Encoding
+    )
+
+    Get-Content -Path $InputFile -Encoding $Encoding | Export-Csv -Path $OutputFile -NoTypeInformation
 }
