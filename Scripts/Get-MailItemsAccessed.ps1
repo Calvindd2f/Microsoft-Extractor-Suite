@@ -1,212 +1,687 @@
-# Check if the current user has the required permissions
-function Test-HasRequiredPermissions {
+using module  "$PSScriptRoot\Microsoft-Extractor-Suite.psm1";
+
+Function Get-Sessions {
+<#
+    .SYNOPSIS
+	Find SessionID(s) in the Audit Log.
+
+    .DESCRIPTION
+    Find SessionID(s) in the Audit Log. You can filter based on IP address or Username. The first step is to identify what sessions belong to the threat actor. 
+    With this information you can go to the next step and find the MessageID(s) belonging to those sessions. Output is saved in: Output\MailItemsAccessed\
+	
+	.PARAMETER UserIds
+    The unique identifier of the user.
+
+	.PARAMETER StartDate
+    startDate is the parameter specifying the start date of the date range.
+
+	.PARAMETER EndDate
+    endDate is the parameter specifying the end date of the date range.
+	
+	.PARAMETER IP
+    The IP address parameter is used to filter the logs by specifying the desired IP address.
+
+	.PARAMETER OutputDir
+    outputDir is the parameter specifying the output directory.
+	Default: Output\MailItemsAccessed
+
+	.PARAMETER Encoding
+    Encoding is the parameter specifying the encoding of the CSV output file.
+	Default: UTF8
+
+    .PARAMETER Output
+    "Y" or "N" to specify whether the output should be saved to a file.
+	Default: Y
+
+	.EXAMPLE
+    Get-Sessions -StartDate 1/4/2023 -EndDate 5/4/2023
+	Collects all sessions for all users between 1/4/2023 and 5/4/2023.
+    
+    .EXAMPLE
+    Get-Sessions Get-Sessions -StartDate 1/4/2023 -EndDate 5/4/2023 -UserIds HR@invictus-ir.com
+	Collects all sessions for the user HR@invictus-ir.com.
+#>
     [CmdletBinding()]
-    param ()
+	param(
+        [Parameter(Mandatory=$true)]$StartDate,
+        [Parameter(Mandatory=$true)]$EndDate,
+		[string]$OutputDir,
+        [string]$UserIds,
+        [string]$IP,
+		[string]$Encoding,
+        [string]$Output
+	)
 
     try {
-        Get-AdminAuditLogConfig -ErrorAction Stop
+		$areYouConnected = Get-AdminAuditLogConfig -ErrorAction stop
+	}
+	catch {
+		write-logFile -Message "[WARNING] You must call Connect-M365 before running this script" -Color "Red"
+		break
+	}
+
+    if ($OutputDir -eq "" ){
+        $OutputDir = "Output\MailItemsAccessed"
+        if (!(test-path $OutputDir)) {
+            New-Item -ItemType Directory -Force -Name $OutputDir | Out-Null
+            write-logFile -Message "[INFO] Creating the following directory: $OutputDir"
+        }
+    }
+
+    else {
+		if (Test-Path -Path $OutputDir) {
+			write-LogFile -Message "[INFO] Custom directory set to: $OutputDir"
+		}
+	
+		else {
+			write-Error "[Error] Custom directory invalid: $OutputDir exiting script" -ErrorAction Stop
+			write-LogFile -Message "[Error] Custom directory invalid: $OutputDir exiting script"
+		}
+	}
+
+    if ($Encoding -eq "" ){
+		$Encoding = "UTF8"
+	}
+
+    Write-logFile -Message "[INFO] Running Get-Sessions" -Color "Green"
+    
+    if ($UserIds -And !$IP){
+        $Results = @()
+
+        $amountResults = (Search-UnifiedAuditLog -StartDate $StartDate -UserIds $UserIds -EndDate $EndDate -Operations "MailItemsAccessed" -ResultSize 1 | Select-Object -First 1 -ExpandProperty ResultCount)
+
+        if($amountResults -gt 4999){
+            write-logFile -Message "[WARNING] A total of $amountResults events have been identified, surpassing the maximum limit of 5000 results for a single session. To refine your search, kindly provide more specific details, such as specifying a user or IP address." -Color "Red"
+        }
+
+        else {   
+            $mailItemRecords = (Search-UnifiedAuditLog -UserIds $UserIds -StartDate $StartDate -EndDate $EndDate -ResultSize 5000 -Operations "MailItemsAccessed")
+            
+            foreach($rec in $mailItemRecords) {
+                $AuditData = ConvertFrom-Json $Rec.Auditdata
+                $Line = [PSCustomObject]@{
+                TimeStamp   = $AuditData.CreationTime
+                User        = $AuditData.UserId
+                Action      = $AuditData.Operation
+                SessionId   = $AuditData.SessionId
+                ClientIP    = $AuditData.ClientIPAddress
+                OperationCount = $AuditData.OperationCount
+            }
+                
+                $Results += $Line
+            }
+            
+            $Results | Sort SessionId, TimeStamp | Format-Table Timestamp, User, Action, SessionId, ClientIP, OperationCount -AutoSize
+         }
+
+        if (($output -ne "N") -And ($output -ne "No")) {
+            $filePath = "$OutputDir\Sessions-$UserIds.csv"
+            $Results | Export-Csv -Path $filePath -NoTypeInformation -Encoding $Encoding
+            Write-logFile -Message "[INFO] Output written to $filePath" -Color "Green"
+        }  
+    }
+
+        elseif($IP -And !$UserIds){
+            $Results = @()
+
+            $amountResults = (Search-UnifiedAuditLog -StartDate $StartDate -EndDate $EndDate -FreeText $IP -Operations "MailItemsAccessed" -ResultSize 1 | Select-Object -First 1 -ExpandProperty ResultCount)
+
+            if($amountResults -gt 4999){
+                write-logFile -Message "[WARNING] A total of $amountResults events have been identified, surpassing the maximum limit of 5000 results for a single session. To refine your search, kindly provide more specific details, such as specifying a user." -Color "Red"
+            }
+
+            else{              
+                $MailItemRecords = (Search-UnifiedAuditLog -StartDate $StartDate -EndDate $EndDate -FreeText $IP -ResultSize 5000 -Operations "MailItemsAccessed")
+
+                ForEach($Rec in $MailItemRecords){
+                    $AuditData = ConvertFrom-Json $Rec.Auditdata
+                    $Line = [PSCustomObject]@{
+                    TimeStamp   = $AuditData.CreationTime
+                    User        = $AuditData.UserId
+                    Action      = $AuditData.Operation
+                    SessionId   = $AuditData.SessionId
+                    ClientIP    = $AuditData.ClientIPAddress
+                    OperationCount = $AuditData.OperationCount
+                }
+                    
+                    if($AuditData.ClientIPAddress -eq $IP){
+                        $Results += $Line
+                    }
+                 }
+                    
+                $Results | Sort SessionId, TimeStamp | Format-Table Timestamp, User, Action, SessionId, ClientIP, OperationCount -AutoSize
+            }
+
+            if (($output -ne "N") -And ($output -ne "No")) {
+                $filePath = "$OutputDir\Sessions-$IP.csv"
+                $Results | Export-Csv -Path $filePath -NoTypeInformation -Encoding $Encoding
+                Write-logFile -Message "[INFO] Output written to $filePath" -Color "Green"
+            }  
+        }
+            
+        elseif($IP -And $UserIds){
+            $Results = @()
+
+            $amountResults = (Search-UnifiedAuditLog -UserIds $UserIds -FreeText $IP -StartDate $StartDate -EndDate $EndDate -Operations "MailItemsAccessed" -ResultSize 1 | Select-Object -First 1 -ExpandProperty ResultCount)
+            if($amountResults -gt 4999){
+                write-logFile -Message "[WARNING] A total of $amountResults events have been identified, surpassing the maximum limit of 5000 results for a single session. To refine your search, kindly provide a more specific time window." -Color "Red"
+            }
+
+            else{
+                $MailItemRecords = (Search-UnifiedAuditLog -UserIds $UserIds -FreeText $IP -StartDate $StartDate -EndDate $EndDate -ResultSize 5000 -Operations "MailItemsAccessed")
+        
+                foreach($Rec in $MailItemRecords){
+                $AuditData = ConvertFrom-Json $Rec.Auditdata
+                $Line = [PSCustomObject]@{
+                TimeStamp   = $AuditData.CreationTime
+                User        = $AuditData.UserId
+                Action      = $AuditData.Operation
+                SessionId   = $AuditData.SessionId
+                ClientIP    = $AuditData.ClientIPAddress
+                OperationCount = $AuditData.OperationCount
+            }
+                
+                if($AuditData.ClientIPAddress -eq $IP){
+                    $Results += $Line
+                }
+            }
+                    
+                $Results | Sort SessionId, TimeStamp | Format-Table Timestamp, User, Action, SessionId, ClientIP, OperationCount -AutoSize
+            }
+
+            if (($output -ne "N") -And ($output -ne "No")) {
+                $filePath = "$OutputDir\Sessions-$UserIds-$IP.csv"
+                $Results | Export-Csv -Path $filePath -NoTypeInformation -Encoding $Encoding
+                Write-logFile -Message "[INFO] Output written to $filePath" -Color "Green"
+            }   
+        }
+    
+        else{
+            $Results = @()
+
+            $amountResults = (Search-UnifiedAuditLog -StartDate $StartDate -EndDate $EndDate -Operations "MailItemsAccessed" -ResultSize 1 | Select-Object -First 1 -ExpandProperty ResultCount)
+
+            if($amountResults -gt 4999){
+                write-logFile -Message "[WARNING] A total of $amountResults events have been identified, surpassing the maximum limit of 5000 results for a single session. To refine your search, kindly provide more specific details, such as specifying a user." -Color "Red"
+            }
+
+            else{   
+                $MailItemRecords = (Search-UnifiedAuditLog -StartDate $StartDate -EndDate $EndDate -ResultSize 5000 -Operations "MailItemsAccessed")
+                
+                foreach($Rec in $MailItemRecords) {
+                    $AuditData = ConvertFrom-Json $Rec.Auditdata
+                    $Line = [PSCustomObject]@{
+                    TimeStamp   = $AuditData.CreationTime
+                    User        = $AuditData.UserId
+                    Action      = $AuditData.Operation
+                    SessionId   = $AuditData.SessionId
+                    ClientIP    = $AuditData.ClientIPAddress
+                    OperationCount = $AuditData.OperationCount
+                }
+                    
+                $Results += $Line}
+                $Results | Sort SessionId, TimeStamp | Format-Table Timestamp, User, Action, SessionId, ClientIP, OperationCount -AutoSize
+            }
+
+            if (($output -ne "N") -And ($output -ne "No")) {
+                $filePath = "$OutputDir\Sessions.csv"
+                $Results | Export-Csv -Path $filePath -NoTypeInformation -Encoding $Encoding
+                Write-logFile -Message "[INFO] Output written to $filePath" -Color "Green"
+            }   
+        }
+}
+
+function Get-MessageIDs {
+<#
+    .SYNOPSIS
+	Find the InternetMessageID(s).
+
+    .DESCRIPTION
+    Find the InternetMessageID(s). You can filter on SessionID(s) or IP addresses. After you identified the session(s) of the threat actor, you can use this information to find all MessageID(s).
+    belonging to the sessions. With the MessageID(s) you can identify what emails were exposed to the threat actor. Output is saved in: Output\MailItemsAccessed\
+
+	.PARAMETER StartDate
+    startDate is the parameter specifying the start date of the date range.
+
+	.PARAMETER EndDate
+    endDate is the parameter specifying the end date of the date range.
+
+	.PARAMETER OutputDir
+    outputDir is the parameter specifying the output directory.
+	Default: Output\MailItemsAccessed
+
+	.PARAMETER Encoding
+    Encoding is the parameter specifying the encoding of the CSV output file.
+	Default: UTF8
+	
+	.PARAMETER Sessions
+    The sessions parameter is used to filter the logs by specifying the desired session id.
+
+    .PARAMETER IP
+    The IP address parameter is used to filter the logs by specifying the desired IP address.
+
+    .PARAMETER Output
+    "Yes" or "No" to specify whether the output should be saved to a file.
+	Default: Yes
+
+    .PARAMETER Download
+    To specifiy whether the messages and their attachments should be saved.
+	Default: No
+
+	.EXAMPLE
+    Get-MessageIDs -StartDate 1/4/2023 -EndDate 5/4/2023
+	Collects all sessions for all users between 1/4/2023 and 5/4/2023.
+    
+    .EXAMPLE
+    Get-MessageIDs Get-Sessions -StartDate 1/4/2023 -EndDate 5/4/2023 -IP 1.1.1.1
+	Collects all sessions for the IP address 1.1.1.1.
+
+    .EXAMPLE
+    Get-MessageIDs Get-Sessions -StartDate 1/4/2023 -EndDate 5/4/2023 -IP 1.1.1.1 -Download Yes
+	Collects all sessions for the IP address 1.1.1.1 and downloads the e-mails and attachments.
+#>
+    [CmdletBinding()]
+	param(
+        [Parameter(Mandatory=$true)]$StartDate,
+        [Parameter(Mandatory=$true)]$EndDate,
+		[string]$OutputDir,
+        [string]$IP,
+		[string]$Encoding,
+        [string]$Sessions,
+        [string]$Output,
+        [string]$Download
+	)
+
+    try {
+		$areYouConnected = Get-AdminAuditLogConfig -ErrorAction stop
+	}
+	catch {
+		write-logFile -Message "[WARNING] You must call Connect-M365 before running this script" -Color "Red"
+		break
+	}
+
+    if ($OutputDir -eq "" ){
+        $OutputDir = "Output\MailItemsAccessed"
+        if (!(test-path $OutputDir)) {
+            New-Item -ItemType Directory -Force -Name $OutputDir | Out-Null
+            write-logFile -Message "[INFO] Creating the following directory: $OutputDir"
+        }
+    }
+
+    else {
+		if (Test-Path -Path $OutputDir) {
+			write-LogFile -Message "[INFO] Custom directory set to: $OutputDir"
+		}
+	
+		else {
+			write-Error "[Error] Custom directory invalid: $OutputDir exiting script" -ErrorAction Stop
+			write-LogFile -Message "[Error] Custom directory invalid: $OutputDir exiting script"
+		}
+	}
+
+    if ($Encoding -eq "" ){
+		$Encoding = "UTF8"
+	}
+    
+    Write-logFile -Message "[INFO] Running Get-MessageIDs" -Color "Green"
+
+    $results=@();
+	
+	if (!$Sessions -And !$IP){
+		$amountResults = Search-UnifiedAuditLog -StartDate $StartDate -EndDate $EndDate -Operations "MailItemsAccessed" -ResultSize 1 | Select-Object -First 1 -ExpandProperty ResultCount
+		
+        if ($amountResults -gt 4999){
+            write-logFile -Message "[WARNING] A total of $amountResults events have been identified, surpassing the maximum limit of 5000 results for a single session. To refine your search, kindly lower the time window." -Color "Red"
+        }
+
+        else {
+            $MailItemRecords = Search-UnifiedAuditLog -StartDate $StartDate -EndDate $EndDate -ResultSize 5000 -Operations "MailItemsAccessed"
+
+            forEach ($Rec in $MailItemRecords){
+                $AuditData = ConvertFrom-Json $Rec.Auditdata
+                $InternetMessageId = $AuditData.Folders.FolderItems
+                $TimeStamp = $AuditData.CreationTime
+                $SessionId = $AuditData.SessionId
+                $ClientIP = $AuditData.ClientIPAddress
+                $userId = $AuditData.UserId
+                                
+                if ($AuditData.OperationCount -gt 1){
+                    foreach ($message in $InternetMessageId){
+                        $iMessageID = $message.InternetMessageId
+                        $sizeInBytes = $message.SizeInBytes
+
+                        $resultObject = [PSCustomObject]@{
+                            Timestamp           = $TimeStamp
+                            User                = $userId
+                            IPaddress           = $ClientIP
+                            SessionID           = $SessionId
+                            InternetMessageId   = $iMessageID
+                            SizeInBytes         = $sizeInBytes
+                        }
+                        
+                        $results += $resultObject
+
+                        if ($Download -eq "Yes" ){
+                            DownloadMails($iMessageID,$userId)
+                        } 
+                    }
+                }
+                            
+                else {
+                    $SessionID = ""
+                    $iMessageID = $message.InternetMessageId
+                    $sizeInBytes = $message.SizeInBytes
+                    
+                    $resultObject = [PSCustomObject]@{
+                        Timestamp           = $TimeStamp
+                        User                = $userId
+                        IPaddress           = $ClientIP
+                        SessionID           = $SessionId
+                        InternetMessageId   = $iMessageID
+                        SizeInBytes         = $sizeInBytes
+                    }
+                    
+                    $results += $resultObject
+
+                    if ($Download -eq "Yes" ){
+                        DownloadMails($iMessageID,$userId)
+                    }
+                }
+            }
+        }
+        $results | Sort TimeStamp | Format-Table Timestamp, User, IPaddress, SessionID, InternetMessageId, SizeInBytes
+        
+        if (($output -ne "N") -And ($output -ne "No")) {
+            $date = [datetime]::Now.ToString('yyyyMMddHHmmss') 
+            $filePath = "$OutputDir\$date-MessageIDs.csv"
+            $results | Export-Csv -Path $filePath -NoTypeInformation -Encoding $Encoding
+            Write-logFile -Message "[INFO] Output written to $filePath" -Color "Green"
+        } 
+    }
+
+    elseif ($IP -And $Sessions){
+        $amountResults = Search-UnifiedAuditLog -StartDate $StartDate -EndDate $EndDate -FreeText $IP -Operations "MailItemsAccessed" -ResultSize 1 | Select-Object -First 1 -ExpandProperty ResultCount
+		
+        if ($amountResults -gt 4999){
+            write-logFile -Message "[WARNING] A total of $amountResults events have been identified, surpassing the maximum limit of 5000 results for a single session. To refine your search, kindly lower the time window." -Color "Red"
+        }
+
+        else {
+            $MailItemRecords = Search-UnifiedAuditLog -StartDate $StartDate -EndDate $EndDate -FreeText $IP -ResultSize 5000 -Operations "MailItemsAccessed"
+        
+            forEach ($Rec in $MailItemRecords){
+                $AuditData = ConvertFrom-Json $Rec.Auditdata
+                $InternetMessageId = $AuditData.Folders.FolderItems
+                $TimeStamp = $AuditData.CreationTime
+                $SessionId = $AuditData.SessionId
+                $ClientIP = $AuditData.ClientIPAddress
+                $userId = $AuditData.UserId
+        
+                if($SessionId){
+                    if($Sessions.Contains($SessionId)){
+                        if($ClientIP -eq $IP){
+
+                            if ($AuditData.OperationCount -gt 1){
+                                foreach ($message in $InternetMessageId){
+                                    $iMessageID = $message.InternetMessageId
+                                    $sizeInBytes = $message.SizeInBytes
+            
+                                    $resultObject = [PSCustomObject]@{
+                                        Timestamp           = $TimeStamp
+                                        User                = $userId
+                                        IPaddress           = $ClientIP
+                                        SessionID           = $SessionId
+                                        InternetMessageId   = $iMessageID
+                                        SizeInBytes         = $sizeInBytes
+                                    }
+                                    
+                                    $results += $resultObject
+
+                                    if ($Download -eq "Yes" ){
+                                        DownloadMails($iMessageID,$userId)
+                                    }
+                                }
+                            }
+                                        
+                            else {
+                                $SessionID = ""
+                                $iMessageID = $message.InternetMessageId
+                                $sizeInBytes = $message.SizeInBytes
+                                
+                                $resultObject = [PSCustomObject]@{
+                                    Timestamp           = $TimeStamp
+                                    User                = $userId
+                                    IPaddress           = $ClientIP
+                                    SessionID           = $SessionId
+                                    InternetMessageId   = $iMessageID
+                                    SizeInBytes         = $sizeInBytes
+                                }
+                                
+                                $results += $resultObject
+
+                                if ($Download -eq "Yes" ){
+                                    DownloadMails($iMessageID,$userId)
+                                }
+                            }                               
+                        }
+                        
+                    }
+                }
+            }
+        }
+        $results | Sort TimeStamp | Format-Table Timestamp, User, IPaddress, SessionID, InternetMessageId, SizeInBytes  
+
+        if (($output -ne "N") -And ($output -ne "No")) {
+            $date = [datetime]::Now.ToString('yyyyMMddHHmmss') 
+            $filePath = "$OutputDir\$date-MessageIDs.csv"
+            $results | Export-Csv -Path $filePath -NoTypeInformation -Encoding $Encoding
+            Write-logFile -Message "[INFO] Output written to $filePath" -Color "Green"
+        }
+    }
+
+    elseif ($Sessions -And !$IP){
+        $amountResults = Search-UnifiedAuditLog -StartDate $StartDate -EndDate $EndDate -FreeText $Sessions -Operations "MailItemsAccessed" -ResultSize 1 | Select-Object -First 1 -ExpandProperty ResultCount
+		
+        if ($amountResults -gt 4999){
+            write-logFile -Message "[WARNING] A total of $amountResults events have been identified, surpassing the maximum limit of 5000 results for a single session. To refine your search, kindly lower the time window." -Color "Red"
+        }
+
+        else {
+            $MailItemRecords = Search-UnifiedAuditLog -StartDate $StartDate -EndDate $EndDate -ResultSize 5000 -FreeText $Sessions -Operations "MailItemsAccessed"
+        
+            forEach ($Rec in $MailItemRecords){
+                $AuditData = ConvertFrom-Json $Rec.Auditdata
+                $InternetMessageId = $AuditData.Folders.FolderItems
+                $TimeStamp = $AuditData.CreationTime
+                $SessionId = $AuditData.SessionId
+                $ClientIP = $AuditData.ClientIPAddress
+                $userId = $AuditData.UserId
+
+                if($SessionId){
+                    if($Sessions.Contains($SessionId)){
+                        if ($AuditData.OperationCount -gt 1){
+                            foreach ($message in $InternetMessageId){
+                                $iMessageID = $message.InternetMessageId
+                                $sizeInBytes = $message.SizeInBytes
+            
+                                $resultObject = [PSCustomObject]@{
+                                    Timestamp           = $TimeStamp
+                                    User                = $userId
+                                    IPaddress           = $ClientIP
+                                    SessionID           = $SessionId
+                                    InternetMessageId   = $iMessageID
+                                    SizeInBytes         = $sizeInBytes
+                                }
+                                
+                                $results += $resultObject
+
+                                if ($Download -eq "Yes" ){
+                                    DownloadMails($iMessageID,$userId)
+                                }
+                            }
+                        }
+                                    
+                        else {
+                            $SessionID = ""
+                            $iMessageID = $message.InternetMessageId
+                            $sizeInBytes = $message.SizeInBytes
+                            
+                            $resultObject = [PSCustomObject]@{
+                                Timestamp           = $TimeStamp
+                                User                = $userId
+                                IPaddress           = $ClientIP
+                                SessionID           = $SessionId
+                                InternetMessageId   = $iMessageID
+                                SizeInBytes         = $sizeInBytes
+                            }
+                            
+                            $results += $resultObject
+
+                            if ($Download -eq "Yes" ){
+                                DownloadMails($iMessageID,$userId)
+                            }
+                        }                               
+                    }    
+                }
+            }
+        }
+        $results | Sort TimeStamp | Format-Table Timestamp, User, IPaddress, SessionID, InternetMessageId, SizeInBytes  
+
+        if (($output -ne "N") -And ($output -ne "No")) {
+            $filePath = "$OutputDir\MessageIDs-$Sessions.csv"
+            $results | Export-Csv -Path $filePath -NoTypeInformation -Encoding $Encoding
+            Write-logFile -Message "[INFO] Output written to $filePath" -Color "Green"
+        }
+    }
+        
+    elseif (!$Sessions -And $IP){
+        $amountResults = Search-UnifiedAuditLog -StartDate $StartDate -EndDate $EndDate -FreeText $IP -Operations "MailItemsAccessed" -ResultSize 1 | Select-Object -First 1 -ExpandProperty ResultCount
+        if ($amountResults -gt 4999){
+            write-logFile -Message "[WARNING] A total of $amountResults events have been identified, surpassing the maximum limit of 5000 results for a single session. To refine your search, kindly lower the time window." -Color "Red"
+        }
+
+        else {
+            $MailItemRecords = Search-UnifiedAuditLog -StartDate $StartDate -EndDate $EndDate -FreeText $IP -ResultSize 5000 -Operations "MailItemsAccessed"
+
+            forEach ($Rec in $MailItemRecords){
+                $AuditData = ConvertFrom-Json $Rec.Auditdata
+                $InternetMessageId = $AuditData.Folders.FolderItems
+                $TimeStamp = $AuditData.CreationTime
+                $SessionId = $AuditData.SessionId
+                $ClientIP = $AuditData.ClientIPAddress
+
+                $userId = $AuditData.UserId
+                  
+                if($ClientIP -eq $IP){
+                    if ($AuditData.OperationCount -gt 1){
+                        foreach ($message in $InternetMessageId){
+                            $iMessageID = $message.InternetMessageId
+                            $sizeInBytes = $message.SizeInBytes
+            
+                            $resultObject = [PSCustomObject]@{
+                                Timestamp           = $TimeStamp
+                                User                = $userId
+                                IPaddress           = $ClientIP
+                                SessionID           = $SessionId
+                                InternetMessageId   = $iMessageID
+                                SizeInBytes         = $sizeInBytes
+                            }
+                            
+                            $results += $resultObject
+
+                            if ($Download -eq "Yes" ){
+                                DownloadMails($iMessageID,$userId)
+                            }
+                        }
+                    }
+                                
+                    else {
+                        $SessionID = ""
+                        $iMessageID = $message.InternetMessageId
+                        $sizeInBytes = $message.SizeInBytes
+                        
+                        $resultObject = [PSCustomObject]@{
+                            Timestamp           = $TimeStamp
+                            User                = $userId
+                            IPaddress           = $ClientIP
+                            SessionID           = $SessionId
+                            InternetMessageId   = $iMessageID
+                            SizeInBytes         = $sizeInBytes
+                        }
+                        
+                        $results += $resultObject
+
+                        if ($Download -eq "Yes" ){
+                            DownloadMails($iMessageID,$userId)
+                        }
+                    }                               
+                }          
+            }
+        }
+        $results | Sort TimeStamp | Format-Table Timestamp, User, IPaddress, SessionID, InternetMessageId, SizeInBytes  
+
+        if (($output -ne "N") -And ($output -ne "No")) {
+            $date = [datetime]::Now.ToString('yyyyMMddHHmmss') 
+            $filePath = "$OutputDir\$date-MessageIDs.csv"
+            $results | Export-Csv -Path $filePath -NoTypeInformation -Encoding $Encoding
+            Write-logFile -Message "[INFO] Output written to $filePath" -Color "Green"
+        }
+    }                       
+}
+
+function DownloadMails($iMessageID,$UserIds){
+
+    $onlyMessageID = $iMessageID.Split(" ")[0]
+    if ($outputDir -eq "" ){
+        $outputDir = "Output\MailItemsAccessed\Emails"
+        if (!(test-path $outputDir)) {
+            write-logFile -Message "[INFO] Creating the following directory: $outputDir"
+            New-Item -ItemType Directory -Force -Name $outputDir | Out-Null
+        }
+    }
+
+    try {
+        $getMessage = Get-MgUserMessage -Filter "internetMessageId eq '$onlyMessageID'" -UserId $userId -ErrorAction stop
+        $messageId = $getMessage.Id
+        $attachment = $getMessage.Attachments
+        $ReceivedDateTime = $getMessage.ReceivedDateTime.ToString("yyyyMMdd_HHmmss")
+
+        $subject = $getMessage.Subject
+        $subject = $subject -replace '[\\/:*?"<>|]', '_'
+        $filePath = "$outputDir\$ReceivedDateTime-$subject.msg"
+
+        Get-MgUserMessageContent -MessageId $messageId -UserId $userId -OutFile $filePath
+        Write-logFile -Message "[INFO] Output written to $filePath" -Color "Green"
+
+        if ($attachment -eq "True"){
+            Write-logFile -Message "[INFO] Found Attachment file!"
+            $attachment = Get-MgUserMessageAttachment -UserId $userIds -MessageId $iMessageID
+            $filename = $attachment.Name
+
+            Write-logFile -Message "[INFO] Downloading attachment"
+            Write-host "[INFO] Name: $filename"
+            write-host "[INFO] Size: $($attachment.Size)"
+
+            $base64B = ($attachment).AdditionalProperties.contentBytes
+            $decoded = [System.Convert]::FromBase64String($base64B)
+
+            $filename = $filename -replace '[\\/:*?"<>|]', '_'
+            $filePath = Join-Path -Path $outputDir -ChildPath "$ReceivedDateTime-$filename"
+            Set-Content -Path $filePath -Value $decoded -Encoding Byte
+
+            Write-logFile -Message "[INFO] File Attachment Successfully Written to $filePath" -Color "Green"
+        }
     }
     catch {
-        Write-Error "You must call Connect-M365 before running this script"
-        return $false
+        Write-logFile -Message "[WARNING] You must call Connect-MgGraph -Scopes Mail.ReadBasic.All before running the -Download flag" -Color "Red"
+        Write-logFile -Message "[WARNING] The 'Mail.ReadBasic.All' is an application-level permission, requiring an application-based connection through the 'Connect-MgGraph' command for its use." -Color "Red"
+        Write-Host "[WARNING] Error Message: $($_.Exception.Message)" -Color "Red"
+        break
     }
 
-    return $true
+    
+
+
+
 }
 
-# Get the sessions
-function Get-Sessions {
-    [CmdletBinding()]
-    param (
-        [Parameter(Mandatory=$true)]
-        [string]$StartDate,
-
-        [Parameter(Mandatory=$true)]
-        [string]$EndDate,
-
-        [string]$UserIds,
-
-        [string]$IP,
-
-        [string]$OutputDir = "Output\MailItemsAccessed",
-
-        [string]$Encoding = "UTF8",
-
-        [string]$Output = "Y"
-    )
-
-    if (-not (Test-Path $OutputDir)) {
-        New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null
-    }
-
-    $params = @{
-        StartDate   = $StartDate
-        EndDate     = $EndDate
-        ResultSize  = 5000
-        Operations  = "MailItemsAccessed"
-    }
-
-    if ($UserIds) {
-        $params.UserIds = $UserIds
-    }
-
-    if ($IP) {
-        $params.FreeText = $IP
-    }
-
-    $results = Search-UnifiedAuditLog @params
-
-    if ($UserIds) {
-        $results = $results | Where-Object { $_.AuditData.UserId -eq $UserIds }
-    }
-
-    if ($IP) {
-        $results = $results | Where-Object { $_.AuditData.ClientIPAddress -eq $IP }
-    }
-
-    $results = $results | ForEach-Object {
-        [PSCustomObject]@{
-            TimeStamp   = $_.AuditData.CreationTime
-            User        = $_.AuditData.UserId
-            Action      = $_.AuditData.Operation
-            SessionId   = $_.AuditData.SessionId
-            ClientIP    = $_.AuditData.ClientIPAddress
-            OperationCount = $_.AuditData.OperationCount
-        }
-    }
-
-    if ($Output -eq "Y") {
-        $filePath = Join-Path -Path $OutputDir -ChildPath "Sessions.csv"
-        $results | Export-Csv -Path $filePath -NoTypeInformation -Encoding $Encoding
-        Write-Host "Output written to $filePath"
-    }
-
-    $results
-}
-
-# Get the message IDs
-function Get-MessageIDs {
-    [CmdletBinding()]
-    param (
-        [Parameter(Mandatory=$true)]
-        [string]$StartDate,
-
-        [Parameter(Mandatory=$true)]
-        [string]$EndDate,
-
-        [string]$Sessions,
-
-        [string]$IP,
-
-        [string]$OutputDir = "Output\MailItemsAccessed",
-
-        [string]$Encoding = "UTF8",
-
-        [string]$Output = "Y"
-    )
-
-    if (-not (Test-Path $OutputDir)) {
-        New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null
-    }
-
-    $params = @{
-        StartDate   = $StartDate
-        EndDate     = $EndDate
-        ResultSize  = 5000
-        Operations  = "MailItemsAccessed"
-    }
-
-    if ($Sessions) {
-        $params.SessionIds = $Sessions
-    }
-
-    if ($IP) {
-        $params.FreeText = $IP
-    }
-
-    $results = Search-UnifiedAuditLog @params
-
-    if ($Sessions) {
-        $results = $results | Where-Object { $_.AuditData.SessionId -in $Sessions }
-    }
-
-    if ($IP) {
-        $results = $results | Where-Object { $_.AuditData.ClientIPAddress -eq $IP }
-    }
-
-    $results = $results | ForEach-Object {
-        [PSCustomObject]@{
-            TimeStamp   = $_.AuditData.CreationTime
-            User        = $_.AuditData.UserId
-            IPaddress   = $_.AuditData.ClientIPAddress
-            SessionID   = $_.AuditData.SessionId
-            MessageID   = $_.AuditData.MessageId
-        }
-    }
-
-    if ($Output -eq "Y") {
-        $filePath = Join-Path -Path $OutputDir -ChildPath "MessageIDs.csv"
-        $results | Export-Csv -Path $filePath -NoTypeInformation -Encoding $Encoding
-        Write-Host "Output written to $filePath"
-    }
-
-    $results
-}
-
-# Download the emails and attachments
-function Download-Emails {
-    [CmdletBinding()]
-    param (
-        [Parameter(Mandatory=$true)]
-        [string]$MessageID,
-
-        [Parameter(Mandatory=$true)]
-        [string]$UserIds,
-
-        [string]$OutputDir = "Output\MailItemsAccessed\Emails"
-    )
-
-    if (-not (Test-Path $OutputDir)) {
-        New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null
-    }
-
-    $message = Get-MgUserMessage -Filter "internetMessageId eq '$MessageID'" -UserId $UserIds -ErrorAction Stop
-    $attachment = $message.Attachments
-
-    $filePath = Join-Path -Path $OutputDir -ChildPath "$($message.ReceivedDateTime.ToString("yyyyMMdd_HHmmss"))-$($message.Subject).msg"
-    Get-MgUserMessageContent -MessageId $message.Id -UserId $UserIds -OutFile $filePath
-    Write-Host "Output written to $filePath"
-
-    if ($attachment -eq "True") {
-        Write-Host "Found Attachment file!"
-        $attachment = Get-MgUserMessageAttachment -UserId $UserIds -MessageId $MessageID
-        $filename = $attachment.Name
-
-        Write-Host "Downloading attachment"
-        Write-Host "Name: $filename"
-        Write-Host "Size: $($attachment.Size)"
-
-        $base64B = ($attachment).AdditionalProperties.contentBytes
-        $decoded = [System.Convert]::FromBase64String($base64B)
-
-        $filename = $filename -replace '[\\/:*?"<>|]', '_'
-        $filePath = Join-Path -Path $OutputDir -ChildPath "$($message.ReceivedDateTime.ToString("yyyyMMdd_HHmmss"))-$filename"
-        Set-Content -Path $filePath -Value $decoded -Encoding Byte
-
-        Write-Host "File Attachment Successfully Written to $filePath"
-    }
-}
-
-# Check if the current user has the required permissions
-if (-not (Test-HasRequiredPermissions)) {
-    exit 1
-}
-
-# Get the sessions
-$sessions = Get-Sessions -StartDate "2023-01-01" -EndDate "2023-02-01" -UserIds "user1@example.com" -IP "192.168.1.1"
-
-# Get the message IDs
-$messageIDs = Get-MessageIDs -StartDate "2023-01-01" -EndDate "2023-02-01" -Sessions $sessions.SessionId -IP "192.168.1.1"
-
-# Download the emails and attachments
-$messageIDs.MessageID | ForEach-Object { Download-Emails -MessageID $_ -UserIds "user1@example.com" }
