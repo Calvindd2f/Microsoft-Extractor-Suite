@@ -4,7 +4,12 @@ if (-not $PSScriptRoot) {
 }
 
 # Load required module
-Import-Module "$PSScriptRoot\Microsoft-Extractor-Suite.psm1"
+try {
+    Import-Module "$PSScriptRoot\Microsoft-Extractor-Suite.psm1"
+} catch {
+    Write-LogFile "Failed to import required module. Error: $_" -Color "Red"
+    return
+}
 
 # Test if the user is connected to the required services
 function Test-IsConnected {
@@ -265,3 +270,4 @@ function Get-RiskyDetections {
     Write-LogFile "[INFO] A total of $count risky detections found"
     Write-LogFile "[INFO] Output written to $filePath" -Color "Green"
 }
+
