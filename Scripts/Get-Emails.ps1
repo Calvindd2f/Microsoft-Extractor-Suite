@@ -6,6 +6,30 @@ try {
     exit 1
 }
 
+function Log-Message {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory=$true)]
+        [string]$Message,
+        [ConsoleColor]$Color = 'White'
+    )
+    Write-Host "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') $Message" -ForegroundColor $Color
+}
+
+function Test-GraphResponse {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory=$true)]
+        [object]$Response
+    )
+    if ($Response.IsSuccessStatusCode) {
+        return $true
+    } else {
+        Log-Message "Error: Graph API request failed with status code: $($Response.StatusCode) and reason: $($Response.ReasonPhrase)" -Color 'Red'
+        return $false
+    }
+}
+
 function Get-SpecificEmail {
     [CmdletBinding(SupportsShouldProcess = $true)]
     param(
@@ -15,14 +39,20 @@ function Get-SpecificEmail {
         [Parameter(Mandatory = $true)]
         [string]$InternetMessageId,
 
-        [string]$OutputFormat = "msg",
+        [Parameter(Mandatory=$false)]
+        [ValidateSet('msg', 'eml')]
+        [string]$OutputFormat = 'msg',
 
+        [Parameter(Mandatory=$false)]
         [string]$OutputDirectory = "Output\EmailExport",
 
+        [Parameter(Mandatory=$false)]
         [switch]$IncludeAttachments,
 
+        [Parameter(Mandatory=$false)]
         [string]$Token,
 
+        [Parameter(Mandatory=$false)]
         [ValidateSet('Yes', 'No')]
         [string]$Confirm = 'No'
     )
@@ -50,12 +80,16 @@ function Get-SpecificEmail {
         $message = Invoke-MgGraphRequest -Uri $uri -Headers $headers -Method Get -QueryParameters $queryParams
     }
     catch {
-        Write-Error "Error fetching data: $_"
+        Log-Message "Error fetching data: $_"
+        return
+    }
+
+    if (!(Test-GraphResponse $message)) {
         return
     }
 
     if (!(Test-Path -Path $OutputDirectory)) {
-        Write-Error "Invalid output directory: $OutputDirectory"
+        Log-Message "Invalid output directory: $OutputDirectory"
         return
     }
 
@@ -63,8 +97,12 @@ function Get-SpecificEmail {
     $receivedDateTime = [datetime]::Parse($message.ReceivedDateTime).ToString("yyyyMMdd_HHmmss")
     $filePath = Join-Path -Path $OutputDirectory -ChildPath "$receivedDateTime-$subject.$OutputFormat"
 
-    Invoke-MgGraphRequest -Uri $message.ContentUrl -Headers $headers -OutFile $filePath
-    Write-Host "[INFO] Output written to $filePath" -ForegroundColor Green
+    if (-not (Test-Path -Path $filePath)) {
+        Invoke-MgGraphRequest -Uri $message.ContentUrl -Headers $headers -OutFile $filePath
+        Log-Message "[INFO] Output written to $filePath" -Color 'Green'
+    } else {
+        Log-Message "[WARNING] Output file already exists: $filePath" -Color 'Yellow'
+    }
 
     if ($IncludeAttachments) {
         foreach ($attachment in $message.Attachments) {
@@ -75,8 +113,12 @@ function Get-SpecificEmail {
 
             $attachmentFile = Join-Path -Path $OutputDirectory -ChildPath "$receivedDateTime-$($attachment.Name)$($attachment.ContentType.Split('/')[1])"
 
-            Invoke-MgGraphRequest -Uri $attachment.ContentUrl -Headers $attachmentHeaders -OutFile $attachmentFile
-            Write-Host "[INFO] Attachment written to $attachmentFile" -ForegroundColor Green
+            if (-not (Test-Path -Path $attachmentFile)) {
+                Invoke-MgGraphRequest -Uri $attachment.ContentUrl -Headers $attachmentHeaders -OutFile $attachmentFile
+                Log-Message "[INFO] Attachment written to $attachmentFile" -Color 'Green'
+            } else {
+                Log-Message "[WARNING] Attachment file already exists: $attachmentFile" -Color 'Yellow'
+            }
         }
     }
 }
