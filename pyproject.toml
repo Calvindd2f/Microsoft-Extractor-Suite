@@ -3,6 +3,24 @@ requires = ["flit_core >=3.2,<4"]
 build-backend = "flit_core.buildapi"
 
 [project]
-name = "Invictus-Microsoft"
-authors = [{name = "Invictus-ir", email = "info@invictus-ir.com"}]
+name = "invictus-microsoft"
+authors = [
+  {name = "Invictus-ir", email = "info@invictus-ir.com"},
+]
+requires-python = ">=3.6"
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.6",
+  "Programming Language :: Python :: 3.7",
+  "Programming Language :: Python :: 3.8",
+  "Programming Language :: Python :: 3.9",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+]
+dependencies = [
+  # Add any dependencies here
+]
 dynamic = ["version", "description"]
+
+[project.urls]
+Homepage = "https://github.com/Invictus-ir/Invictus-Microsoft"
