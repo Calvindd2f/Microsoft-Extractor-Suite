@@ -1,204 +1,267 @@
-using module  "$PSScriptRoot\Microsoft-Extractor-Suite.psm1";
+# Check if $PSScriptRoot is set
+if (-not $PSScriptRoot) {
+    $PSScriptRoot = $MyInvocation->MyCommand->ScriptBlock->File
+}
 
-function Get-RiskyUsers {
-<#
-    .SYNOPSIS
-    Retrieves the risky users.
+# Load required module
+Import-Module "$PSScriptRoot\Microsoft-Extractor-Suite.psm1"
 
-    .DESCRIPTION
-    Retrieves the risky users from the Entra ID Identity Protection, which marks an account as being at risk based on the pattern of activity for the account.
-    The output will be written to: Output\UserInfo\
-
-    .PARAMETER OutputDir
-    OutputDir is the parameter specifying the output directory.
-    Default: Output\UserInfo
-
-    .PARAMETER Encoding
-    Encoding is the parameter specifying the encoding of the CSV output file.
-    Default: UTF8
-
-    .PARAMETER Application
-    Application is the parameter specifying App-only access (access without a user) for authentication and authorization.
-    Default: Delegated access (access on behalf a user)
-
-    .EXAMPLE
-    Get-RiskyUsers
-    Retrieves all risky users.
-
-    .EXAMPLE
-    Get-RiskyUsers -Application
-    Retrieves all risky users via application authentication.
-
-    .EXAMPLE
-    Get-RiskyUsers -Encoding utf32
-    Retrieves all risky users and exports the output to a CSV file with UTF-32 encoding.
-
-    .EXAMPLE
-    Get-RiskyUsers -OutputDir C:\Windows\Temp
-    Retrieves all risky users and saves the output to the C:\Windows\Temp folder.
-#>
+# Test if the user is connected to the required services
+function Test-IsConnected {
     [CmdletBinding()]
-    param(
-        [string]$OutputDir,
-        [string]$Encoding,
-        [switch]$Application
+    param()
+
+    try {
+        Get-MgUser -Top 1
+        return $true
+    } catch {
+        return $false
+    }
+}
+
+# Write log messages with better color coding
+function Write-LogFile {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory=$true)]
+        [string]$Message,
+        [string]$Color = "White"
     )
 
-    #Assert-Encoding
-    #Assert-IsConnected
-    #Assert-Connection -Cmdlet Get-MgRiskyUser
-    #Assert-OutputDir -OutputDir "Output\UserInfo"
+    Write-Host "$(Get-Date) [$Color]$Message[/]$($Host.UI.RawUI.BackgroundColor)"
+}
 
-    Write-logFile -Message "[INFO] Running Get-RiskyUsers" -Color "Green"
-    $results=@();
+# Write output to a file with better error handling
+function Write-OutputFile {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory=$true)]
+        [string]$Output,
+        [string]$Content,
+        [string]$Encoding = "UTF8"
+    )
+
+    try {
+        $OutputDir = Split-Path $Output -Parent
+        if (-not (Test-Path $OutputDir)) {
+            New-Item -ItemType Directory -Force -Path $OutputDir
+        }
+        $Content | Out-File -FilePath $Output -Encoding $Encoding -Force -ErrorAction Stop
+    } catch {
+        Write-LogFile "Failed to write output to $Output. Error: $_" -Color "Red"
+    }
+}
+
+# Convert objects to strings with better formatting
+function ConvertTo-String {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory=$true)]
+        [object]$InputObject
+    )
+
+    if ($InputObject -is [string]) {
+        return $InputObject
+    }
+
+    if ($InputObject -is [hashtable]) {
+        return $InputObject.GetEnumerator() | ForEach-Object { "$($_.Key)=$($_.Value)" }
+    }
+
+    if ($InputObject -is [array]) {
+        return $InputObject -join ", "
+    }
+
+    return $InputObject.ToString()
+}
+
+# Convert location objects to strings with better formatting
+function ConvertTo-Location {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory=$true)]
+        [object]$Location
+    )
+
+    if ($Location -eq $null) {
+        return ""
+    }
+
+    return "$($Location.City), $($Location.StateOrProvince), $($Location.CountryOrRegion), $($Location.PostalCode)"
+}
+
+# Convert additional properties to strings with better formatting
+function ConvertTo-AdditionalProperties {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory=$true)]
+        [object]$AdditionalProperties
+    )
+
+    if ($AdditionalProperties -eq $null) {
+        return ""
+    }
+
+    $Properties = $AdditionalProperties.GetEnumerator() | ForEach-Object { "$($_.Key)=$($_.Value)" }
+    return $Properties -join ", "
+}
+
+# Get risky users
+function Get-RiskyUsers {
+    [CmdletBinding()]
+    param (
+        [string]$OutputDir = "Output\UserInfo",
+        [string]$Encoding = "UTF8",
+        [switch]$Application,
+        [switch]$Verbose
+    )
+
+    # Check if the user is connected
+    if (-not (Test-IsConnected)) {
+        Write-LogFile "Please connect to the required services before running this command." -Color "Red"
+        return
+    }
+
+    # Write log message
+    if ($Verbose) {
+        Write-LogFile "[INFO] Running Get-RiskyUsers" -Color "Green"
+    }
+
+    $results = @()
     $count = 0
 
-    Get-MgRiskyUser -All | ForEach-Object {
-        $myObject = [PSCustomObject]@{
-            History                           = "-"
-            Id                                = "-"
-            IsDeleted                         = "-"
-            IsProcessing                      = "-"
-            RiskDetail                        = "-"
-            RiskLastUpdatedDateTime           = "-"
-            RiskLevel                         = "-"
-            RiskState                         = "-"
-            UserDisplayName                   = "-"
-            UserPrincipalName                 = "-"
-            AdditionalProperties              = "-"
+    try {
+        Get-MgRiskyUser -All | ForEach-Object {
+            $myObject = [PSCustomObject]@{
+                History                           = "-"
+                Id                                = "-"
+                IsDeleted                         = "-"
+                IsProcessing                      = "-"
+                RiskDetail                        = "-"
+                RiskLastUpdatedDateTime           = "-"
+                RiskLevel                         = "-"
+                RiskState                         = "-"
+                UserDisplayName                   = "-"
+                UserPrincipalName                 = "-"
+                AdditionalProperties              = "-"
+            }
+
+            $myobject.History = $_.History
+            $myobject.Id = $_.Id
+            $myobject.IsDeleted = $_.IsDeleted
+            $myobject.IsProcessing = $_.IsProcessing
+            $myobject.RiskDetail = $_.RiskDetail
+            $myobject.RiskLastUpdatedDateTime = $_.RiskLastUpdatedDateTime
+            $myobject.RiskLevel = $_.RiskLevel
+            $myobject.RiskState = $_.RiskState
+            $myobject.UserDisplayName = $_.UserDisplayName
+            $myobject.UserPrincipalName = $_.UserPrincipalName
+            $myobject.AdditionalProperties = ConvertTo-AdditionalProperties $_.AdditionalProperties
+
+            $results += $myObject
+            $count++
         }
-
-        $myobject.History = $_.History
-        $myobject.Id = $_.Id
-        $myobject.IsDeleted = $_.IsDeleted
-        $myobject.IsProcessing = $_.IsProcessing
-        $myobject.RiskDetail = $_.RiskDetail
-        $myobject.RiskLastUpdatedDateTime = $_.RiskLastUpdatedDateTime
-        $myobject.RiskLevel = $_.RiskLevel
-        $myobject.RiskState = $_.RiskState
-        $myobject.UserDisplayName = $_.UserDisplayName
-        $myobject.UserPrincipalName = $_.UserPrincipalName
-        $myobject.AdditionalProperties = $_.AdditionalProperties | out-string
-
-        $results+= $myObject;
-        $count = $count +1
+    } catch {
+        Write-LogFile "Failed to get risky users. Error: $_" -Color "Red"
+        return
     }
 
     $date = Get-Date -Format "yyyyMMddHHmm"
     $filePath = "$OutputDir\$($date)-RiskyUsers.csv"
-    $results | Export-Csv -Path $filePath -NoTypeInformation -Encoding $Encoding
-    Write-logFile -Message "[INFO] A total of $count Risky Users found"
-    Write-logFile -Message "[INFO] Output written to $filePath" -Color "Green"
+    Write-OutputFile -Output $filePath -Content ($results | ConvertTo-Csv -NoTypeInformation) -Encoding $Encoding
+
+    Write-LogFile "[INFO] A total of $count risky users found"
+    Write-LogFile "[INFO] Output written to $filePath" -Color "Green"
 }
 
+# Get risky detections
 function Get-RiskyDetections {
-<#
-    .SYNOPSIS
-    Retrieves the risky detections from the Entra ID Identity Protection.
-
-    .DESCRIPTION
-    Retrieves the risky detections from the Entra ID Identity Protection.
-    The output will be written to: Output\UserInfo\
-
-    .PARAMETER OutputDir
-    OutputDir is the parameter specifying the output directory.
-    Default: Output\UserInfo
-
-    .PARAMETER Encoding
-    Encoding is the parameter specifying the encoding of the CSV output file.
-    Default: UTF8
-
-    .PARAMETER Application
-    Application is the parameter specifying App-only access (access without a user) for authentication and authorization.
-    Default: Delegated access (access on behalf a user)
-
-    .EXAMPLE
-    Get-RiskyDetections
-    Retrieves all the risky detections.
-
-    .EXAMPLE
-    Get-RiskyDetections -Application
-    Retrieves all the risky detections via application authentication.
-
-    .EXAMPLE
-    Get-RiskyDetections -Encoding utf32
-    Retrieves the risky detections and exports the output to a CSV file with UTF-32 encoding.
-
-    .EXAMPLE
-    Get-RiskyDetections -OutputDir C:\Windows\Temp
-    Retrieves the risky detections and saves the output to the C:\Windows\Temp folder.
-#>
     [CmdletBinding()]
-    param(
-        [string]$OutputDir,
-        [string]$Encoding,
-        [switch]$Application
+    param (
+        [string]$OutputDir = "Output\UserInfo",
+        [string]$Encoding = "UTF8",
+        [switch]$Application,
+        [switch]$Verbose
     )
-    #Assert-Encoding
-   #Assert-IsConnected -Cmdlet Get-MgRiskDetection
-    #Assert-OutputDir -OutputDir "Output\UserInfo"
 
-    Write-logFile -Message "[INFO] Running Get-RiskyDetections" -Color "Green"
-    $results=@();
+    # Check if the user is connected
+    if (-not (Test-IsConnected)) {
+        Write-LogFile "Please connect to the required services before running this command." -Color "Red"
+        return
+    }
+
+    # Write log message
+    if ($Verbose) {
+        Write-LogFile "[INFO] Running Get-RiskyDetections" -Color "Green"
+    }
+
+    $results = @()
     $count = 0
-    Get-MgRiskDetection -All | ForEach-Object {
-        $myObject = [PSCustomObject]@{
-            Activity                        = "-"
-            ActivityDateTime                = "-"
-            AdditionalInfo                  = "-"
-            CorrelationId                   = "-"
-            DetectedDateTime                = "-"
-            IPAddress                       = "-"
-            Id                              = "-"
-            LastUpdatedDateTime             = "-"
-            City                            = "-"
-            CountryOrRegion                 = "-"
-            State                           = "-"
-            RequestId                       = "-"
-            RiskDetail                      = "-"
-            RiskEventType                   = "-"
-            RiskLevel                       = "-"
-            riskState                       = "-"
-            detectionTimingType             = "-"
-            Source                          = "-"
-            TokenIssuerType                 = "-"
-            UserDisplayName                 = "-"
-            UserId                          = "-"
-            UserPrincipalName               = "-"
-            AdditionalProperties            = "-"
+
+    try {
+        Get-MgRiskDetection -All | ForEach-Object {
+            $myObject = [PSCustomObject]@{
+                Activity                        = "-"
+                ActivityDateTime                = "-"
+                AdditionalInfo                  = "-"
+                CorrelationId                   = "-"
+                DetectedDateTime                = "-"
+                IPAddress                       = "-"
+                Id                              = "-"
+                LastUpdatedDateTime             = "-"
+                City                            = "-"
+                CountryOrRegion                 = "-"
+                State                           = "-"
+                RequestId                       = "-"
+                RiskDetail                      = "-"
+                RiskEventType                   = "-"
+                RiskLevel                       = "-"
+                riskState                       = "-"
+                detectionTimingType             = "-"
+                Source                          = "-"
+                TokenIssuerType                 = "-"
+                UserDisplayName                 = "-"
+                UserId                          = "-"
+                UserPrincipalName               = "-"
+                AdditionalProperties            = "-"
+            }
+
+            $myobject.Activity = $_.Activity
+            $myobject.ActivityDateTime = $_.ActivityDateTime
+            $myobject.AdditionalInfo = $_.AdditionalInfo
+            $myobject.CorrelationId = $_.CorrelationId
+            $myobject.DetectedDateTime = $_.DetectedDateTime
+            $myobject.IPAddress = $_.IPAddress
+            $myobject.Id = $_.Id
+            $myobject.LastUpdatedDateTime = $_.LastUpdatedDateTime
+            $myobject.City = ConvertTo-Location $_.Location
+            $myobject.CountryOrRegion = ConvertTo-Location $_.Location
+            $myobject.State = ConvertTo-Location $_.Location
+            $myobject.RequestId = $_.RequestId
+            $myobject.RiskDetail = $_.RiskDetail
+            $myobject.RiskEventType = $_.RiskEventType
+            $myobject.RiskLevel = $_.RiskLevel
+            $myobject.riskState = $_.riskState
+            $myobject.detectionTimingType = $_.detectionTimingType
+            $myobject.Source = $_.Source
+            $myobject.TokenIssuerType = $_.TokenIssuerType
+            $myobject.UserDisplayName = $_.UserDisplayName
+            $myobject.UserId = $_.UserId
+            $myobject.UserPrincipalName = $_.UserPrincipalName
+            $myobject.AdditionalProperties = ConvertTo-AdditionalProperties $_.AdditionalProperties
+
+            $results += $myObject
+            $count++
         }
-
-        $myobject.Activity = $_.Activity
-        $myobject.ActivityDateTime = $_.ActivityDateTime
-        $myobject.AdditionalInfo = $_.AdditionalInfo
-        $myobject.CorrelationId = $_.CorrelationId
-        $myobject.DetectedDateTime = $_.DetectedDateTime
-        $myobject.IPAddress = $_.IPAddress
-        $myobject.Id = $_.Id
-        $myobject.LastUpdatedDateTime = $_.LastUpdatedDateTime
-        $myobject.City = $_.Location.City | out-string
-        $myobject.CountryOrRegion = $_.Location.CountryOrRegion | out-string
-        $myobject.State = $_.Location.State | out-string
-        $myobject.RequestId = $_.RequestId
-        $myobject.RiskDetail = $_.RiskDetail
-        $myobject.RiskEventType = $_.RiskEventType
-        $myobject.RiskLevel = $_.RiskLevel
-        $myobject.riskState = $_.riskState
-        $myobject.detectionTimingType = $_.detectionTimingType
-        $myobject.Source = $_.Source
-        $myobject.TokenIssuerType = $_.TokenIssuerType
-        $myobject.UserDisplayName = $_.UserDisplayName
-        $myobject.UserId = $_.UserId
-        $myobject.UserPrincipalName = $_.UserPrincipalName
-        $myobject.AdditionalProperties = $_.AdditionalProperties | out-string
-
-        $results+= $myObject;
-        $count = $count +1
+    } catch {
+        Write-LogFile "Failed to get risky detections. Error: $_" -Color "Red"
+        return
     }
 
     $date = Get-Date -Format "yyyyMMddHHmm"
     $filePath = "$OutputDir\$($date)-RiskyDetections.csv"
-    $results | Export-Csv -Path $filePath -NoTypeInformation -Encoding $Encoding
-    Write-logFile -Message "[INFO] A total of $count Risky Detections found"
-    Write-logFile -Message "[INFO] Output written to $filePath" -Color "Green"
+    Write-OutputFile -Output $filePath -Content ($results | ConvertTo-Csv -NoTypeInformation) -Encoding $Encoding
+
+    Write-LogFile "[INFO] A total of $count risky detections found"
+    Write-LogFile "[INFO] Output written to $filePath" -Color "Green"
 }
