@@ -1,159 +1,130 @@
-using module  "$PSScriptRoot\Microsoft-Extractor-Suite.psm1";
-
 # This contains a function for getting Mailbox Audit logging
 
-function Get-MailboxAuditLog {
-    [CmdletBinding(
-        SupportsShouldProcess = $true,
-        ConfirmImpact = 'Medium',
-        DefaultParameterSetName = 'AllUsers'
-    )]
-    param(
-        [Parameter(
-            Mandatory = $false,
-            Position = 0,
-            ParameterSetName = 'SingleUser',
-            ValueFromPipelineByPropertyName = $true
-        )]
-        [string]$UserIds,
+function Get-MailboxAuditLog
+{
+<#
+    .SYNOPSIS
+    Get mailbox audit log entries.
 
-        [Parameter(
-            Mandatory = $false,
-            Position = 0,
-            ParameterSetName = 'AllUsers'
-        )]
-        [switch]$AllUsers,
+    .DESCRIPTION
+    Get mailbox audit log entries for specific a user account. 
+	The output will be written to: Output\MailboxAuditLog\
 
-        [Parameter(
-            Mandatory = $false,
-            Position = 1,
-            ParameterSetName = 'DateRange',
-            ValueFromPipelineByPropertyName = $true
-        )]
-        [string]$StartDate,
+	.PARAMETER UserIds
+    UserIds is the Identity parameter specifying a single mailbox to retrieve mailbox audit log entries from.
 
-        [Parameter(
-            Mandatory = $false,
-            Position = 2,
-            ParameterSetName = 'DateRange',
-            ValueFromPipelineByPropertyName = $true
-        )]
-        [string]$EndDate,
+	.PARAMETER StartDate
+    startDate is the parameter specifying the start date of the date range.
 
-        [Parameter(
-            Mandatory = $false,
-            ParameterSetName = 'OutputParams'
-        )]
-        [string]$OutputDir,
+	.PARAMETER EndDate
+    endDate is the parameter specifying the end date of the date range.
 
-        [Parameter(
-            Mandatory = $false,
-            ParameterSetName = 'OutputParams'
-        )]
-        [string]$Encoding,
+	.PARAMETER OutputDir
+    outputDir is the parameter specifying the output directory.
+	Default: Output\MailboxAuditLog
 
-        [Parameter(
-            Mandatory = $false,
-            ParameterSetName = 'OutputParams'
-        )]
-        [switch]$Force,
+	.PARAMETER Encoding
+    Encoding is the parameter specifying the encoding of the CSV output file.
+	Default: UTF8
+    
+	.EXAMPLE
+    Get-MailboxAuditLog
+	Get all available mailbox audit log entries for all user accounts
 
-        [Parameter(
-            Mandatory = $false,
-            ParameterSetName = 'OutputParams'
-        )]
-        [switch]$WhatIf,
+    .EXAMPLE
+    Get-MailboxAuditLog -UserIds Test@invictus-ir.com
+	Get mailbox audit log entries for the user Test@invictus-ir.com
 
-        [Parameter(
-            Mandatory = $false,
-            ParameterSetName = 'OutputParams'
-        )]
-        [switch]$Confirm
-    )]
+	.EXAMPLE
+    Get-MailboxAuditLog -UserIds "Test@invictus-ir.com,HR@invictus-ir.com"
+	Get mailbox audit log entries for the users Test@invictus-ir.com and HR@invictus-ir.com.
 
-    begin {
-        if ($PSCmdlet.ParameterSetName -eq 'OutputParams') {
-            if ($OutputDir) {
-                if (!(Test-Path $OutputDir)) {
-                    New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null
-                }
-            } else {
-                $OutputDir = "Output\MailboxAuditLog"
-                if (!(Test-Path $OutputDir)) {
-                    New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null
-                }
-            }
+	.EXAMPLE
+	Get-MailboxAuditLog -UserIds Test@invictus-ir.com -StartDate 1/4/2023 -EndDate 5/4/2023
+	Get mailbox audit log entries for the user Test@invictus-ir.com between 1/4/2023 and 5/4/2023.
+#>
+	[CmdletBinding()]
+	param(
+		[string]$UserIds,
+		[string]$StartDate,
+		[string]$EndDate,
+		[string]$OutputDir,
+		[string]$Encoding
+	)
 
-            if ($Encoding) {
-                $encoding = $Encoding
-            } else {
-                $encoding = "UTF8"
-            }
-        }
+	try {
+		$areYouConnected = Search-MailboxAuditlog -ErrorAction stop
+	}
+	catch {
+		write-logFile -Message "[WARNING] You must call Connect-M365 before running this script" -Color "Red"
+		break
+	}
 
-        $date = Get-Date -Format "yyyyMMddHHmm"
-    }
+	write-logFile -Message "[INFO] Running Get-MailboxAuditLog" -Color "Green"
 
-    process {
-        if ($PSCmdlet.ParameterSetName -eq 'SingleUser') {
-            $UserIds = $UserIds.Trim()
-            if ($UserIds -match '\s') {
-                throw 'UserIds cannot contain spaces.'
-            }
+	if ($OutputDir -eq "" ){
+		$OutputDir = "Output\MailboxAuditLog"
+		If (!(test-path $OutputDir)){
+			New-Item -ItemType Directory -Force -Name $OutputDir | Out-Null
+			write-logFile -Message "[INFO] Creating the following directory: $OutputDir" 
+		}
+	}
 
-            $userIdArray = $UserIds -split ','
-            foreach ($userId in $userIdArray) {
-                $outputFile = "$OutputDir\$($date)-mailboxAuditLog-$($userId).csv"
+	else {
+		if (Test-Path -Path $OutputDir) {
+			write-LogFile -Message "[INFO] Custom directory set to: $OutputDir"
+		}
+	
+		else {
+			write-Error "[Error] Custom directory invalid: $OutputDir exiting script" -ErrorAction Stop
+			write-LogFile -Message "[Error] Custom directory invalid: $OutputDir exiting script"
+		}
+	}
 
-                if ($PSCmdlet.ShouldProcess($outputFile, 'Exporting Mailbox Audit Log')) {
-                    try {
-                        $result = Search-MailboxAuditlog -Identity $userId -LogonTypes Delegate,Admin,Owner -StartDate $StartDate -EndDate $EndDate -ShowDetails -ResultSize 250000 -ErrorAction Stop
-                        $result | Export-Csv -NoTypeInformation -Path $outputFile -Encoding $encoding -Force
+	if ($Encoding -eq "" ){
+		$Encoding = "UTF8"
+	}
+	
+	StartDate
+	EndDate
 
-                        Write-Host "##[info] Output is written to: $outputFile"
-                    } catch {
-                        Write-Host "##[error] Failed to export Mailbox Audit Log for user: $userId. Error: $_"
-                    }
-                }
-            }
-        } elseif ($PSCmdlet.ParameterSetName -eq 'AllUsers') {
-            Get-Mailbox -ResultSize unlimited | ForEach-Object {
-                $userId = $_.UserPrincipalName
+	if (($null -eq $UserIds) -Or ($UserIds -eq ""))  {
+		write-logFile -Message "[INFO] No users provided.. Getting the MailboxAuditLog for all users" -Color "Yellow"
+		Get-mailbox -resultsize unlimited  |
+		ForEach-Object {
+			$date = Get-Date -Format "yyyyMMddHHmm"
+			$outputFile = "$OutputDir\$($date)-mailboxAuditLog-$($_.UserPrincipalName).csv"
 
-                $outputFile = "$OutputDir\$($date)-mailboxAuditLog-$($userId).csv"
+			write-logFile -Message "[INFO] Collecting the MailboxAuditLog for $($_.UserPrincipalName)"
+			$result = Search-MailboxAuditlog -Identity $_.UserPrincipalName -LogonTypes Delegate,Admin,Owner -StartDate $script:StartDate -EndDate $script:EndDate -ShowDetails -ResultSize 250000 
+			$result | export-csv -NoTypeInformation -Path $outputFile -Encoding $Encoding
+			
+			write-logFile -Message "[INFO] Output is written to: $outputFile" -Color "Green"
+		}
+	}
 
-                if ($PSCmdlet.ShouldProcess($outputFile, 'Exporting Mailbox Audit Log')) {
-                    try {
-                        $result = Search-MailboxAuditlog -Identity $userId -LogonTypes Delegate,Admin,Owner -StartDate $StartDate -EndDate $EndDate -ShowDetails -ResultSize 250000 -ErrorAction Stop
-                        $result | Export-Csv -NoTypeInformation -Path $outputFile -Encoding $encoding -Force
+	elseif ($UserIds -match ",") {
+		$UserIds.Split(",") | Foreach {
+			$user = $_
+			$date = Get-Date -Format "yyyyMMddHHmm"
+			$outputFile = "$OutputDir\$($date)-mailboxAuditLog-$($user).csv"
 
-                        Write-Host "##[info] Output is written to: $outputFile"
-                    } catch {
-                        Write-Host "##[error] Failed to export Mailbox Audit Log for user: $userId. Error: $_"
-                    }
-                }
-            }
-        } elseif ($PSCmdlet.ParameterSetName -eq 'DateRange') {
-            Get-Mailbox -ResultSize unlimited | ForEach-Object {
-                $userId = $_.UserPrincipalName
+			write-logFile -Message "[INFO] Collecting the MailboxAuditLog for $user"
+			$result = Search-MailboxAuditlog -Identity $user -LogonTypes Delegate,Admin,Owner -StartDate $script:StartDate -EndDate $script:EndDate -ShowDetails -ResultSize 250000 
+			$result | export-csv -NoTypeInformation -Path $outputFile -Encoding $Encoding
+			
+			write-logFile -Message "[INFO] Output is written to: $outputFile" -Color "Green"
+		}
+	}
 
-                $outputFile = "$OutputDir\$($date)-mailboxAuditLog-$($userId).csv"
+	else {		
+		$date = Get-Date -Format "yyyyMMddHHmm"
+		$outputFile = "$OutputDir\$($date)-mailboxAuditLog-$($UserIds).csv"
 
-                if ($PSCmdlet.ShouldProcess($outputFile, 'Exporting Mailbox Audit Log')) {
-                    try {
-                        $result = Search-MailboxAuditlog -Identity $userId -LogonTypes Delegate,Admin,Owner -StartDate $StartDate -EndDate $EndDate -ShowDetails -ResultSize 250000 -ErrorAction Stop
-                        $result | Export-Csv -NoTypeInformation -Path $outputFile -Encoding $encoding -Force
-
-                        Write-Host "##[info] Output is written to: $outputFile"
-                    } catch {
-                        Write-Host "##[error] Failed to export Mailbox Audit Log for user: $userId. Error: $_"
-                    }
-                }
-            }
-        }
-    }
-
-    end {
-        Write-Host "##[section]Finished exporting Mailbox Audit Logs."
-    }
+		write-logFile -Message "[INFO] Collecting the MailboxAuditLog for $UserIds"
+		$result = Search-MailboxAuditlog -Identity $UserIds -LogonTypes Delegate,Admin,Owner -StartDate $script:StartDate -EndDate $script:EndDate -ShowDetails -ResultSize 250000 
+		$result | export-csv -NoTypeInformation -Path $outputFile -Encoding $Encoding
+		
+		write-logFile -Message "[INFO] Output is written to: $outputFile" -Color "Green"
+	} 
 }

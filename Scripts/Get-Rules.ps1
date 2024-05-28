@@ -1,208 +1,341 @@
-# Load required modules
-. "$PSScriptRoot\Microsoft-Extractor-Suite.psm1"
-
 # This contains functions to display or collect the inbox and transport rules.
 
-# Gets the current date and time in the format "yyyyMMddHHmm"
 $date = Get-Date -Format "yyyyMMddHHmm"
+function Show-TransportRules
+{
+<#
+    .SYNOPSIS
+    Shows the transport rules in your organization.
 
-# Displays the transport rules in the organization
-function Show-TransportRules {
-    <#
-        .SYNOPSIS
-            Displays the transport rules in the organization.
+    .DESCRIPTION
+    Shows the transport rules in your organization.
 
-        .DESCRIPTION
-            Displays the transport rules in the organization.
+    .Example
+    Show-TransportRules
+#>
+	$transportRules = Get-TransportRule | Select-Object -Property Name,Description,CreatedBy,WhenChanged,State
 
-        .EXAMPLE
-            Show-TransportRules
-    #>
-
-    # Gets the transport rules from Microsoft Graph API
-    $transportRules = Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/v1.0/policies/transportRules" -OutputType Microsoft.Open.MSG.Clients.TransportRules.MicrosoftGraph.TrustPolicy
-
-    if ($null -ne $transportRules) {
-        # Displays information message
-        Write-LogFile -Message "[INFO] Checking all TransportRules"
-
-        # Loops through each transport rule
-        $transportRules.Value | ForEach-Object {
-            # Displays a message indicating that a transport rule is found
-            [void](Write-LogFile -Message "[INFO] Found a TransportRule" -Color "Green")
-
-            # Displays the name, created by, when changed, state, and description of the transport rule
-            [void](Write-LogFile -Message "Rule Name: $($_.DisplayName)" -Color "Yellow")
-            [void](Write-LogFile -Message "Rule CreatedBy: $($_.CreatedBy.Application.DisplayName)" -Color "Yellow")
-            [void](Write-LogFile -Message "When Changed: $($_.CreatedBy.DateTime)" -Color "Yellow")
-            [void](Write-LogFile -Message "Rule State: $($_.IsEnabled)" -Color "Yellow")
-            [void](Write-LogFile -Message "Description: $($_.Description)" -Color "Yellow")
-        }
-    }
+	if ($null -ne $transportRules) {
+		write-LogFile -Message "[INFO] Checking all TransportRules"
+		foreach ($rule in $transportRules) {
+			write-LogFile -Message "[INFO] Found a TransportRule" -Color "Green"
+			write-LogFile -Message "Rule Name $($rule.name)" -Color "Yellow"
+			write-LogFile -Message "Rule CreatedBy: $($rule.CreatedBy)" -Color "Yellow"
+			write-LogFile -Message "When Changed: $($rule.WhenChanged)" -Color "Yellow"
+			write-LogFile -Message "Rule State: $($rule.State)" -Color "Yellow"
+			write-LogFile -Message "Description: $($rule.Description)" -Color "Yellow"
+		}
+	}
 }
 
-# Collects the transport rules in the organization and saves them to a CSV file
-function Get-TransportRules {
-    <#
-        .SYNOPSIS
-            Collects all transport rules in the organization and saves them to a CSV file.
+function Get-TransportRules
+{
+<#
+    .SYNOPSIS
+    Collects all transport rules in your organization.
 
-        .DESCRIPTION
-            Collects all transport rules in the organization and saves them to a CSV file.
+    .DESCRIPTION
+    Collects all transport rules in your organization.
+	The output will be written to a CSV file called "TransportRules.csv".
 
-        .PARAMETER OutputDir
-            OutputDir is the parameter specifying the output directory.
-            Default: Output\Rules
+	.PARAMETER OutputDir
+	OutputDir is the parameter specifying the output directory.
+	Default: Output\Rules
 
-        .PARAMETER Encoding
-            Encoding is the parameter specifying the encoding of the CSV output file.
-            Default: UTF8
+	.PARAMETER Encoding
+	Encoding is the parameter specifying the encoding of the CSV output file.
+	Default: UTF8
 
-        .EXAMPLE
-            Get-TransportRules
-    #>
+    .Example
+    Get-TransportRules
+#>
 
-    [CmdletBinding()]
-    param (
-        [string]$OutputDir = "Output\Rules",
-        [string]$Encoding = "UTF8"
-    )
+	[CmdletBinding()]
+	param (
+		[string]$OutputDir,
+		[string]$Encoding
+	)
 
-    # Validates the output directory
-    if (!(Test-Path -Path $OutputDir)) {
-        # Creates the output directory if it doesn't exist
-        New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null
-        Write-LogFile -Message "[INFO] Creating the following directory: $OutputDir"
-    }
+	if ($OutputDir -eq "" ){
+		$OutputDir = "Output\Rules"
+		if (!(test-path $OutputDir)) {
+			New-Item -ItemType Directory -Force -Name $OutputDir | Out-Null
+			write-LogFile -Message "[INFO] Creating the following directory: $OutputDir"
+		}
+	}
 
-    $filename = "$($date)-TransportRules.csv"
-    $outputDirectory = Join-Path $OutputDir $filename
+	else{
+		if (Test-Path -Path $OutputDir) {
+  			write-LogFile -Message "[INFO] Custom directory set to: $OutputDir"
+     	}
 
-    # Gets the transport rules from Microsoft Graph API
-    $transportRules = Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/v1.0/policies/transportRules" -OutputType Microsoft.Open.MSG.Clients.TransportRules.MicrosoftGraph.TrustPolicy
+       	else {
+    		write-Error "[Error] Custom directory invalid: $OutputDir exiting script" -ErrorAction Stop
+       		write-LogFile -Message "[Error] Custom directory invalid: $OutputDir exiting script"
+	 	}
+   	}
 
-    if ($null -ne $transportRules) {
-        # Creates a StreamWriter to write to the CSV file
-        $streamWriter = [IO.StreamWriter]::Create($outputDirectory, $false, [Text.Utf8Encoding]::new($Encoding, $false, $true))
+	$filename = "$($date)-TransportRules.csv"
+	$outputDirectory = Join-Path $OutputDir $filename
 
-        try {
-            # Writes the header row to the CSV file
-            $streamWriter.WriteLine("Name,Description,CreatedBy,WhenChanged,State")
+	if ($Encoding -eq "" ){
+		$Encoding = "UTF8"
+	}
 
-            # Loops through each transport rule
-            $transportRules.Value | ForEach-Object {
-                # Writes the properties of the transport rule to the CSV file
-                $streamWriter.WriteLine("$($_.DisplayName),$($_.Description),$($_.CreatedBy.Application.DisplayName),$($_.CreatedBy.DateTime),$($_.IsEnabled)")
-            }
-        }
-        finally {
-            # Closes the StreamWriter
-            $streamWriter.Dispose()
-        }
+	$transportRules = Get-TransportRule | Select-Object -Property Name,Description,CreatedBy,WhenChanged,State
 
-        # Displays a success message
-        Write-LogFile -Message "[INFO] Transport rules are collected and writen to: $outputDirectory" -Color "Green"
-    }
+	if ($null -ne $transportRules) {
+		$transportRules | export-csv -NoTypeInformation $outputDirectory -Encoding $Encoding
+		write-LogFile -Message "[INFO] Transport rules are collected and writen to: $outputDirectory" -Color "Green"
+	}
 }
 
-# Collects the mailbox rules for the specified users and saves them to a CSV file
-function Get-MailboxRules {
-    <#
-        .SYNOPSIS
-            Collects all the mailbox rules for the specified users and saves them to a CSV file.
+function Show-MailboxRules
+{
+<#
+    .SYNOPSIS
+    Shows the mailbox rules in your organization.
 
-        .DESCRIPTION
-            Collects all the mailbox rules for the specified users and saves them to a CSV file.
+    .DESCRIPTION
+    Shows the mailbox rules in your organization.
 
-        .PARAMETER UserIds
-            UserIds is the Identity parameter specifies the Inbox rule that you want to view.
+	.Parameter UserIds
+    UserIds is the Identity parameter specifies the Inbox rule that you want to view.
 
-        .PARAMETER OutputDir
-            OutputDir is the parameter specifying the output directory.
-            Default: Output\Rules
+    .Example
+    Show-MailboxRules -UserIds "HR@invictus-ir.com,Test@Invictus-ir.com"
+#>
+	[CmdletBinding()]
+	param(
+		[string]$UserIds
+	)
 
-        .PARAMETER Encoding
-            Encoding is the parameter specifying the encoding of the CSV output file.
-            Default: UTF8
+	$amountofRules = 0
+	if ($UserIds -eq "") {
+		Get-mailbox -resultsize unlimited  |
+		ForEach-Object {
+			write-LogFile -Message "[INFO] Checking $($_.UserPrincipalName)..."
 
-        .EXAMPLE
-            Get-mailboxRules -UserIds Test@Invictus-ir.com
-            Get-mailboxRules -UserIds "HR@invictus-ir.com,Test@Invictus-ir.com"
-    #>
+			$inboxrule = Get-inboxrule -Mailbox $_.UserPrincipalName
+			if ($inboxrule) {
+				write-LogFile -Message "[INFO] Found InboxRule(s) for: $($_.UserPrincipalName)..." -Color "Green"
+				foreach($rule in $inboxrule){
+					$amountofRules = $amountofRules + 1
+					write-LogFile -Message "Username: $($_.UserPrincipalName)" -Color "Yellow"
+					write-LogFile -Message "RuleName: $($rule.name)" -Color "Yellow"
+					write-LogFile -Message "RuleEnabled: $($rule.Enabled)" -Color "Yellow"
+					write-LogFile -Message "CopytoFolder: $($rule.CopyToFolder)" -Color "Yellow"
+					write-LogFile -Message "MovetoFolder: $($rule.MoveToFolder)" -Color "Yellow"
+					write-LogFile -Message "RedirectTo $($rule.RedirectTo)" -Color "Yellow"
+					write-LogFile -Message "ForwardTo: $($rule.ForwardTo)" -Color "Yellow"
+					write-LogFile -Message "TextDescription: $($rule.Description)" -Color "Yellow"
+				}
+			}
+		}
+	}
 
-    [CmdletBinding()]
-    param (
-        [Parameter(Mandatory = $true)]
-        [string]$UserIds,
+	else {
+		if ($UserIds -match ",") {
+			$UserIds.Split(",") | ForEach-Object {
+				$user = $_
+				Write-Output ('[INFO] Checking {0}...' -f $user)
 
-        [string]$OutputDir = "Output\Rules",
-        [string]$Encoding = "UTF8"
-    )
+				$inboxrule = get-inboxrule -Mailbox $user
+				if ($inboxrule) {
+					write-LogFile -Message "[INFO] Found InboxRule(s) for: $UserIds..." -Color "Green"
+					foreach($rule in $inboxrule){
+						$amountofRules = $amountofRules + 1
+						write-LogFile -Message "Username: $user" -Color "Yellow"
+						write-LogFile -Message "RuleName: $($rule.name)" -Color "Yellow"
+						write-LogFile -Message "RuleEnabled: $($rule.Enabled)" -Color "Yellow"
+						write-LogFile -Message "CopytoFolder: $($rule.CopyToFolder)" -Color "Yellow"
+						write-LogFile -Message "MovetoFolder: $($rule.MoveToFolder)" -Color "Yellow"
+						write-LogFile -Message "RedirectTo $($rule.RedirectTo)" -Color "Yellow"
+						write-LogFile -Message "ForwardTo: $($rule.ForwardTo)" -Color "Yellow"
+						write-LogFile -Message "TextDescription: $($rule.Description)" -Color "Yellow"
+					}
+				}
+			}
+		}
 
-    # Validates the output directory
-    if (!(Test-Path -Path $OutputDir)) {
-        # Creates the output directory if it doesn't exist
-        New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null
-        Write-LogFile -Message "[INFO] Creating the following directory: $OutputDir"
-    }
+		else {
+			Write-Output ('[INFO] Checking {0}...' -f $UserIds)
+			$inboxrule = get-inboxrule -Mailbox $UserIds
+			if ($inboxrule) {
+				write-LogFile -Message "[INFO] Found InboxRule(s) for: $UserIds..." -Color "Green"
+				foreach($rule in $inboxrule){
+					$amountofRules = $amountofRules + 1
+					write-LogFile -Message "Username: $UserIds" -Color "Yellow"
+					write-LogFile -Message "RuleName: $($rule.name)" -Color "Yellow"
+					write-LogFile -Message "RuleEnabled: $($rule.Enabled)" -Color "Yellow"
+					write-LogFile -Message "CopytoFolder: $($rule.CopyToFolder)" -Color "Yellow"
+					write-LogFile -Message "MovetoFolder: $($rule.MoveToFolder)" -Color "Yellow"
+					write-LogFile -Message "RedirectTo $($rule.RedirectTo)" -Color "Yellow"
+					write-LogFile -Message "ForwardTo: $($rule.ForwardTo)" -Color "Yellow"
+					write-LogFile -Message "TextDescription: $($rule.Description)" -Color "Yellow"
+				}
+			}
+		}
+	}
 
-    $RuleList = @()
+	write-LogFile -Message "[INFO] A total of $amountofRules InboxRules found" -Color "Green"
+}
 
-    if ($Encoding -eq "") {
-        $Encoding = "UTF8"
-    }
+function Get-MailboxRules
+{
+<#
+    .SYNOPSIS
+    Collects all the mailbox rules in your organization.
 
-    # Splits the UserIds parameter into an array of user IDs
-    $userIdsArray = $UserIds -split ","
+    .DESCRIPTION
+    Collects all the mailbox rules in your organization.
+	The output will be written to a CSV file called "InboxRules.csv".
 
-    # Loops through each user ID
-    foreach ($userId in $userIdsArray) {
-        # Trims whitespace from the user ID
-        $userId = $userId.Trim()
+	.Parameter UserIds
+    UserIds is the Identity parameter specifies the Inbox rule that you want to view.
 
-        # Gets the user object from Microsoft Graph API
-        $user = Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/v1.0/users/$userId" -OutputType Microsoft.Graph.User
+	.PARAMETER OutputDir
+	OutputDir is the parameter specifying the output directory.
+	Default: Output\Rules
 
-        if ($null -ne $user) {
-            # Gets the mailbox rules for the user
-            $inboxrule = Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/v1.0/users/$($user.id)/mailboxRules" -OutputType Microsoft.Open.MSG.Clients.MailboxRules.MicrosoftGraph.TrustPolicy
+	.PARAMETER Encoding
+	Encoding is the parameter specifying the encoding of the CSV output file.
+	Default: UTF8
 
-            if ($inboxrule) {
-                # Loops through each mailbox rule
-                foreach ($rule in $inboxrule.Value) {
-                    $RuleList += [PSCustomObject]@{
-                        UserName       = $user.Mail
-                        RuleName       = $rule.Name
-                        RuleEnabled    = $rule.IsEnabled
-                        CopytoFolder   = $rule.CopyToFolder
-                        MovetoFolder   = $rule.MoveToFolder
-                        RedirectTo    = $rule.RedirectTo
-                        ForwardTo     = $rule.ForwardTo
-                        TextDescription = $rule.Description
-                    }
-                }
+    .Example
+	Get-MailboxRules -UserIds Test@Invictus-ir.com
+    Get-MailboxRules -UserIds "HR@invictus-ir.com,Test@Invictus-ir.com"
+#>
+	[CmdletBinding()]
+	param(
+		[string]$UserIds,
+		[string]$OutputDir,
+		[string]$Encoding
+	)
 
-                # Displays a message indicating that the mailbox rules for the user are collected
-                Write-LogFile -Message "[INFO] Found $($inboxrule.Value.Count) MailboxRule(s) for: $($user.Mail)..." -Color "Yellow"
-                Write-LogFile -Message "[INFO] Collecting $($inboxrule.Value.Count) MailboxRule(s) for: $($user.Mail)..." -Color "Yellow"
-            }
-            else {
-                # Displays a message indicating that no mailbox rules are found for the user
-                Write-LogFile -Message "[INFO] No MailboxRules found for: $($user.Mail)" -Color "Yellow"
-            }
-        }
-        else {
-            # Displays an error message if the user is not found
-            Write-LogFile -Message "[ERROR] User not found: $userId" -Color "Red"
-        }
-    }
+	$RuleList = @()
 
-    $filename = "$($date)-MailboxRules.csv"
-    $outputDirectory = Join-Path $OutputDir $filename
+	if ($Encoding -eq "" ){
+		$Encoding = "UTF8"
+	}
 
-    # Exports the mailbox rules to a CSV file
-    $RuleList | Export-Csv -Path $outputDirectory -Encoding $Encoding -NoTypeInformation
+	if ($OutputDir -eq "" ){
+		$OutputDir = "Output\Rules"
+		if (!(test-path $OutputDir)) {
+			write-LogFile -Message "[INFO] Creating the following directory: $OutputDir"
+			New-Item -ItemType Directory -Force -Name $OutputDir | Out-Null
+		}
+	}
 
-    # Displays a success message
-    Write-LogFile -Message "[INFO] MailboxRules rules are collected and writen to: $outputDirectory" -Color "Green"
+	else{
+		if (Test-Path -Path $OutputDir) {
+  			write-LogFile -Message "[INFO] Custom directory set to: $OutputDir"
+     	}
+
+       	else {
+	 		write-LogFile -Message "[Error] Custom directory invalid: $OutputDir exiting script"
+    		write-Error "[Error] Custom directory invalid: $OutputDir exiting script" -ErrorAction Stop
+	 	}
+   	}
+
+	$filename = "$($date)-MailboxRules.csv"
+	$outputDirectory = Join-Path $OutputDir $filename
+
+	$amountofRules = 0
+	if ($UserIds -eq "") {
+		$totalRules = 0
+		Get-mailbox -resultsize unlimited  |
+		ForEach-Object {
+			Write-Output ('[INFO] Checking {0}...' -f $_.UserPrincipalName)
+
+			$inboxrule = Get-inboxrule -Mailbox $_.UserPrincipalName
+			if ($inboxrule) {
+				$amountofRules = 0
+				foreach ($rule in $inboxrule) {
+					$tempval = [pscustomobject]@{
+						UserName = $_.UserPrincipalName
+						RuleName = $rule.name
+						RuleEnabled = $rule.Enabled
+						CopytoFolder = $rule.CopyToFolder
+						MovetoFolder = $rule.MoveToFolder
+						RedirectTo = $rule.RedirectTo
+						ForwardTo = $rule.ForwardTo
+						TextDescription = $rule.Description
+                     }
+
+					$RuleList = $tempval
+					$amountofRules = $amountofRules + 1
+					$totalRules = $totalRules + 1
+					$RuleList | export-CSV $outputDirectory -Append -NoTypeInformation -Encoding UTF8
+				}
+
+				write-LogFile -Message "[INFO] Found $amountofRules InboxRule(s) for: $($_.UserPrincipalName)..." -Color "Yellow"
+				write-LogFile -Message "[INFO] Collecting $amountofRules InboxRule(s) for: $($_.UserPrincipalName)..." -Color "Yellow"
+			}
+		}
+	}
+
+	else {
+		if ($UserIds -match ",") {
+			$UserIds.Split(",") | ForEach-Object {
+				$User = $_
+
+				Write-Output ('[INFO] Checking {0}...' -f $User)
+				$inboxrule = get-inboxrule -Mailbox $User
+				if ($inboxrule) {
+					$amountofRules = 0
+					foreach ($rule in $inboxrule) {
+						$tempval = [pscustomobject]@{
+							UserName = $User
+							RuleName = $rule.name
+							RuleEnabled = $rule.Enabled
+							CopytoFolder = $rule.CopyToFolder
+							MovetoFolder = $rule.MoveToFolder
+							RedirectTo = $rule.RedirectTo
+							ForwardTo = $rule.ForwardTo
+							TextDescription = $rule.Description
+						}
+
+						$RuleList = $tempval
+						$amountofRules = $amountofRules + 1
+						$totalRules = $totalRules + 1
+						$RuleList | export-CSV $outputDirectory -Append -NoTypeInformation -Encoding UTF8
+					}
+
+					write-LogFile -Message "[INFO] Found $amountofRules InboxRule(s) for: $User..." -Color "Yellow"
+					write-LogFile -Message "[INFO] Collecting $amountofRules InboxRule(s) for: $User..." -Color "Yellow"
+				}
+			}
+		}
+
+		else {
+			Write-Output ('[INFO] Checking {0}...' -f $UserIds)
+			$inboxrule = get-inboxrule -Mailbox $UserIds
+			if ($inboxrule) {
+				write-host ('[INFO] Found InboxRule(s) for: {0}...' -f $UserIds) -ForegroundColor Yellow
+				foreach($rule in $inboxrule){
+					$amountofRules = $amountofRules + 1
+					$tempval = [pscustomobject]@{
+							UserName = $UserIds
+							RuleName = $rule.name
+							RuleEnabled = $rule.Enabled
+							CopytoFolder = $rule.CopyToFolder
+							MovetoFolder = $rule.MoveToFolder
+							RedirectTo = $rule.RedirectTo
+							ForwardTo = $rule.ForwardTo
+							TextDescription = $rule.Description
+						}
+
+						$RuleList = $tempval
+						$totalRules = $totalRules + 1
+						$RuleList | export-CSV $outputDirectory -Append -NoTypeInformation -Encoding UTF8
+					}
+
+					write-LogFile -Message "[INFO] Collecting $amountofRules InboxRule(s) for: $UserIds..." -Color "Yellow"
+			}
+		}
+	}
+
+	write-LogFile -Message "[INFO] A total of $totalRules InboxRules found!" -Color "Green"
+	write-LogFile -Message "[INFO] InboxRules rules are collected and writen to: $outputDirectory" -Color "Green"
 }

@@ -1,5 +1,3 @@
-using module  "$PSScriptRoot\Microsoft-Extractor-Suite.psm1";
-
 function Get-RiskyUsers {
 <#
     .SYNOPSIS

@@ -1,154 +1,94 @@
-. "$PSScriptRoot\Microsoft-Extractor-Suite.psm1";
+function Get-UALStatistics
+{
+<#
+    .SYNOPSIS
+    Displays the total number of logs within the unified audit log.
 
-function Write-Log {
-    [CmdletBinding()]
-    param(
-        [string]$Message,
-        [ConsoleColor]$Color = [ConsoleColor]::White,
-        [switch]$ToFile
-    )
+    .DESCRIPTION
+    A search is executed and the total number of logs within the set timeframe will be displayed.
+	The output will be written to a CSV file called "Amount_Of_Audit_Logs.csv".
 
-    if ($Color) {
-        Write-Host $Message -ForegroundColor $Color
-    } else {
-        Write-Host $Message
-    }
+	.PARAMETER UserIds
+    UserIds is the UserIds parameter filtering the log entries by the account of the user who performed the actions.
 
-    if ($ToFile) {
-        $date = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-        $logFile = Join-Path -Path (Join-Path -Path $PSScriptRoot -ChildPath "Logs") -ChildPath "$($MyInvocation.MyCommand.Name).log"
+	.PARAMETER StartDate
+    startDate is the parameter specifying the start date of the date range.
 
-        if (-not (Test-Path -Path (Split-Path -Path $logFile -Parent))) {
-            New-Item -ItemType Directory -Force -Path (Split-Path -Path $logFile -Parent)
-        }
+	.PARAMETER EndDate
+    endDate is the parameter specifying the end date of the date range.
 
-        Add-Content -Path $logFile -Value "$date - $Message"
-    }
+	.PARAMETER OutputDir
+	OutputDir is the parameter specifying the output directory.
+	Default: Output\
+
+    .EXAMPLE
+    Get-UALStatistics
+	Displays the total number of logs within the unified audit log.
+
+	.EXAMPLE
+	Get-UALStatistics -UserIds Test@invictus-ir.com -StartDate 1/4/2023 -EndDate 5/4/2023
+	Displays the total number of logs within the unified audit log between 1/4/2023 and 5/4/2023 for the user Test@invictus-ir.com.
+#>
+	[CmdletBinding()]
+	param(
+		[string]$UserIds,
+		[string]$StartDate,
+		[string]$EndDate,
+		[string]$OutputDir
+	)
+
+	#Assert-Connection -Cmdlet 'Get-AdminAuditLogConfig'
+
+	write-logFile -Message "[INFO] Running Get-UALStatistics" -Color "Green"
+
+	StartDate
+	EndDate
+
+	Assert-UserIds
+
+	$recordTypes = "ExchangeAdmin","ExchangeItem","ExchangeItemGroup","SharePoint","SyntheticProbe","SharePointFileOperation","OneDrive","AzureActiveDirectory","AzureActiveDirectoryAccountLogon","DataCenterSecurityCmdlet","ComplianceDLPSharePoint","Sway","ComplianceDLPExchange","SharePointSharingOperation","AzureActiveDirectoryStsLogon","SkypeForBusinessPSTNUsage","SkypeForBusinessUsersBlocked","SecurityComplianceCenterEOPCmdlet","ExchangeAggregatedOperation","PowerBIAudit","CRM","Yammer","SkypeForBusinessCmdlets","Discovery","MicrosoftTeams","ThreatIntelligence","MailSubmission","MicrosoftFlow","AeD","MicrosoftStream","ComplianceDLPSharePointClassification","ThreatFinder","Project","SharePointListOperation","SharePointCommentOperation","DataGovernance","Kaizala","SecurityComplianceAlerts","ThreatIntelligenceUrl","SecurityComplianceInsights","MIPLabel","WorkplaceAnalytics","PowerAppsApp","PowerAppsPlan","ThreatIntelligenceAtpContent","LabelContentExplorer","TeamsHealthcare","ExchangeItemAggregated","HygieneEvent","DataInsightsRestApiAudit","InformationBarrierPolicyApplication","SharePointListItemOperation","SharePointContentTypeOperation","SharePointFieldOperation","MicrosoftTeamsAdmin","HRSignal","MicrosoftTeamsDevice","MicrosoftTeamsAnalytics","InformationWorkerProtection","Campaign","DLPEndpoint","AirInvestigation","Quarantine","MicrosoftForms","ApplicationAudit","ComplianceSupervisionExchange","CustomerKeyServiceEncryption","OfficeNative","MipAutoLabelSharePointItem","MipAutoLabelSharePointPolicyLocation","MicrosoftTeamsShifts","SecureScore","MipAutoLabelExchangeItem","CortanaBriefing","Search","WDATPAlerts","PowerPlatformAdminDlp","PowerPlatformAdminEnvironment","MDATPAudit","SensitivityLabelPolicyMatch","SensitivityLabelAction","SensitivityLabeledFileAction","AttackSim","AirManualInvestigation","SecurityComplianceRBAC","UserTraining","AirAdminActionInvestigation","MSTIC","PhysicalBadgingSignal","TeamsEasyApprovals","AipDiscover","AipSensitivityLabelAction","AipProtectionAction","AipFileDeleted","AipHeartBeat","MCASAlerts","OnPremisesFileShareScannerDlp","OnPremisesSharePointScannerDlp","ExchangeSearch","SharePointSearch","PrivacyDataMinimization","LabelAnalyticsAggregate","MyAnalyticsSettings","SecurityComplianceUserChange","ComplianceDLPExchangeClassification","ComplianceDLPEndpoint","MipExactDataMatch","MSDEResponseActions","MSDEGeneralSettings","MSDEIndicatorsSettings","MS365DCustomDetection","MSDERolesSettings","MAPGAlerts","MAPGPolicy","MAPGRemediation","PrivacyRemediationAction","PrivacyDigestEmail","MipAutoLabelSimulationProgress","MipAutoLabelSimulationCompletion","MipAutoLabelProgressFeedback","DlpSensitiveInformationType","MipAutoLabelSimulationStatistics","LargeContentMetadata","Microsoft365Group","CDPMlInferencingResult","FilteringMailMetadata","CDPClassificationMailItem","CDPClassificationDocument","OfficeScriptsRunAction","FilteringPostMailDeliveryAction","CDPUnifiedFeedback","TenantAllowBlockList","ConsumptionResource","HealthcareSignal","DlpImportResult","CDPCompliancePolicyExecution","MultiStageDisposition","PrivacyDataMatch","FilteringDocMetadata","FilteringEmailFeatures","PowerBIDlp","FilteringUrlInfo","FilteringAttachmentInfo","CoreReportingSettings","ComplianceConnector","PowerPlatformLockboxResourceAccessRequest","PowerPlatformLockboxResourceCommand","CDPPredictiveCodingLabel","CDPCompliancePolicyUserFeedback","WebpageActivityEndpoint","OMEPortal","CMImprovementActionChange","FilteringUrlClick","MipLabelAnalyticsAuditRecord","FilteringEntityEvent","FilteringRuleHits","FilteringMailSubmission","LabelExplorer","MicrosoftManagedServicePlatform","PowerPlatformServiceActivity","ScorePlatformGenericAuditRecord","FilteringTimeTravelDocMetadata","Alert","AlertStatus","AlertIncident","IncidentStatus","Case","CaseInvestigation","RecordsManagement","PrivacyRemediation","DataShareOperation","CdpDlpSensitive","EHRConnector","FilteringMailGradingResult","PublicFolder","PrivacyTenantAuditHistoryRecord","AipScannerDiscoverEvent","EduDataLakeDownloadOperation","M365ComplianceConnector","MicrosoftGraphDataConnectOperation","MicrosoftPurview","FilteringEmailContentFeatures","PowerPagesSite","PowerAppsResource","PlannerPlan","PlannerCopyPlan","PlannerTask","PlannerRoster","PlannerPlanList","PlannerTaskList","PlannerTenantSettings","ProjectForTheWebProject","ProjectForTheWebTask","ProjectForTheWebRoadmap","ProjectForTheWebRoadmapItem","ProjectForTheWebProjectSettings","ProjectForTheWebRoadmapSettings","QuarantineMetadata","MicrosoftTodoAudit","TimeTravelFilteringDocMetadata","TeamsQuarantineMetadata","SharePointAppPermissionOperation","MicrosoftTeamsSensitivityLabelAction","FilteringTeamsMetadata","FilteringTeamsUrlInfo","FilteringTeamsPostDeliveryAction","MDCAssessments","MDCRegulatoryComplianceStandards","MDCRegulatoryComplianceControls","MDCRegulatoryComplianceAssessments","MDCSecurityConnectors","MDADataSecuritySignal","VivaGoals","FilteringRuntimeInfo","AttackSimAdmin","MicrosoftGraphDataConnectConsent","FilteringAtpDetonationInfo","PrivacyPortal","ManagedTenants","UnifiedSimulationMatchedItem","UnifiedSimulationSummary","UpdateQuarantineMetadata","MS365DSuppressionRule","PurviewDataMapOperation","FilteringUrlPostClickAction","IrmUserDefinedDetectionSignal","TeamsUpdates","PlannerRosterSensitivityLabel","MS365DIncident","FilteringDelistingMetadata","ComplianceDLPSharePointClassificationExtended","MicrosoftDefenderForIdentityAudit","SupervisoryReviewDayXInsight","DefenderExpertsforXDRAdmin","CDPEdgeBlockedMessage","HostedRpa"
+
+	$date = [datetime]::Now.ToString('yyyyMMddHHmmss')
+	$outputFile = "$($date)-Amount_Of_Audit_Logs.csv"
+
+	#Assert-Encoding
+    #Assert-OutputDir
+
+	$outputDirectory = Join-Path $OutputDir $outputFile
+
+	try {
+		$streamWriter = New-Object System.IO.StreamWriter($outputDirectory)
+		$streamWriter.WriteLine("RecordType,Amount of log entries")
+		$streamWriter.Close()
+	}
+	catch {
+		Write-LogFile -Message "[ERROR] Failed to write to file: $_" -Color "Red"
+	}
+
+	#Write-Host "[INFO] Calculating the number of audit logs" -ForegroundColor Green
+	Write-LogFile -Message "[INFO] Calculating the number of audit logs for each of the 236 Record Types between $($script:StartDate.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssK")) and $($script:EndDate.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssK"))" -Color "Green"
+	$totalCount = Search-UnifiedAuditLog -Userids $UserIds -StartDate $script:StartDate -EndDate $script:EndDate -ResultSize 1 |  Format-List -Property ResultCount| out-string -Stream | select-string ResultCount
+
+	Foreach ($record in $recordTypes) {
+		$specificResult = Search-UnifiedAuditLog -Userids $UserIds -StartDate $script:StartDate -EndDate $script:EndDate -RecordType $record -ResultSize 1 | Select-Object -First 1 -ExpandProperty ResultCount
+		if ($specificResult) {
+			Write-LogFile -Message "$($record):$($specificResult)"
+			Write-Output "$record,$number" | Out-File $outputDirectory -Append
+		}
+		else {
+		}
+	}
+
+	if ($totalCount) {
+		$numbertotal = $totalCount.tostring().split(":")[1]
+		Write-LogFile -Message "--------------------------------------"
+		Write-LogFile -Message "Total count:$($numbertotal)" -Color "Green"
+		Write-LogFile -Message "[INFO] Count complete file is written to $outputFile" -Color "Green"
+		$stringTotalCount = "Total Count:"
+		Write-Output "$stringTotalCount : $numbertotal" | Out-File $outputDirectory -Append
+	}
+
+	else {
+		Write-LogFile -Message "[INFO] No records found for $UserIds"
+	}
 }
-
-function Invoke-MgGraphRequest {
-    [CmdletBinding()]
-    param(
-        [string]$Uri,
-        [string]$Method = "GET",
-        [hashtable]$Headers = @{},
-        [string]$Body
-    )
-
-    $headers.Add("ConsistencyLevel", "eventual")
-    $headers.Add("Prefer", "odata.maxversion=4.0")
-
-    $response = Invoke-RestMethod -Uri $Uri -Method $Method -Headers $headers -Body $Body -UseBasicParsing
-
-    if ($response.Error) {
-        Write-Log -Message "[ERROR] $($response.Error.Message)" -Color "Red"
-
-        if ($response.Error.InnerError) {
-            Write-Log -Message "[ERROR] Inner error: $($response.Error.InnerError.Message)" -Color "Red"
-        }
-
-        if ($response.Error.InnerError.RequestId) {
-            Write-Log -Message "[ERROR] Request ID: $($response.Error.InnerError.RequestId)" -Color "Red"
-        }
-
-        if ($response.Error.InnerError.Date) {
-            Write-Log -Message "[ERROR] Date: $($response.Error.InnerError.Date)" -Color "Red"
-        }
-
-        if ($response.Error.InnerError.Body) {
-            Write-Log -Message "[ERROR] Body: $($response.Error.InnerError.Body)" -Color "Red"
-        }
-
-        if ($response.Error.InnerError.Path) {
-            Write-Log -Message "[ERROR] Path: $($response.Error.InnerError.Path)" -Color "Red"
-        }
-
-        if ($response.Error.InnerError.StatusCode) {
-            Write-Log -Message "[ERROR] Status code: $($response.Error.InnerError.StatusCode)" -Color "Red"
-        }
-
-        if ($response.Error.InnerError.SubStatusCode) {
-            Write-Log -Message "[ERROR] Sub status code: $($response.Error.InnerError.SubStatusCode)" -Color "Red"
-        }
-
-        if ($response.Error.InnerError.Parameters) {
-            Write-Log -Message "[ERROR] Parameters: $($response.Error.InnerError.Parameters)" -Color "Red"
-        }
-
-        if ($response.Error.InnerError.Message) {
-            Write-Log -Message "[ERROR] Message: $($response.Error.InnerError.Message)" -Color "Red"
-        }
-
-        if ($response.Error.InnerError.Details) {
-            Write-Log -Message "[ERROR] Details: $($response.Error.InnerError.Details)" -Color "Red"
-        }
-
-        exit 1
-    }
-
-    return $response
-}
-
-function Format-DateString {
-    [CmdletBinding()]
-    param(
-        [datetime]$Date
-    )
-
-    return $Date.ToString("s") + "Z"
-}
-
-function Format-OutputFileName {
-    [CmdletBinding()]
-    param(
-        [string]$RecordType,
-        [datetime]$StartDate,
-        [datetime]$EndDate
-    )
-
-    return "$($RecordType)_$(Format-DateString -Date $StartDate)_$(Format-DateString -Date $EndDate).csv"
-}
-
-function Format-RecordTypeName {
-    [CmdletBinding()]
-    param(
-        [string]$RecordType
-    )
-
-    $formattedRecordType = $RecordType.Replace("Exchange", "EXCH")
-    $formattedRecordType = $formattedRecordType.Replace("SharePoint", "SHAREPOINT")
-    $formattedRecordType = $formattedRecordType.Replace("OneDrive", "ONEDRIVE")
-    $formattedRecordType = $formattedRecordType.Replace("AzureActiveDirectory", "AAD")
-    $formattedRecordType = $formattedRecordType.Replace("DataCenterSecurityCmdlet", "DCSC")
-    $formattedRecordType = $formattedRecordType.Replace("ComplianceDLP", "DLP")
-    $formattedRecordType = $formattedRecordType.Replace("Sway", "SWAY")
-    $formattedRecordType = $formattedRecordType.Replace("SecurityComplianceCenterEOPCmdlet", "SCCEOP")
-    $formattedRecordType = $formattedRecordType.Replace("ExchangeAggregatedOperation", "EXCHAGG")
-    $formattedRecordType = $formattedRecordType.Replace("PowerBIAudit", "PBIAUDIT")
-    $formattedRecordType = $formattedRecordType.Replace("CRM", "CRM")
-    $formattedRecordType = $formattedRecordType.Replace("Yammer", "YAMMER")
-    $formattedRecordType = $formattedRecordType.Replace("SkypeForBusiness", "SFB")
-    $formattedRecordType = $formattedRecordType.Replace("MicrosoftTeams", "MSTEAMS")
-    $formattedRecordType = $formattedRecordType.Replace("ThreatIntelligence", "TI")
-    $formattedRecordType = $formattedRecordType.Replace("MailSubmission", "MAILSUBM")
-    $formattedRecordType = $formattedRecordType.Replace("MicrosoftFlow", "FLOW")
-    $formattedRecordType = $formattedRecordType.Replace("AeD", "AED")
-    $formattedRecordType = $formattedRecordType.Replace("MicrosoftStream", "STREAM")
-    $formattedRecordType = $formattedRecordType.Replace("ComplianceDLPSharePointClassification", "DLPCLASS")
-    $formattedRecordType = $formattedRecordType.Replace("ThreatFinder", "TF")
-    $formattedRecordType = $formattedRecordType.Replace("Project", "PROJ")
-    $formattedRecordType = $formattedRecordType.Replace("SharePointListOperation", "SHAREPOINTLIST")
-    $formattedRecordType = $formattedRecordType.Replace("SharePointCommentOperation", "SHAREPOINTCOMMENT")
-    $formattedRecordType = $formattedRecordType.Replace("DataGovernance", "DG")
-    $formattedRecordType = $formattedRecordType.Replace("Kaizala", "KAIZALA")
-    $formattedRecordType = $formattedRecordType.Replace("SecurityComplianceAlerts", "SCALERTS")
-    $formattedRecordType = $formattedRecordType.Replace("ThreatIntelligenceUrl", "TIURL")
-    $formattedRecordType = $formattedRecordType.Replace("SecurityComplianceInsights", "SCINSIGHTS")
-    $formattedRecordType = $formattedRecordType.Replace("MIPLabel", "MIPLABEL")
-    $formattedRecordType = $formattedRecordType.Replace("WorkplaceAnalytics", "WPA")
-    $formattedRecordType = $formattedRecordType.Replace("PowerAppsApp", "POWERAPPSAPP")
-    $formattedRecordType = $formattedRecordType.Replace("PowerAppsPlan", "POWERAPPSPLAN")
-    $formattedRecordType = $formattedRecordType.Replace("ThreatIntelligenceAtpContent", "TIATPCONTENT")
-    $formattedRecordType = $formattedRecordType.Replace("LabelContentExplorer", "LABELCONTENTEXP")
-    $formattedRecordType = $formattedRecordType.Replace("TeamsHealthcare", "TEAMSHEALTHCARE")
-    $formattedRecordType = $formattedRecordType.Replace("ExchangeItemAggregated", "EXCHITEM

@@ -1,232 +1,297 @@
-using module "$PSScriptRoot\Microsoft-Extractor-Suite.psm1"
+# This contains functions for getting Azure AD logging
 
 function Get-ADSignInLogs {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory=$true)]
-        [datetime]$StartDate,
-        [Parameter(Mandatory=$true)]
-        [datetime]$EndDate,
-        [Parameter(Mandatory=$true)]
-        [string]$OutputDir,
-        [string]$UserIds,
-        [switch]$MergeOutput,
-        [string]$Encoding = 'UTF8',
-        [int]$Interval
-    )
+<#
+    .SYNOPSIS
+    Get sign-in logs.
 
-    Write-Log -Message "Running Get-ADSignInLogs" -Color "Green"
+    .DESCRIPTION
+    The Get-ADSignInLogs cmdlet collects the contents of the Azure Active Directory sign-in logs.
+	The output will be written to: Output\AzureAD\SignInLogs.json
 
-    $outputFiles = Get-OutputFiles -OutputDir $OutputDir -FilePrefix "$($StartDate)-AuditLogSignIn" -FileExtension json
+	.PARAMETER startDate
+	The startDate parameter specifies the date from which all logs need to be collected.
 
-    $dateStamp = Get-Date -Format "yyyyMMddHHmmss"
-    $filePath = Join-Path $OutputDir "$($dateStamp)-AuditLogSignIn.json"
+	.PARAMETER endDate
+    The Before parameter specifies the date endDate which all logs need to be collected.
 
-    $baseUri = 'https://graph.microsoft.com/v1.0'
-    $resourcePath = (Find-MgGraphCommand -Command Get-MgBetaAuditLogSignIn).URI[1]
-    $baseUri = "$baseUri$resourcePath?"
+	.PARAMETER OutputDir
+    OutputDir is the parameter specifying the output directory.
+	Default: Output\AzureAD
 
-    $queryParameters = @{
-        filter = @{
-            properties = @{
-                activityDateTime = @{
-                    ge = $StartDate
-                    le = $EndDate
-                }
-            }
-        }
-    }
+	.PARAMETER Encoding
+    Encoding is the parameter specifying the encoding of the JSON output file.
+	Default: UTF8
 
-    if ($UserIds) {
-        $queryParameters.filter.properties.initiatedBy = @{
-            user = @{
-                id = $UserIds
-            }
-        }
-    }
+	.PARAMETER MergeOutput
+    MergeOutput is the parameter specifying if you wish to merge outputs to a single file
+    Default: No
 
-    $apiUrl = "$baseUri$($queryParameters.filter.properties.activityDateTime.ge),$($queryParameters.filter.properties.activityDateTime.le),$($queryParameters.filter.properties.initiatedBy.user.id | ToQueryString)/@odata.type=#microsoft.graph.auditLogSignIn"
+	.PARAMETER UserIds
+    UserIds is the UserIds parameter filtering the log entries by the account of the user who performed the actions.
+    
+    .EXAMPLE
+    Get-ADSignInLogs
+	Get all sign-in logs.
 
-    try {
-        do {
-            $response = Invoke-MgGraphRequest -Method Get -Uri $apiUrl -ContentType 'application/json'
-            $logs = $response
+    .EXAMPLE
+    Get-ADAuditLogs -UserIds Test@invictus-ir.com
+    Get sign-in logs for the user Test@invictus-ir.com.
 
-            $currentDate = Get-Date -Format "yyyy-MM-ddTHH:mm:ss"
-            $logs.Values | ConvertTo-Json -Depth 100 | Out-File -FilePath $filePath -Encoding utf8BOM
-            Write-Host "Sign-in logs written to $filePath" -ForegroundColor Green
+	.EXAMPLE
+    Get-ADSignInLogs -endDate 2023-04-12
+	Get sign-in logs before 2023-04-12.
 
-            $apiUrl = $response.'@odata.nextLink'  # Update the URL to the nextLink for pagination
-            [System.GC]::Collect()
-            [System.GC]::WaitForPendingFinalizers()
+	.EXAMPLE
+    Get-ADSignInLogs -startDate 2023-04-12
+	Get sign-in logs after 2023-04-12.
+#>
+	[CmdletBinding()]
+	param(
+		[string]$startDate,
+		[string]$endDate,
+		[string]$outputDir,
+		[string]$UserIds,
+		[switch]$MergeOutput,
+		[string]$Encoding,
+		[string]$Interval
+	)
 
-            Start-Sleep -Seconds $Interval
+	try {
+		import-module AzureADPreview -force -ErrorAction stop
+		$areYouConnected = Get-AzureADAuditSignInLogs -ErrorAction stop
+	}
+	catch {
+		Write-logFile -Message "[WARNING] You must call Connect-Azure or install AzureADPreview before running this script" -Color "Red"
+		break
+	}
 
-        } while ($response.'@odata.nextLink')
-    }
-    catch {
-        Write-Error "Error fetching data: $_"
-    }
-    finally {
-        Remove-Variable response -ErrorAction Ignore
-        Remove-Variable logs -ErrorAction Ignore
-        [System.GC]::WaitForPendingFinalizers()
-        [System.GC]::Collect()
-    }
+	Write-logFile -Message "[INFO] Running Get-AADSignInLogs" -Color "Green"
 
-    if ($MergeOutput) {
-        try {
-            Write-Host 'Merging output files...' -ForegroundColor Green
-            $mergedFile = Join-Path $OutputDir "$($dateStamp)-AuditLogSignIn-MERGED.json"
-            Merge-OutputFiles -OutputDir $OutputDir -Encoding $Encoding -mergedFile $mergedFile -Files $outputFiles
-        }
-        catch {
-            Write-Error "Error merging files: $_" -ForegroundColor Red
-        }
-        finally {
-            Write-Host 'Process completed.' -ForegroundColor Green
-        }
-    }
+	StartDateAz
+	EndDate
+
+	if ($Interval -eq "") {
+		$Interval = 1440
+		Write-LogFile -Message "[INFO] Setting the Interval to the default value of 1440"
+	}
+
+	if ($Encoding -eq "" ){
+		$Encoding = "UTF8"
+	}
+
+	$date = [datetime]::Now.ToString('yyyyMMddHHmmss') 
+	if ($OutputDir -eq "" ){
+		$OutputDir = "Output\AzureAD\$date"
+		if (!(test-path $OutputDir)) {
+			write-logFile -Message "[INFO] Creating the following directory: $OutputDir"
+			New-Item -ItemType Directory -Force -Name $OutputDir | Out-Null
+		}
+	}
+
+	if ($UserIds){
+		Write-LogFile -Message "[INFO] UserID's eq $($UserIds)"
+	}
+
+
+	$filePath = "$OutputDir\SignInLogs.json"
+		
+	[DateTime]$currentStart = $script:StartDate
+	[DateTime]$currentEnd = $script:EndDate
+	[DateTime]$lastLog = $script:EndDate
+	$currentDay = 0  
+
+	Write-LogFile -Message "[INFO] Extracting all available Directory Sign-in Logs between $($currentStart.ToUniversalTime().ToString("yyyy-MM-dd")) and $($currentEnd.ToUniversalTime().ToString("yyyy-MM-dd"))" -Color "Green"
+	if($currentStart -gt $script:EndDate){
+		Write-LogFile -Message "[ERROR] $($currentStart.ToString("yyyy-MM-dd")) is greather than $($script:EndDate.ToString("yyyy-MM-dd")) - are you sure you put in the correct year? Exiting!" -Color "Red"
+		return
+	}
+
+	while ($currentStart -lt $script:EndDate) {			
+		$currentEnd = $currentStart.AddMinutes($Interval)       
+		if ($UserIds){
+			Write-LogFile -Message "[INFO] Collecting Directory Sign-in logs between $($currentStart.ToUniversalTime().ToString("yyyy-MM-dd")) and $($currentEnd.ToUniversalTime().ToString("yyyy-MM-dd"))."
+			try{
+				[Array]$results =  Get-AzureADAuditSignInLogs -All $true -Filter "UserPrincipalName eq '$($Userids)' and createdDateTime lt $($currentEnd.ToString("yyyy-MM-dd")) and createdDateTime gt $($currentStart.ToString("yyyy-MM-dd"))"
+			}
+			catch{
+				Start-Sleep -Seconds 20
+				[Array]$results =  Get-AzureADAuditSignInLogs -All $true -Filter "UserPrincipalName eq '$($Userids)' and createdDateTime lt $($currentEnd.ToString("yyyy-MM-dd")) and createdDateTime gt $($currentStart.ToString("yyyy-MM-dd"))"
+			}
+		}
+		else {
+			try{
+				[Array]$results =  Get-AzureADAuditSignInLogs -All $true -Filter "createdDateTime lt $($currentEnd.ToString("yyyy-MM-dd")) and createdDateTime gt $($currentStart.ToString("yyyy-MM-dd"))"
+			}
+			catch{
+				Start-Sleep -Seconds 20
+				[Array]$results =  Get-AzureADAuditSignInLogs -All $true -Filter "createdDateTime lt $($currentEnd.ToString("yyyy-MM-dd")) and createdDateTime gt $($currentStart.ToString("yyyy-MM-dd"))"
+			}
+		}
+		if ($null -eq $results -or $results.Count -eq 0) {
+			Write-LogFile -Message "[WARNING] Empty data set returned between $($currentStart.ToUniversalTime().ToString("yyyy-MM-dd")) and $($currentEnd.ToUniversalTime().ToString("yyyy-MM-dd")). Moving On!"				
+		}
+		else {					
+			$currentCount = $results.Count
+			if ($currentDay -ne 0){
+				$currentTotal = $currentCount + $results.Count
+			}
+			else {
+				$currentTotal = $currentCount 
+			}
+			
+			Write-LogFile -Message "[INFO] Found $currentCount Directory Sign-in Logs between $($currentStart.ToUniversalTime().ToString("yyyy-MM-dd")) and $($currentEnd.ToUniversalTime().ToString("yyyy-MM-dd"))" -Color "Green"
+				
+			$filePath = "$OutputDir\SignInLogs-$($CurrentStart.ToString("yyyyMMdd"))-$($CurrentEnd.ToString("yyyyMMdd")).json"
+			$results | ConvertTo-Json -Depth 100 | Out-File -Append $filePath -Encoding $Encoding
+
+			Write-LogFile -Message "[INFO] Successfully retrieved $($currentCount) records out of total $($currentTotal) for the current time range."							
+		}
+		[Array]$results = @()
+		$CurrentStart = $CurrentEnd
+  		$currentDay++
+	}
+	
+	if ($MergeOutput.IsPresent)
+	{
+		Write-LogFile -Message "[INFO] Merging output files into one file"
+	  	$outputDirMerged = "$OutputDir\Merged\"
+	  	If (!(test-path $outputDirMerged)) {
+			Write-LogFile -Message "[INFO] Creating the following directory: $outputDirMerged"
+		  	New-Item -ItemType Directory -Force -Path $outputDirMerged | Out-Null
+	  	}
+
+		$allJsonObjects = @()
+
+		Get-ChildItem $OutputDir -Filter *.json | ForEach-Object {
+			$content = Get-Content -Path $_.FullName -Raw
+			$jsonObjects = $content | ConvertFrom-Json
+			$allJsonObjects += $jsonObjects
+		}
+	
+		$allJsonObjects | ConvertTo-Json -Depth 100 | Set-Content "$outputDirMerged\SignInLogs-Combined.json"
+	}
+	
+	Write-LogFile -Message "[INFO] Acquisition complete, check the $($OutputDir) directory for your files.." -Color "Green"		
 }
 
 function Get-ADAuditLogs {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory=$true)]
-        [datetime]$StartDate,
-        [Parameter(Mandatory=$true)]
-        [datetime]$EndDate,
-        [Parameter(Mandatory=$true)]
-        [string]$OutputDir,
+<#
+    .SYNOPSIS
+    Get directory audit logs.
+
+    .DESCRIPTION
+    The Get-ADAuditLogs cmdlet collects the contents of the Azure Active Directory Audit logs.
+	The output will be written to: "Output\AzureAD\Auditlogs.json
+
+	.PARAMETER startDate
+	The startDate parameter specifies the date from which all logs need to be collected.
+
+	.PARAMETER endDate
+    The endDate parameter specifies the date before which all logs need to be collected.
+
+	.PARAMETER OutputDir
+    outputDir is the parameter specifying the output directory.
+	Default: Output\AzureAD
+
+	.PARAMETER Encoding
+    Encoding is the parameter specifying the encoding of the JSON output file.
+	Default: UTF8
+
+    .PARAMETER UserIds
+    UserIds is the UserIds parameter filtering the log entries by the account of the user who performed the actions.
+    
+    .EXAMPLE
+    Get-ADAuditLogs
+	Get directory audit logs.
+
+    .EXAMPLE
+    Get-ADAuditLogs -UserIds Test@invictus-ir.com
+    Get directory audit logs for the user Test@invictus-ir.com.
+
+	.EXAMPLE
+    Get-ADAuditLogs -endDate 2023-04-12
+	Get directory audit logs before 2023-04-12.
+
+	.EXAMPLE
+    Get-ADAuditLogs -startDate 2023-04-12
+	Get directory audit logs after 2023-04-12.
+#>
+	[CmdletBinding()]
+	param(
+		[string]$startDate,
+		[string]$endDate,
+		[string]$OutputDir,
         [string]$UserIds,
-        [string]$Encoding = 'UTF8'
-    )
+		[string]$Encoding
+	)
 
-    $dateStamp = Get-Date -Format "yyyyMMddHHmmss"
-    $filePath = Join-Path $OutputDir "$($dateStamp)-AuditLogDirectoryAudit.json"
+	try {
+		$areYouConnected = Get-AzureADAuditDirectoryLogs -ErrorAction stop
+	}
+	catch {
+		Write-logFile -Message "[WARNING] You must call Connect-Azure or install AzureADPreview before running this script" -Color "Red"
+		break
+	}
 
-    Write-Log -Message "Collecting the Directory Audit Logs"
+	if ($Encoding -eq "" ){
+		$Encoding = "UTF8"
+	}
 
-    $baseUri = 'https://graph.microsoft.com/v1.0'
-    $resourcePath = (Find-MgGraphCommand -Command Get-MgBetaAuditLogDirectoryAudit).URI[1]
-    $baseUri = "$baseUri$resourcePath?"
+	Write-logFile -Message "[INFO] Running Get-ADAuditLogs" -Color "Green"
+	
+	$date = [datetime]::Now.ToString('yyyyMMddHHmmss') 
+	if ($OutputDir -eq "" ){
+		$OutputDir = "Output\AzureAD"
+		if (!(test-path $OutputDir)) {
+			New-Item -ItemType Directory -Force -Name $OutputDir | Out-Null
+			write-logFile -Message "[INFO] Creating the following directory: $OutputDir"
+		}
+	}
 
-    $queryParameters = @{
-        filter = @{
-            properties = @{
-                activityDateTime = @{
-                    ge = $StartDate
-                    le = $EndDate
-                }
-            }
-        }
-    }
+	else {
+		if (Test-Path -Path $OutputDir) {
+			write-LogFile -Message "[INFO] Custom directory set to: $OutputDir"
+		}
+	
+		else {
+			write-Error "[Error] Custom directory invalid: $OutputDir exiting script" -ErrorAction Stop
+			write-LogFile -Message "[Error] Custom directory invalid: $OutputDir exiting script"
+		}
+	}
 
-    if ($UserIds) {
-        $queryParameters.filter.properties.initiatedBy = @{
-            user = @{
-                id = $UserIds
-            }
-        }
-    }
+	$filePath = "$OutputDir\$($date)-Auditlogs.json"
+	Write-logFile -Message "[INFO] Collecting the Directory Audit Logs"
 
-    $apiUrl = "$baseUri$($queryParameters.filter.properties.activityDateTime.ge),$($queryParameters.filter.properties.activityDateTime.le),$($queryParameters.filter.properties.initiatedBy.user.id | ToQueryString)/@odata.type=#microsoft.graph.auditLogDirectoryAudit"
+	if ($endDate -and $After) {
+		write-logFile -Message "[WARNING] Please provide only one of either a start date or end date" -Color "Red"
+		return
+	}
 
-    try {
-        do {
-            $response = Invoke-MgGraphRequest -Method Get -Uri $apiUrl -ContentType 'application/json'
-            $logs = $response
+	$filter = ""
+	if ($endDate) {
+		$filter = "activityDateTime lt $endDate"
+	}
+	if ($startDate) {
+		$filter = "activityDateTime gt $startDate"
+	}
 
-            $currentDate = Get-Date -Format "yyyy-MM-ddTHH:mm:ss"
-            $logs.Values | ConvertTo-Json -Depth 100 | Out-File -FilePath $filePath -Encoding utf8BOM
-            Write-Host "Directory logs written to $filePath" -ForegroundColor Green
-
-            $apiUrl = $response.'@odata.nextLink'  # Update the URL to the nextLink for pagination
-            [System.GC]::Collect()
-            [System.GC]::WaitForPendingFinalizers()
-
-            Start-Sleep -Seconds $Interval
-
-        } while ($response.'@odata.nextLink')
-    }
-    catch {
-        Write-Error "Error fetching data: $_"
-    }
-    finally {
-        Remove-Variable response -ErrorAction Ignore
-        Remove-Variable logs -ErrorAction Ignore
-        [System.GC]::WaitForPendingFinalizers()
-        [System.GC]::Collect()
-    }
-
-    Write-Log -Message "Directory audit logs written to $filePath" -Color "Green"
-}
-
-function Merge-OutputFiles {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory=$true)]
-        [string]$OutputDir,
-        [Parameter(Mandatory=$true)]
-        [string]$Encoding,
-        [Parameter(Mandatory=$true)]
-        [string]$mergedFile,
-        [Parameter(Mandatory=$false)]
-        [string[]]$Files
-    )
-
-    if ($Files) {
-        $filesToMerge = $Files
-    }
-    else {
-        $filesToMerge = Get-ChildItem -Path $OutputDir -Filter *.json
-    }
-
-    if ($filesToMerge.Count -eq 0) {
-        Write-Log -Message "No JSON files found in the output directory." -Color "Yellow"
-        return
-    }
-
-    $mergedContent = @()
-
-    foreach ($file in $filesToMerge) {
-        try {
-            $content = Get-Content -Path $file.FullName -Encoding $Encoding
-            $mergedContent += $content
-        }
-        catch {
-            Write-Error "Error reading file: $_" -ForegroundColor Red
-        }
-    }
-
-    $mergedContent | ConvertFrom-Json | ConvertTo-Json -Depth 100 | Out-File -FilePath $mergedFile -Encoding utf8BOM
-    Write-Log -Message "Output files merged successfully." -Color "Green"
-}
-
-function Get-OutputFiles {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory=$true)]
-        [string]$OutputDir,
-        [Parameter(Mandatory=$true)]
-        [string]$FilePrefix,
-        [Parameter(Mandatory=$true)]
-        [string]$FileExtension
-    )
-
-    $outputFiles = Get-ChildItem -Path $OutputDir -Filter "$($FilePrefix)*$($FileExtension)"
-
-    return $outputFiles
-}
-
-function ToQueryString {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory=$true)]
-        [string[]]$Properties
-    )
-
-    $queryString = $Properties -join ','
-
-    return $queryString
+	if ($UserIds) {
+		if ($filter) {
+			$filter = " and $filter"
+		}
+		Get-AzureADAuditDirectoryLogs -All $true -Filter "initiatedBy/user/userPrincipalName eq '$Userids' $filter" | Select-Object Id,Category,CorrelationId,Result,ResultReason,ActivityDisplayName,@{N='ActivityDateTime';E={$_.ActivityDateTime.ToString()}},LoggedByService,OperationType,InitiatedBy,TargetResources,AdditionalDetails |
+			ForEach-Object {
+				$_ | ConvertTo-Json -Depth 100
+			} |
+			Out-File -FilePath $filePath -Encoding $Encoding
+	} 
+	else {
+		Get-AzureADAuditDirectoryLogs -All $true -Filter $filter | Select-Object Id,Category,CorrelationId,Result,ResultReason,ActivityDisplayName,@{N='ActivityDateTime';E={$_.ActivityDateTime.ToString()}},LoggedByService,OperationType,InitiatedBy,TargetResources,AdditionalDetails |
+			ForEach-Object {
+				$_ | ConvertTo-Json -Depth 100
+			} |
+			Out-File -FilePath $filePath -Encoding $Encoding
+	}
+	Write-logFile -Message "[INFO] Directory audit logs written to $filePath" -Color "Green"
 }

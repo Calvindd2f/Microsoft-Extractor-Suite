@@ -1,71 +1,60 @@
-# Load required modules
-Import-Module -Name "Microsoft.PowerShell.Utility"
+# This contains function for getting Admin Audit Log
 
-# Define the function
-function Get-AdminAuditLogs {
+function Get-AdminAuditLog {
+<#
+    .SYNOPSIS
+    Search the contents of the administrator audit log.
+
+    .DESCRIPTION
+    Administrator audit logging records when a user or administrator makes a change in your organization (in the Exchange admin center or by using cmdlets).
+	The output will be written to a CSV file called "AdminAuditLog.csv".
+
+	.PARAMETER StartDate
+    startDate is the parameter specifying the start date of the date range.
+
+	.PARAMETER EndDate
+    endDate is the parameter specifying the end date of the date range.
+
+	.PARAMETER OutputDir
+    OutputDir is the parameter specifying the output directory.
+	Default: Output\AdminAuditLog
+
+    .EXAMPLE
+    Get-AdminAuditLog
+	Displays the total number of logs within the admin audit log.
+
+	.EXAMPLE
+	Get-AdminAuditLog -StartDate 1/4/2023 -EndDate 5/4/2023
+	Collects the admin audit log between 1/4/2023 and 5/4/2023
+#>
     [CmdletBinding()]
-    param (
-        [Parameter(Mandatory)]
-        [string]$StartDate,
+	param (
+		[string]$StartDate,
+		[string]$EndDate,
+		[string]$outputDir
+	)
 
-        [Parameter(Mandatory)]
-        [string]$EndDate,
+	try {
+		$areYouConnected = Get-AdminAuditLogConfig -ErrorAction stop
+	}
+	catch {
+		write-logFile -Message "[WARNING] You must call Connect-M365 before running this script" -Color "Red"
+		break
+	}
 
-        [Parameter(Mandatory)]
-        [string]$OutputDirectory
-    )
+    write-logFile -Message "[INFO] Running Get-AdminAuditLog" -Color "Green"
 
-    # Convert input dates to universal time
-    $startDateUtc = [DateTime]::Parse($StartDate).ToUniversalTime()
-    $endDateUtc = [DateTime]::Parse($EndDate).ToUniversalTime()
+	$date = [datetime]::Now.ToString('yyyyMMddHHmmss')
+	#Assert-OutputDir -OutputDir "Output\AdminAuditLog" -filename "$($date)-AdminAuditLog.csv"
 
-    # Generate output file name
-    $outputFileName = "{0}-AdminAuditLog-$(Get-Date -Format yyyyMMddHHmmss).csv" -f $startDateUtc.ToString("yyyy-MM-ddTHH:mm:ssK")
-    $outputPath = Join-Path $OutputDirectory $outputFileName
 
-    # Write log messages
-    Write-Host "[INFO] Running Get-AdminAuditLogs" -ForegroundColor Green
-    Write-Host "[INFO] Extracting all available Admin Audit Logs between $($startDateUtc.ToString("yyyy-MM-ddTHH:mm:ssK")) and $($endDateUtc.ToString("yyyy-MM-ddTHH:mm:ssK"))" -ForegroundColor Green
+	StartDate
+	EndDate
 
-    # Get an access token for Microsoft Graph API
-    $clientId = "your-client-id"
-    $tenantId = "your-tenant-id"
-    $clientSecret = "your-client-secret"
-    $resourceAppIdUri = "https://graph.microsoft.com"
+    Write-LogFile -Message "[INFO] Extracting all available Admin Audit Logs between $($script:StartDate.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssK")) and $($script:EndDate.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssK"))" -Color "Green"
 
-    $tokenEndpoint = "https://login.microsoftonline.com/$tenantId/oauth2/token"
-    $body = @{
-        client_id     = $clientId
-        client_secret = $clientSecret
-        resource      = $resourceAppIdUri
-        grant_type    = "client_credentials"
-    }
+    $results = Search-AdminAuditLog -ResultSize 250000 -StartDate $script:startDate -EndDate $script:EndDate
+    $results | Export-Csv $outputDirectory -NoTypeInformation -Append -Encoding UTF8
 
-    $response = Invoke-RestMethod -Method Post -Uri $tokenEndpoint -Body $body
-    $token = $response.access_token
-
-    # Define the API URL
-    $apiUrl = "https://graph.microsoft.com/v1.0/auditLogs/directoryAudits?`$filter=activityDateTime ge '$startDateUtc' and activityDateTime le '$endDateUtc'"
-
-    # Initialize the list for storing audit logs
-    $auditLogs = @()
-
-    # Retrieve and export audit logs
-    do {
-        $response = Invoke-RestMethod -Headers @{Authorization = "Bearer $token"} -Uri $apiUrl -Method Get -ContentType 'application/json'
-        $currentAuditLogs = $response.value
-
-        if ($currentAuditLogs) {
-            $auditLogs += $currentAuditLogs
-            $apiUrl = $response.'@odata.nextLink'
-        }
-    } while ($apiUrl)
-
-    # Export the audit logs to a CSV file
-    $auditLogs | Export-Csv $outputPath -NoTypeInformation -Encoding UTF8
-
-    Write-Host "[INFO] Output is written to: $outputPath" -ForegroundColor Green
+    write-logFile -Message "[INFO] Output is written to: $(Join-Path $OutputDir $outputFile)" -Color "Green"
 }
-
-# Call the function
-Get-AdminAuditLogs -StartDate "2022-01-01T00:00:00Z" -EndDate "2022-01-31T23:59:59Z" -OutputDirectory "C:\Temp"

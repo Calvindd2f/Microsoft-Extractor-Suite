@@ -37,6 +37,14 @@ rem Check if a command was provided as an argument
 if "%~1" == "" (
     goto help
 ) else (
+    rem Check if the provided argument is valid
+    if /i not "%~1" in (html, buildername, help) (
+        echo.
+        echo.Invalid command. Supported commands are: html, buildername, help
+        echo.
+        exit /b 1
+    )
+
     rem Build the documentation
     "%SPHINXBUILD%" -M %1 %SOURCEDIR% %BUILDDIR% %SPHINXOPTS% %O%
 )

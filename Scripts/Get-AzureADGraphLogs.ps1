@@ -1,114 +1,204 @@
-using module  "$PSScriptRoot\Microsoft-Extractor-Suite.psm1";
+function Get-ADSignInLogsGraph
+{
+    <#
+    .SYNOPSIS
+        Gets Azure AD sign-in logs with pagination.
+    .DESCRIPTION
+        Collects the contents of the Azure Active Directory sign-in logs using the GraphAPI with pagination.
+        Outputs are written to a specified directory.
+    .PARAMETER startDate
+        Specifies the date from which all logs need to be collected.
+    .PARAMETER endDate
+        Specifies the end date until which all logs need to be collected.
+    .PARAMETER OutputDir
+        Specifies the output directory. Default: "Output\AzureAD"
+    .PARAMETER Encoding
+        Specifies the encoding of the JSON output file. Default: UTF8
+    .PARAMETER Application
+        Specifies App-only access for authentication and authorization.
+        Default: Delegated access (access on behalf a user)
+    .PARAMETER MergeOutput
+        Specifies if output files should be merged into a single file. Default: No
+    .PARAMETER UserIds
+        Filters log entries by the user account that performed the actions.
+    .EXAMPLE
+        Get-ADSignInLogsGraph
+        Retrieves all sign-in logs.
+    .EXAMPLE
+        Get-ADSignInLogsGraph -endDate '2023-04-12'
+        Retrieves sign-in logs until 2023-04-12.
+    #>
+[CmdletBinding()]
+param(
+    [string]$startDate,
+    [string]$endDate,
+    [string]$OutputDir = 'Output\AzureAD',
+    [string]$UserIds,
+    [string]$Encoding = 'UTF8',
+    [switch]$Application,
+    [switch]$MergeOutput
+)
 
-function Get-ADSignInLogs {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory=$false)]
-        [datetime]$StartDate = (Get-Date).AddDays(-30),
-        [Parameter(Mandatory=$false)]
-        [datetime]$EndDate = Get-Date,
-        [Parameter(Mandatory=$false)]
-        [string]$OutputDirectory = "$((Get-Location).Path)\Output\",
-        [Parameter(Mandatory=$false)]
-        [string]$UserIds,
-        [Parameter(Mandatory=$false)]
-        [string]$Encoding = 'UTF8',
-        [Parameter(Mandatory=$false)]
-        [switch]$Application,
-        [Parameter(Mandatory=$false)]
-        [switch]$MergeOutput
-    )
+if ([string]::IsNullOrWhiteSpace($OutputDir.Split('\')[0])){mkdir -Force $OutputDir>$null}
 
-    $requiredScopes = @('AuditLog.Read.All', 'Directory.Read.All')
-    EnsureScopes $requiredScopes
 
-    $baseUri = 'https://graph.microsoft.com/v1.0/auditLogs/signIns?'
-    $queryParameters = @()
-    if ($StartDate) { $queryParameters += "`$filter=activityDateTime ge $($StartDate.ToString('yyyy-MM-ddTHH:mm:ss'))" }
-    if ($EndDate) { $queryParameters += "activityDateTime le $($EndDate.ToString('yyyy-MM-ddTHH:mm:ss'))" }
-    if ($UserIds) { $queryParameters += " and initiatedBy/user/id eq $UserIds" }
-    $filterQuery = $queryParameters -join ' and '
-    $apiUrl = "$baseUri$filterQuery"
+# Test if connected to graph with correct scopes
 
-    try {
-        Do {
-            $response = Invoke-MgGraphRequest -Method Get -Uri $baseUri -ContentType 'application/json'
-            $logs = $response
-            $filePath = "ADSignInLogsGraph.json"
-            $logs.Values | ConvertTo-Json -Depth 100 | Out-File -FilePath $filePath -Encoding utf8BOM
+try {
+    if([string]::IsNullOrEmpty($scopes))
+    {
+        $scopes=@('AuditLog.Read.All','Directory.Read.All')
+    }
+    foreach ($s in $scopes){
+        if ((get-mgcontext).Scopes -match $s)
+        {
+            $connected -eq $true
+        }
+        else{
+            $connected -eq $false
+        }
+    }
+catch {
+   [ex
+}
+finally {
+   <#Do this after the try block regardless of whether an exception occurred or not#>
+}
+Connect-MgGraph -Scopes 'AuditLog.Read.All', 'Directory.Read.All' -NoWelcome
+
+
+$queryFilter = @()
+if ($startDate)
+{
+    $queryFilter += "createdDateTime ge '$startDate'"
+}
+if ($endDate)
+{
+    $queryFilter += "createdDateTime le '$endDate'"
+}
+if ($UserIds)
+{
+    $queryFilter += "userPrincipalName eq '$UserIds'"
+}
+
+$apiUri = 'https://graph.microsoft.com/v1.0/auditLogs/signIns'
+$filter = $queryFilter -join ' and '
+$params = @{
+    Uri    = "$apiUri`?`$filter=$filter"
+    Method = 'GET'
+}
+    try
+    {
+        Do
+        {
+            $response = Invoke-MgGraphRequest @params
+            $logs = $response.Content | ConvertFrom-Json
+
+            $date = Get-Date -Format 'yyyyMMddHHmmss'
+            $filePath = Join-Path -Path $OutputDir -ChildPath "$($date)-SignInLogsGraph.json"
+            $logs.value | ConvertTo-Json -Depth 100 | Out-File -FilePath $filePath -Append -Encoding $Encoding
+
             Write-Host "[INFO] Sign-in logs written to $filePath" -ForegroundColor Green
-            $baseUri = $response.'@odata.nextLink'  # Update the URL to the nextLink for pagination
+
+            $params.Uri = $response.'@odata.nextLink'
+
             [System.GC]::Collect()
             [System.GC]::WaitForPendingFinalizers()
         } While ($response.'@odata.nextLink')
-    }
-    catch {
-        Write-Error "Error fetching data: $_"
-    }
-    finally {
-        Remove-Variable response -ErrorAction Ignore
-        Remove-Variable logs -ErrorAction Ignore
-        [System.GC]::Collect()
-        [System.GC]::WaitForPendingFinalizers()
-    }
 
-    if ($MergeOutput) {
-        try {
-            Write-Host '[INFO] Merging output files...' -ForegroundColor Green
-            $mergedFile = "ADSignInLogsGraph-Combined.json"
-            Merge-OutputFiles -OutputDirectory $OutputDirectory -Encoding $Encoding -MergedFile $mergedFile
+        if ($MergeOutput)
+        {
+            Merge-OutputFiles -OutputDir $OutputDir -Encoding $Encoding
         }
-        catch {
-            Write-Error "Error merging files: $_" -ForegroundColor Red
-        }
-        finally {
-            Write-Host '[INFO] Process completed.' -ForegroundColor Green
-        }
+    }
+    catch
+    {
+        Write-Error "Error fetching data: $_" -ForegroundColor Red
+    }
+    finally
+    {
+        Write-Host '[INFO] Process completed.' -ForegroundColor Green
     }
 }
 
-function Get-ADAuditLogsGraph {
+function Merge-OutputFiles
+{
+    param(
+        [string]$OutputDir,
+        [string]$Encoding
+    )
+    $mergedFilePath = Join-Path -Path $OutputDir -ChildPath 'SignInLogs-Combined.json'
+    $allLogs = Get-ChildItem -Path $OutputDir -Filter '*.json' |
+    Get-Content -Raw | ConvertFrom-Json
+
+    $allLogs | ConvertTo-Json -Depth 100 | Set-Content -Path $mergedFilePath -Encoding $Encoding
+    Write-Host "[INFO] All logs merged into $mergedFilePath" -ForegroundColor Green
+}
+
+function Get-ADAuditLogsGraph
+{
+    <#
+    .SYNOPSIS
+        Get directory audit logs using direct API calls.
+    .DESCRIPTION
+        Uses direct API calls to fetch the contents of the Azure Active Directory Audit logs using RESTful endpoints.
+        Outputs are written to "Output\AzureAD\AuditlogsGraph.json"
+    .PARAMETER StartDate
+        Specifies the date from which logs should be collected.
+    .PARAMETER EndDate
+        Specifies the end date until which logs should be collected.
+    .PARAMETER OutputDir
+        Specifies the output directory.
+        Default: "Output\AzureAD"
+    .PARAMETER UserIds
+        Filters the log entries by the account of the user who performed the actions.
+    .PARAMETER Encoding
+        Specifies the encoding of the JSON output file.
+        Default: "UTF8"
+    #>
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory=$false)]
-        [datetime]$StartDate = (Get-Date).AddDays(-30),
-        [Parameter(Mandatory=$false)]
-        [datetime]$EndDate = (Get-Date),
-        [Parameter(Mandatory=$false)]
-        [string]$OutputDirectory = Join-Path -Path (Get-Location).Path -ChildPath "Output\",
-        [Parameter(Mandatory=$false)]
+        [string]$StartDate,
+        [string]$EndDate,
+        [string]$OutputDir = 'Output\AzureAD',
         [string]$UserIds,
-        [Parameter(Mandatory=$false)]
         [string]$Encoding = 'UTF8'
     )
 
-    $requiredScopes = @('AuditLog.Read.All', 'Directory.Read.All')
-    EnsureScopes $requiredScopes
+    #Assert-OutputDir
 
-    $baseUri = 'https://graph.microsoft.com/v1.0/auditLogs/directoryAudits?'
+    $baseUri = 'https://graph.microsoft.com/v1.0/auditLogs/directoryAudits'
     $queryParameters = @()
-    if ($StartDate) { $queryParameters += "`$filter=activityDateTime ge $($StartDate.ToString('yyyy-MM-ddTHH:mm:ss'))" }
-    if ($EndDate) { $queryParameters += "activityDateTime le $($EndDate.ToString('yyyy-MM-ddTHH:mm:ss'))" }
+    if ($StartDate) { $queryParameters += "`$filter=activityDateTime ge $StartDate" }
+    if ($EndDate) { $queryParameters += "activityDateTime le $EndDate" }
     if ($UserIds) { $queryParameters += " and initiatedBy/user/id eq $UserIds" }
     $filterQuery = $queryParameters -join ' and '
-    $apiUrl = "$baseUri$filterQuery"
+    $apiUrl = "$baseUri?$filterQuery"
 
-    try {
-        Do {
-            $response = Invoke-MgGraphRequest -Method Get -Uri $baseUri -ContentType 'application/json'
-            $logs = $response
-            $filePath = "AuditlogsGraph.json"
-            $logs.Values | ConvertTo-Json -Depth 100 | Out-File -FilePath $filePath -Encoding utf8BOM
+    try
+    {
+        Do
+        {
+            $response = Invoke-MgGraphRequest -Method Get -Uri $apiUrl
+            $logs = $response.Content | ConvertFrom-Json
+
+            $date = [datetime]::Now.ToString('yyyyMMddHHmmss')
+            $filePath = Join-Path $OutputDir "$($date)-AuditlogsGraph.json"
+            $logs.value | ConvertTo-Json -Depth 100 | Out-File -FilePath $filePath -Encoding $Encoding
             Write-Host "[INFO] Audit logs written to $filePath" -ForegroundColor Green
-            $baseUri = $response.'@odata.nextLink'  # Update the URL to the nextLink for pagination
-            [System.GC]::Collect()
+
+            $apiUrl = $response.'@odata.nextLink'  # Update the URL to the nextLink for pagination
+            [System.GC]::Collect()  # Manage memory by forcing garbage collection
             [System.GC]::WaitForPendingFinalizers()
         } While ($response.'@odata.nextLink')
     }
-    catch {
-        Write-Error "Error fetching data: $_"
+    catch
+    {
+        Write-Error "Error fetching data: $_" -ForegroundColor Red
     }
-    finally {
+    finally
+    {
+        # Clean up resources explicitly after the loop
         Remove-Variable response -ErrorAction Ignore
         Remove-Variable logs -ErrorAction Ignore
         [System.GC]::Collect()
@@ -116,45 +206,4 @@ function Get-ADAuditLogsGraph {
     }
 }
 
-function EnsureScopes($requiredScopes) {
-    if (!(Get-MgContext).Scopes -contains $requiredScopes)
-    {
-        try
-        {
-            Connect-MgGraph -Scopes $requiredScopes
-        }
-        catch
-        {
-            throw $_.Exception
-        }
-    }
-}
 
-function Merge-OutputFiles {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory=$true)]
-        [string]$OutputDirectory,
-        [Parameter(Mandatory=$true)]
-        [string]$Encoding,
-        [Parameter(Mandatory=$true)]
-        [string]$MergedFile
-    )
-
-    $files = Get-ChildItem -Path $OutputDirectory -Filter *.json
-
-    if ($files.Count -eq 0) {
-        Write-Warning "No JSON files found in the output directory: $OutputDirectory"
-        return
-    }
-
-    $mergedContent = @()
-
-    foreach ($file in $files) {
-        $content = Get-Content -Path $file.FullName -Encoding $Encoding
-        $mergedContent += $content
-    }
-
-    $mergedContent | Out-File -FilePath $MergedFile -Encoding $Encoding
-    Write-Host "[INFO] Merged output files to: $MergedFile" -ForegroundColor Green
-}

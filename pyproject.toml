@@ -3,9 +3,10 @@ requires = ["flit_core >=3.2,<4"]
 build-backend = "flit_core.buildapi"
 
 [tool.flit.metadata]
-module = "invictus_microsoft"
+name = "invictus-microsoft"
 author = "Invictus-ir"
 author-email = "info@invictus-ir.com"
+description-file = "README.md"
 home-page = "https://github.com/Invictus-ir/Invictus-Microsoft"
 classifiers = [
   "Programming Language :: Python :: 3",

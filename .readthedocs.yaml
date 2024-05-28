@@ -7,21 +7,16 @@ version: 2
 
 # Set the version of Python and other tools you might need
 build:
-  image: python:3.11-slim-buster
+  os: ubuntu-22.04
+  tools:
+    python: "3.11"
 
 # Build documentation in the docs/ directory with Sphinx
 sphinx:
   configuration: docs/source/conf.py
-  # Optionally, you can specify the path to your Sphinx build directory
-  build_dir: docs/build
 
 # We recommend specifying your dependencies to enable reproducible builds:
 # https://docs.readthedocs.io/en/stable/guides/reproducible-builds.html
 python:
   install:
     - requirements: docs/requirements.txt
-    - method: pip
-      index:
-        - name: jessie
-          url: https://packagecloud.io/AtlasSC/jessie/pip/
-

@@ -12,96 +12,77 @@ namespace MicrosoftExtractorSuite
     [Cmdlet(VerbsCommunications.Connect, "M365")]
     public class ConnectM365Cmdlet : Cmdlet
     {
-        protected override void ProcessRecord()
+        protected virtual void VersionCheck() { }
+        protected virtual void WriteLogFile(string message, ConsoleColor color) { }
+    }
+
+    public static class ConnectHelper
+    {
+        public static async Task ConnectExchangeOnline(Action writeLogFile)
         {
-            VersionCheck();
-            ConnectExchangeOnline();
+            writeLogFile("Connecting to Exchange Online...");
+            // Add actual implementation here
+            await Task.CompletedTask;
         }
 
-        private void ConnectExchangeOnline()
+        public static async Task ConnectAzureAD(Action writeLogFile)
         {
-            // Implement the connection logic to Exchange Online
-            // Example:
-            WriteLogFile("[INFO] Connecting to Exchange Online...", "Yellow");
+            writeLogFile("Connecting to Azure AD...");
+            // Add actual implementation here
+            await Task.CompletedTask;
         }
 
-        private void VersionCheck()
+        public static async Task ConnectAzAccount(Action writeLogFile)
         {
-            // Implement version check logic
-            WriteLogFile("[INFO] Version check performed.", "Yellow");
+            writeLogFile("Connecting to Azure...");
+            // Add actual implementation here
+            await Task.CompletedTask;
         }
 
-        private void WriteLogFile(string message, string color)
+        public static async Task<string> GetToken(string resource, Action<string> writeLogFile)
         {
-            // Implement logging logic
-            Console.ForegroundColor = color == "Yellow" ? ConsoleColor.Yellow : ConsoleColor.White;
-            Console.WriteLine(message);
-            Console.ResetColor();
+            writeLogFile("Getting token...");
+            // Add actual implementation here
+            return await Task.FromResult<string>(default);
+        }
+
+        public static void CheckToken(string token, Action<string> writeLogFile)
+        {
+            writeLogFile("Checking token...");
+            // Add actual implementation here
+        }
+
+        public static async Task ConnectMgGraph(string[] scopes, Action<string> writeLogFile)
+        {
+            writeLogFile("Connecting to Microsoft Graph...");
+            // Add actual implementation here
+            await Task.CompletedTask;
         }
     }
 
-    [Cmdlet(VerbsCommunications.Connect, "Azure")]
-    public class ConnectAzureCmdlet : Cmdlet
+    public class ConnectM365Cmdlet : BaseConnectCmdlet
     {
-        protected override void ProcessRecord()
-        {
-            VersionCheck();
-            ConnectAzureAD();
-        }
-
-        private void ConnectAzureAD()
-        {
-            // Implement the connection logic to Azure AD
-            WriteLogFile("[INFO] Connecting to Azure AD...", "Yellow");
-        }
-
-        private void VersionCheck()
-        {
-            // Implement version check logic
-            WriteLogFile("[INFO] Version check performed.", "Yellow");
-        }
-
-        private void WriteLogFile(string message, string color)
-        {
-            // Implement logging logic
-            Console.ForegroundColor = color == "Yellow" ? ConsoleColor.Yellow : ConsoleColor.White;
-            Console.WriteLine(message);
-            Console.ResetColor();
-        }
+        protected override void Connect() => ConnectHelper.ConnectExchangeOnline(WriteLogFile);
+        protected override void VersionCheck() => WriteLogFile("Version check performed.", ConsoleColor.Yellow);
+        protected override void WriteLogFile(string message, ConsoleColor color) => Console.ForegroundColor = color;
     }
 
     [Cmdlet(VerbsCommunications.Connect, "AzureAZ")]
     public class ConnectAzureAZCmdlet : Cmdlet
     {
-        protected override void ProcessRecord()
-        {
-            VersionCheck();
-            ConnectAzAccount();
-        }
-
-        private void ConnectAzAccount()
-        {
-            // Implement the connection logic to Azure
-            WriteLogFile("[INFO] Connecting to Azure...", "Yellow");
-        }
-
-        private void VersionCheck()
-        {
-            // Implement version check logic
-            WriteLogFile("[INFO] Version check performed.", "Yellow");
-        }
-
-        private void WriteLogFile(string message, string color)
-        {
-            // Implement logging logic
-            Console.ForegroundColor = color == "Yellow" ? ConsoleColor.Yellow : ConsoleColor.White;
-            Console.WriteLine(message);
-            Console.ResetColor();
-        }
+        protected override void Connect() => ConnectHelper.ConnectAzureAD(WriteLogFile);
+        protected override void VersionCheck() => WriteLogFile("Version check performed.", ConsoleColor.Yellow);
+        protected override void WriteLogFile(string message, ConsoleColor color) => Console.ForegroundColor = color;
     }
 
-    [Cmdlet(VerbsCommunications.Connect, "ExtractorSuite")]
-    public class ConnectExtractorSuiteCmdlet : Cmdlet
+    public class ConnectAzureAZCmdlet : BaseConnectCmdlet
+    {
+        protected override void Connect() => ConnectHelper.ConnectAzAccount(WriteLogFile);
+        protected override void VersionCheck() => WriteLogFile("Version check performed.", ConsoleColor.Yellow);
+        protected override void WriteLogFile(string message, ConsoleColor color) => Console.ForegroundColor = color;
+    }
+
+    public class ConnectExtractorSuiteCmdlet : BaseConnectCmdlet
     {
         [Parameter]
         public bool Application { get; set; }
@@ -128,26 +109,32 @@ namespace MicrosoftExtractorSuite
                 appThumbprint = Environment.GetEnvironmentVariable("AppThumbprint");
                 tenantID = Environment.GetEnvironmentVariable("TenantId");
 
-                string token = GetToken("https://graph.microsoft.com/.default").Result;
-                CheckToken(token);
+                if (appID == null || appSecret == null || appThumbprint == null || tenantID == null)
+                {
+                    throw new Exception("Missing environment variables required for authentication with Application Auth");
+                }
+
+                Task.Run(async () =>
+                {
+                    string token = await ConnectHelper.GetToken("https://graph.microsoft.com/.default", WriteLogFile);
+                    ConnectHelper.CheckToken(token, WriteLogFile);
+                }).Wait();
             }
             else if (DeviceCode)
             {
-                ConnectDeviceCode();
+                ConnectHelper.ConnectDeviceCode(WriteLogFile);
             }
             else if (Delegate)
             {
-                var delegateScopes = new[] {
+                await ConnectHelper.ConnectMgGraph(new[] {
                     "AuditLogsQuery.Read.All", "UserAuthenticationMethod.Read.All", "User.Read.All",
                     "Mail.ReadBasic.All", "Mail.ReadWrite", "Mail.Read", "Mail.ReadBasic", "Policy.Read.All",
                     "Directory.Read.All"
-                };
-
-                ConnectMgGraph(delegateScopes);
+                }, WriteLogFile);
             }
             else
             {
-                ConnectDeviceCode();
+                ConnectHelper.ConnectDeviceCode(WriteLogFile);
             }
         }
 
@@ -166,115 +153,23 @@ namespace MicrosoftExtractorSuite
                     })
                 };
 
-                var response = await client.SendAsync(request);
-                response.EnsureSuccessStatusCode();
-
-                var json = await response.Content.ReadAsStringAsync();
-                var token = JObject.Parse(json)["access_token"].ToString();
-
-                return token;
-            }
-        }
-
-        private void CheckToken(string token)
-        {
-            try
-            {
-                var request = (HttpWebRequest)WebRequest.Create("https://graph.microsoft.com/v1.0/me");
-                request.Method = "GET";
-                request.ContentType = "application/json;odata.metadata=minimal";
-                request.Headers["Authorization"] = "Bearer " + token;
-
-                var response = (HttpWebResponse)request.GetResponse();
-                using (var reader = new StreamReader(response.GetResponseStream()))
-                {
-                    var jsonResponse = reader.ReadToEnd();
-                    WriteLogFile("MS Graph Token is valid.", "Yellow");
-                }
-            }
-            catch
-            {
-                WriteLogFile("MS Graph Token is invalid", "Red");
-            }
-        }
-
-        private void ConnectDeviceCode()
-        {
-            // Implement the logic to connect using Device Code
-            WriteLogFile("[INFO] Connecting using Device Code...", "Yellow");
-        }
-
-        private void ConnectMgGraph(string[] scopes)
-        {
-            // Implement the logic to connect to Microsoft Graph with specific scopes
-            WriteLogFile("[INFO] Connecting to Microsoft Graph with delegate scopes...", "Yellow");
-        }
-
-        private void VersionCheck()
-        {
-            // Implement version check logic
-            WriteLogFile("[INFO] Version check performed.", "Yellow");
-        }
-
-        private void WriteLogFile(string message, string color)
-        {
-            // Implement logging logic
-            Console.ForegroundColor = color == "Yellow" ? ConsoleColor.Yellow : color == "Red" ? ConsoleColor.Red : ConsoleColor.White;
-            Console.WriteLine(message);
-            Console.ResetColor();
-        }
+        protected override void WriteLogFile(string message, ConsoleColor color) => Console.ForegroundColor = color;
     }
 
     [Cmdlet(VerbsCommunications.Connect, "AquisitionGraph")]
     public class ConnectAquisitionGraphCmdlet : Cmdlet
     {
-        protected override void ProcessRecord()
-        {
-            var graphScopes = new[] {
-                "User.Read.All", "Policy.Read.All", "Organization.Read.All", "RoleManagement.Read.Directory",
-                "GroupMember.Read.All", "Directory.Read.All", "PrivilegedEligibilitySchedule.Read.AzureADGroup",
-                "PrivilegedAccess.Read.AzureADGroup", "RoleManagementPolicy.Read.AzureADGroup"
-            };
-
-            ConnectMgGraph(graphScopes);
-        }
-
-        private void ConnectMgGraph(string[] scopes)
-        {
-            // Implement the logic to connect to Microsoft Graph with specific scopes
-            WriteLogFile("[INFO] Connecting to Microsoft Graph with acquisition scopes...", "Yellow");
-        }
-
-        private void WriteLogFile(string message, string color)
-        {
-            // Implement logging logic
-            Console.ForegroundColor = color == "Yellow" ? ConsoleColor.Yellow : color == "Red" ? ConsoleColor.Red : ConsoleColor.White;
-            Console.WriteLine(message);
-            Console.ResetColor();
-        }
+        protected override void Connect() => ConnectHelper.ConnectMgGraph(new[] {
+            "User.Read.All", "Policy.Read.All", "Organization.Read.All", "RoleManagement.Read.Directory",
+            "GroupMember.Read.All", "Directory.Read.All", "PrivilegedEligibilitySchedule.Read.AzureADGroup",
+            "PrivilegedAccess.Read.AzureADGroup", "RoleManagementPolicy.Read.AzureADGroup"
+        }, WriteLogFile);
     }
 
     [Cmdlet(VerbsCommunications.Connect, "AquisitionExo")]
     public class ConnectAquisitionExoCmdlet : Cmdlet
     {
-        protected override void ProcessRecord()
-        {
-            ConnectExchangeOnline();
-        }
-
-        private void ConnectExchangeOnline()
-        {
-            // Implement the logic to connect to Exchange Online
-            WriteLogFile("[INFO] Connecting to Exchange Online...", "Yellow");
-        }
-
-        private void WriteLogFile(string message, string color)
-        {
-            // Implement logging logic
-            Console.ForegroundColor = color == "Yellow" ? ConsoleColor.Yellow : color == "Red" ? ConsoleColor.Red : ConsoleColor.White;
-            Console.WriteLine(message);
-            Console.ResetColor();
-        }
+        protected override void Connect() => ConnectHelper.ConnectExchangeOnline(WriteLogFile);
     }
 
     [Cmdlet(VerbsCommon.Get, "AquisitionServicePrincipalParams")]

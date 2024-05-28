@@ -1,219 +1,254 @@
-using module  "$PSScriptRoot\Microsoft-Extractor-Suite.psm1";
-
-function Write-LogFile([string]$Message, [string]$Color = "White") {
-    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-    $messageColor = @{
-        Red     = "DarkRed"
-        Green   = "Green"
-        Yellow  = "Yellow"
-        White   = "White"
-    }
-
-    $color = $messageColor[$Color]
-
-    $logMessage = "$timestamp [$Color] $Message"
-    Write-Host $logMessage -ForegroundColor $color
-    Add-Content -Path "$PSScriptRoot\log.txt" -Value $logMessage
-}
-
-function Connect-MgGraph([string[]]$Scopes, [switch]$NoWelcome) {
-    $moduleName = "Microsoft.Graph"
-    $moduleVersion = "1.0.0"
-
-    if (-not (Get-Module -Name $moduleName -ListAvailable)) {
-        Write-LogFile -Message "Installing the Microsoft.Graph module..." -Color Yellow
-        Install-Module -Name $moduleName -Force -AllowClobber -Scope CurrentUser
-    }
-
-    if (-not (Get-Module -Name $moduleName -ListAvailable)) {
-        Write-LogFile -Message "Failed to install the Microsoft.Graph module. Please install it manually and try again." -Color Red
-        return
-    }
-
-    if (-not (Get-Module -Name $moduleName -Name $moduleVersion)) {
-        Write-LogFile -Message "The required version of the Microsoft.Graph module is not installed. Installing it now..." -Color Yellow
-        Uninstall-Module -Name $moduleName -Force -ErrorAction SilentlyContinue
-        Install-Module -Name $moduleName -Force -AllowClobber -Scope CurrentUser -RequiredVersion $moduleVersion
-    }
-
-    if (-not (Get-Module -Name $moduleName -Name $moduleVersion)) {
-        Write-LogFile -Message "Failed to install the required version of the Microsoft.Graph module. Please install it manually and try again." -Color Red
-        return
-    }
-
-    $module = Import-Module -Name $moduleName -PassThru -MinimumVersion $moduleVersion
-
-    if (-not $module.ExportedCommands.ContainsKey("Connect-MgGraph")) {
-        Write-LogFile -Message "The required Connect-MgGraph cmdlet is not found in the Microsoft.Graph module. Please install the latest version and try again." -Color Red
-        return
-    }
-
-    if (-not (Get-MgSession)) {
-        Connect-MgGraph -Scopes $Scopes -NoWelcome
-    }
-}
-
 function Get-MFA {
+<#
+    .SYNOPSIS
+    Retrieves the MFA status for all users.
+    Script inspired by: https://activedirectorypro.com/mfa-status-powershell/
+
+    .DESCRIPTION
+    Retrieves the MFA status for all users.
+    The output will be written to: Output\UserInfo\
+
+    .PARAMETER OutputDir
+    OutputDir is the parameter specifying the output directory.
+    Default: Output\UserInfo
+
+    .PARAMETER Encoding
+    Encoding is the parameter specifying the encoding of the CSV output file.
+    Default: UTF8
+
+    .PARAMETER Application
+    Application is the parameter specifying App-only access (access without a user) for authentication and authorization.
+    Default: Delegated access (access on behalf a user)
+    
+    .EXAMPLE
+    Get-MFA
+    Retrieves the MFA status for all users.
+
+    .EXAMPLE
+    Get-MFA
+    Retrieves the MFA status for all users via application authentication.
+	
+    .EXAMPLE
+    Get-MFA -Encoding utf32
+    Retrieves the MFA status for all users and exports the output to a CSV file with UTF-32 encoding.
+		
+    .EXAMPLE
+    Get-MFA -OutputDir C:\Windows\Temp
+    Retrieves the MFA status for all users and saves the output to the C:\Windows\Temp folder.	
+#>
     [CmdletBinding()]
     param(
-        [string]$OutputDir = "Output\UserInfo",
-        [string]$Encoding = "UTF8",
+        [string]$OutputDir,
+        [string]$Encoding,
         [switch]$Application
     )
 
-    if (-not (Test-Path $OutputDir)) {
-        New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null
-    }
-
-    $scopes = @('UserAuthenticationMethod.Read.All', 'User.Read.All')
-
-    if (-not (Get-MgSession)) {
-        Connect-MgGraph -Scopes $scopes -NoWelcome
-    }
-
-    if (-not $Application.IsPresent) {
-        try {
-            $session = Get-MgSession
-            if (-not $session.AccessToken) {
-                Connect-MgGraph -Scopes $scopes -NoWelcome
-            }
-        }
-        catch {
-            Write-LogFile -Message "You must call Connect-MgGraph -Scopes '$($scopes -join ',')' before running this script" -Color "Red"
-            return
-        }
+    if (!($Application.IsPresent)) {
+        Connect-MgGraph -Scopes UserAuthenticationMethod.Read.All,User.Read.All -NoWelcome
     }
 
     try {
-        $users = Get-MgUser -All
+        $areYouConnected = Get-MgUser -ErrorAction stop 
     }
     catch {
-        Write-LogFile -Message "Error while retrieving users: $_" -Color "Red"
-        return
+        Write-logFile -Message "[WARNING] You must call Connect-MgGraph -Scopes 'UserAuthenticationMethod.Read.All,User.Read.All' before running this script" -Color "Red"
+        break
     }
 
-    $mfaStatus = "Disabled"
-    $mfaMethods = @{}
+    if ($Encoding -eq "" ){
+        $Encoding = "UTF8"
+    }
+
+    if ($OutputDir -eq "" ){
+        $OutputDir = "Output\UserInfo"
+        if (!(test-path $OutputDir)) {
+            New-Item -ItemType Directory -Force -Name $OutputDir | Out-Null
+            write-logFile -Message "[INFO] Creating the following directory: $OutputDir"
+        }
+    }
+
+    else {
+      if (Test-Path -Path $OutputDir) {
+        write-LogFile -Message "[INFO] Custom directory set to: $OutputDir"
+      }
+    
+      else {
+        write-Error "[Error] Custom directory invalid: $OutputDir exiting script" -ErrorAction Stop
+        write-LogFile -Message "[Error] Custom directory invalid: $OutputDir exiting script"
+      }
+	  }
+  
+    Write-logFile -Message "[INFO] Running Get-MFA" -Color "Green"
+    Write-logFile -Message "[INFO] Identifying all the authentication methods utilized within the environment" -Color "Green"
+    
+    $users = Get-MgUser -All
+
+    $MFAEmail = 0
+    $MFAfido2 = 0
+    $MFAapp = 0
+    $MFAphone = 0
+    $MFAsoftwareoath = 0
+    $MFAhellobusiness = 0
+    $MFAstatusAmount = 0
+
+    $results=@();
 
     foreach ($user in $users) {
-        try {
-            $mfaData = Get-MgUserAuthenticationMethod -UserId $user.UserPrincipalName
 
-            if ($mfaData) {
-                $mfaStatus = "Enabled"
-                break
-            }
+        $myObject = [PSCustomObject]@{
+            user               = "-"
+            MFAstatus          = "Disabled"  # Default to 'Disabled'
+            email              = "-"
+            fido2              = "-"
+            app                = "-"
+            password           = "-"
+            phone              = "-"
+            softwareoath       = "-"
+            hellobusiness      = "-"
+            temporaryAccessPass = "-"
+            certificateBasedAuthConfiguration = "-"
         }
-        catch {
-            Write-LogFile -Message "Error while retrieving the MFA status for $($user.UserPrincipalName): $_" -Color "Red"
-        }
-    }
-
-    $results = foreach ($user in $users) {
-        $mfaMethods = @{}
 
         try {
-            $mfaData = Get-MgUserAuthenticationMethod -UserId $user.UserPrincipalName
+          $MFAData= Get-MgUserAuthenticationMethod -UserId $user.UserPrincipalName
 
-            if ($mfaData) {
-                foreach ($method in $mfaData) {
-                    switch ($method.AdditionalProperties.["@odata.type"]) {
-                        "#microsoft.graph.emailAuthenticationMethod" {
-                            $mfaMethods.email = $true
-                        }
+          $myobject.user = $user.UserPrincipalName;
+          ForEach ($method in $MFAData) {
+        
+              Switch ($method.AdditionalProperties["@odata.type"]) {
+                  "#microsoft.graph.emailAuthenticationMethod" { 
+                  $myObject.email = $true 
+                  $myObject.MFAstatus = "Enabled"
+                  }
 
-                        "#microsoft.graph.fido2AuthenticationMethod" {
-                            $mfaMethods.fido2 = $true
-                        }
-
-                        "#microsoft.graph.microsoftAuthenticatorAuthenticationMethod" {
-                            $mfaMethods.app = $true
-                        }
-
-                        "#microsoft.graph.passwordAuthenticationMethod" {
-                            $mfaMethods.password = $true
-                        }
-
-                        "#microsoft.graph.phoneAuthenticationMethod" {
-                            $mfaMethods.phone = $true
-                        }
-
-                        "#microsoft.graph.softwareOathAuthenticationMethod" {
-                            $mfaMethods.softwareoath = $true
-                        }
-
-                        "#microsoft.graph.windowsHelloForBusinessAuthenticationMethod" {
-                            $mfaMethods.hellobusiness = $true
-                        }
-
-                        "#microsoft.graph.temporaryAccessPassAuthenticationMethod" {
-                            $mfaMethods.temporaryAccessPassAuthenticationMethod = $true
-                        }
-
-                        "#microsoft.graph.certificateBasedAuthConfiguration" {
-                            $mfaMethods.certificateBasedAuthConfiguration = $true
-                        }
-                    }
+                  "#microsoft.graph.fido2AuthenticationMethod" { 
+                  $myObject.fido2 = $true 
+                  $myObject.MFAstatus = "Enabled"
                 }
-            }
+
+                  "#microsoft.graph.microsoftAuthenticatorAuthenticationMethod" { 
+                  $myObject.app = $true 
+                  $myObject.MFAstatus = "Enabled"
+                }
+
+                  "#microsoft.graph.passwordAuthenticationMethod" {              
+                  $myObject.password = $true 
+                  if($myObject.MFAstatus -ne "Enabled"){
+                      $myObject.MFAstatus = "Disabled"
+                  }                
+                }
+
+                  "#microsoft.graph.phoneAuthenticationMethod" { 
+                  $myObject.phone = $true 
+                  $myObject.MFAstatus = "Enabled"
+                }
+
+                  "#microsoft.graph.softwareOathAuthenticationMethod" { 
+                  $myObject.softwareoath = $true 
+                  $myObject.MFAstatus = "Enabled"
+                }
+
+                  "#microsoft.graph.windowsHelloForBusinessAuthenticationMethod" { 
+                  $myObject.hellobusiness = $true 
+                  $myObject.MFAstatus = "Enabled"
+                }
+
+                  "#microsoft.graph.temporaryAccessPassAuthenticationMethod" { 
+                  $myObject.temporaryAccessPassAuthenticationMethod = $true 
+                  $myObject.MFAstatus = "Enabled"
+                }
+                  
+                  "#microsoft.graph.certificateBasedAuthConfiguration" { 
+                  $myObject.certificateBasedAuthConfiguration = $true 
+                  $myObject.MFAstatus = "Enabled"
+                }
+              }
+          }
         }
+
         catch {
-            Write-LogFile -Message "Error while retrieving the MFA status for $($user.UserPrincipalName): $_" -Color "Red"
+          Write-logFile -Message "[ERROR] Error while retrieving the MFA status for $user | Error: $_ " -Color "Red"
+        }
+		
+		if($myObject.MFAstatus -eq "Enabled") {
+            $MFAstatusAmount++
         }
 
-        [PSCustomObject]@{
-            User                 = $user.UserPrincipalName
-            MFAStatus            = $mfaStatus
-            Email               = $mfaMethods.email
-            Fido2               = $mfaMethods.fido2
-            App                 = $mfaMethods.app
-            Password            = $mfaMethods.password
-            Phone               = $mfaMethods.phone
-            SoftwareOath       = $mfaMethods.softwareoath
-            HelloBusiness      = $mfaMethods.hellobusiness
-            TemporaryAccessPass = $mfaMethods.temporaryAccessPassAuthenticationMethod
-            CertificateBasedAuthConfiguration = $mfaMethods.certificateBasedAuthConfiguration
-        }
+        $results+= $myObject;
     }
-
+	
     $date = Get-Date -Format "yyyyMMddHHmm"
-    $filePath = Join-Path $OutputDir "$($date)-MFA-AuthenticationMethods.csv"
+    $filePath = "$OutputDir\$($date)-MFA-AuthenticationMethods.csv"
     $results | Export-Csv -Path $filePath -NoTypeInformation -Encoding $Encoding
-    Write-LogFile -Message "Output written to $filePath" -Color "Green"
+    Write-logFile -Message "[INFO] Output written to $filePath" -Color "Green"
+    
+    $MFAEmail = (Import-Csv -Path "$filePath" -Delimiter "," | Where-Object { $_.email -eq "True" } | Measure-Object).Count
+    $MFAfido2 = (Import-Csv -Path "$filePath" -Delimiter "," | Where-Object { $_.fido2 -eq "True" } | Measure-Object).Count
+    $MFAapp = (Import-Csv -Path "$filePath" -Delimiter "," | Where-Object { $_.app -eq "True" } | Measure-Object).Count
+    $MFAphone = (Import-Csv -Path "$filePath" -Delimiter "," | Where-Object { $_.phone -eq "True" } | Measure-Object).Count
+    $MFAsoftwareoath = (Import-Csv -Path "$filePath" -Delimiter "," | Where-Object { $_.softwareoath -eq "True" } | Measure-Object).Count
+    $MFApassword = (Import-Csv -Path "$filePath" -Delimiter "," | Where-Object { $_.password -eq "True" } | Measure-Object).Count
+    $MFAhellobusiness = (Import-Csv -Path "$filePath" -Delimiter "," | Where-Object { $_.hellobusiness -eq "True" } | Measure-Object).Count
+    $MFAstatusAmount = (Import-Csv -Path "$filePath" -Delimiter "," | Where-Object { $_.MFAstatus -eq "Enabled" } | Measure-Object).Count
+    $temporaryAccessPassAuthenticationMethod = (Import-Csv -Path "$filePath" -Delimiter "," | Where-Object { $_.temporaryAccessPassAuthenticationMethod -eq "True" } | Measure-Object).Count
+    $certificateBasedAuthConfiguration = (Import-Csv -Path "$filePath" -Delimiter "," | Where-Object { $_.certificateBasedAuthConfiguration -eq "Enabled" } | Measure-Object).Count
 
-    $mfaStatusCount = ($results | Where-Object { $_.MFAStatus -eq "Enabled" }).Count
-    Write-Host "$mfaStatusCount out of $($users.Count) users have MFA enabled:"
-    $mfaMethods | ForEach-Object {
-        Write-Host "  - $($_.Count) x $_"
-    }
+    write-host "$MFAstatusAmount out of $($users.count) users have MFA enabled:"
+    write-host "  - $MFAEmail x Email"
+    write-host "  - $MFAfido2 x Fido2"
+    write-host "  - $MFAapp x Microsoft Authenticator App"
+    write-host "  - $MFAphone x Phone"
+    write-host "  - $MFAsoftwareoath x SoftwareOAuth"
+    write-host "  - $MFAhellobusiness x HelloBusiness"
+    write-host "  - $temporaryAccessPassAuthenticationMethod x Temporary Access Pass (TAP)"
+    write-host "  - $certificateBasedAuthConfiguration x Certificate Based Auth Configuration"  
 
-    Write-LogFile -Message "Retrieving the user registration details" -Color "Green"
+    write-host ""
+    Write-logFile -Message "[INFO] Retrieving the user registration details" -Color "Green"
 
+    $results=@();
     $date = Get-Date -Format "yyyyMMddHHmm"
-    $filePath = Join-Path $OutputDir "$($date)-MFA-UserRegistrationDetails.csv"
-
-    $registrationDetails = Get-MgReportAuthenticationMethodUserRegistrationDetail -All
-    $results = foreach ($detail in $registrationDetails) {
-        [PSCustomObject]@{
-            Id                                                  = $detail.Id
-            IsAdmin                                             = $detail.IsAdmin
-            IsMfaCapable                                        = $detail.IsMfaCapable
-            IsMfaRegistered                                     = $detail.IsMfaRegistered
-            IsPasswordlessCapable                               = $detail.IsPasswordlessCapable
-            IsSsprCapable                                       = $detail.IsSsprCapable
-            IsSsprEnabled                                       = $detail.IsSsprEnabled
-            IsSsprRegistered                                    = $detail.IsSsprRegistered
-            IsSystemPreferredAuthenticationMethodEnabled        = $detail.IsSystemPreferredAuthenticationMethodEnabled
-            MethodsRegistered                                   = $detail.MethodsRegistered -join ', '
-            SystemPreferredAuthenticationMethods                = $detail.SystemPreferredAuthenticationMethods -join ', '
-            UserDisplayName                                     = $detail.UserDisplayName
-            UserPreferredMethodForSecondaryAuthentication       = $detail.UserPreferredMethodForSecondaryAuthentication
-            UserPrincipalName                                   = $detail.UserPrincipalName
-            UserType                                            = $detail.UserType
-            LastUpdatedDateTime                                 = $detail.LastUpdatedDateTime
+    $filePath = "$OutputDir\$($date)-MFA-UserRegistrationDetails.csv"
+  
+    Get-MgReportAuthenticationMethodUserRegistrationDetail -all | ForEach-Object {
+        $myObject = [PSCustomObject]@{
+            Id                                                  = "-"
+            IsAdmin                                             = "-"
+            IsMfaCapable                                        = "-"
+            IsMfaRegistered                                     = "-"
+            IsPasswordlessCapable                               = "-"
+            IsSsprCapable                                       = "-"
+            IsSsprEnabled                                       = "-"
+            IsSsprRegistered                                    = "-"
+            IsSystemPreferredAuthenticationMethodEnabled        = "-"
+            MethodsRegistered                                   = "-"
+            SystemPreferredAuthenticationMethods                = "-"
+            UserDisplayName                                     = "-"
+            UserPreferredMethodForSecondaryAuthentication       = "-"
+            UserPrincipalName                                   = "-"
+            UserType                                            = "-"
+            AdditionalProperties                                = "-"
         }
+
+        $myobject.Id = $_.Id
+        $myobject.IsAdmin = $_.IsAdmin
+        $myobject.IsMfaCapable = $_.IsMfaCapable
+        $myobject.IsMfaRegistered = $_.IsMfaRegistered
+        $myobject.IsPasswordlessCapable = $_.IsPasswordlessCapable
+        $myobject.IsSsprCapable = $_.IsSsprCapable
+        $myobject.IsSsprEnabled = $_.IsSsprEnabled
+        $myobject.IsSsprRegistered = $_.IsSsprRegistered
+        $myobject.IsSystemPreferredAuthenticationMethodEnabled = $_.IsSystemPreferredAuthenticationMethodEnabled
+        $myobject.MethodsRegistered = $_.MethodsRegistered | out-string
+        $myobject.SystemPreferredAuthenticationMethods = $_.SystemPreferredAuthenticationMethods | out-string
+        $myobject.UserDisplayName = $_.UserDisplayName
+        $myobject.UserPreferredMethodForSecondaryAuthentication = $_.UserPreferredMethodForSecondaryAuthentication
+        $myobject.UserPrincipalName = $_.UserPrincipalName
+        $myobject.UserType = $_.UserType
+        $myobject.AdditionalProperties = $_.AdditionalProperties | out-string
+        $results+= $myObject;
     }
 
     $results | Export-Csv -Path $filePath -NoTypeInformation -Encoding $Encoding
-    Write-LogFile -Message "Output written to $filePath" -Color "Green"
+    Write-logFile -Message "[INFO] Output written to $filePath" -Color "Green"
 }

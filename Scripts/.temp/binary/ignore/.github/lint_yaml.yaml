@@ -4,6 +4,9 @@ name: Lint Check for YAML
 
 # This is a reusable workflow called by the pipeline.
 on:
+  pull_request:
+    branches:
+      - main
   workflow_call:
   workflow_dispatch:
 

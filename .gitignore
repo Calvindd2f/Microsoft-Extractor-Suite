@@ -1,14 +1,70 @@
-# Created by https://www.toptal.com/developers/gitignore/api/python,jupyternotebooks
-# Edit at https://www.toptal.com/developers/gitignore?templates=python,jupyternotebooks
+# Gitignore template for Python and Jupyter Notebooks
 
-### Jupyter Notebooks ###
-# gitignore template for Jupyter Notebooks
-# website: http://jupyter.org/
+# Created by https://www.toptal.com/developers/gitignore and improved by Awais Misbah
+# Generated at https://www.toptal.com/developers/gitignore?templates=python,jupyternotebooks
 
+# Get the latest version at https://www.toptal.com/developers/gitignore/api/python,jupyternotebooks
+
+# Jupyter Notebooks (https://jupyter.org/)
+## Changelogs
 .changelog/*
+Scripts/.test/*
+## Checkpoints
 .ipynb_checkpoints/
 */.ipynb_checkpoints/
 
-# IPython
+## IPython configuration files
 ipython_config.py
 
+# Python (https://www.python.org/)
+### Byte-compiled / optimized / DLL files
+*.py[co]
+/__pycache__/
+
+### Python scripts
+*.py
+
+### Distribution packages
+*.egg
+*.exe
+*.pyz
+*.pyzw
+*.pyd
+*.whl
+
+### Documentation
+*.html
+*.pdf
+
+# Miscellaneous
+*.log
+*.sql
+*.sqlite
+*.swp
+.DS_Store
+.env
+.venv/
+env/
+
+# R Projects
+.Rproj.user/
+
+# CRAN packages
+/cran/
+
+# RStudio
+.Rhistory
+.Rdata
+.Ruserdata
+
+# Jupyter kernels
+.kernel.json
+
+# MongoDB
+.mongorc.js
+
+# VSCode
+.vscode/
+
+# venv
+venv/
