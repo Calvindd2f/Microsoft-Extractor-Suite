@@ -1,62 +1,64 @@
-# Check for required modules
-if (-not (Get-Module -Name Azure -ErrorAction SilentlyContinue)) {
-    Write-Error "The Azure module is not installed. Please install it and try again."
-    return
-}
+Get-AzureActivityLogs
 
-if (-not (Get-Module -Name Az -ErrorAction SilentlyContinue)) {
-    Write-Error "The Az module is not installed. Please install it and try again."
-    return
-}
 
-# Function to check if a directory exists and create it if it doesn't
-function New-Directory ($path) {
-    if (-not (Test-Path -Path $path)) {
-        New-Item -ItemType Directory -Force -Path $path
-    }
-}
+Get-AzureActivityLogs -EndDate 2023-04-12
 
-# Function to check if a file can be written
-function Test-WritableFile ($path) {
-    try {
-        $stream = New-Object System.IO.FileStream($path, 'OpenOrCreate', 'Write', 'None')
-        $stream.Close()
-        return $true
-    } catch {
-        return $false
-    }
-}
 
-# Check parameters
-if ($EndDate -lt $StartDate) {
-    Write-Error "The end date cannot be earlier than the start date."
-    return
-}
+Get-AzureActivityLogs -StartDate 2023-04-12
 
-# Set output path
-$outputDir = "Output\AzureActivityLogs"
-New-Directory -Path $outputDir
-$outputPath = Join-Path -Path $outputDir -ChildPath ("ActivityLogs_${StartDate:yyyy-MM-dd}_to_${EndDate:yyyy-MM-dd}_${SubscriptionID}.json")
 
-# Get Azure activity logs
-try {
-    $azureActivityLogs = Get-AzActivityLog -StartTime $StartDate -EndTime $EndDate -SubscriptionId $SubscriptionID
-} catch {
-    Write-Error "Failed to retrieve Azure activity logs: $_"
-    return
-}
+Get-AzureActivityLogs -SubscriptionID "4947f939-cf12-4329-960d-4dg68a3eb66f"
 
-# Check if any logs were found
-if ($azureActivityLogs.Count -eq 0) {
-    Write-Warning "No Azure activity logs found for the specified date range and subscription."
-    return
-}
 
-# Convert logs to JSON and save to file
-$json = $azureActivityLogs | ConvertTo-Json -Depth 100
-if (Test-WritableFile -Path $outputPath) {
-    $json | Out-File -FilePath $outputPath -Encoding $Encoding
-    Write-Host "Activity logs saved to $outputPath"
-} else {
-    Write-Error "Cannot write to output file: $outputPath"
-}
+<#
+.SYNOPSIS
+    Collect Azure Activity Logs
+.DESCRIPTION
+    This script collects the Azure Activity Logs for the specified time period and subscription.
+.EXAMPLE
+    Get-AzureActivityLogs
+.EXAMPLE
+    Get-AzureActivityLogs -EndDate 2023-04-12
+.EXAMPLE
+    Get-AzureActivityLogs -StartDate 2023-04-12
+.EXAMPLE
+    Get-AzureActivityLogs -SubscriptionID "4947f939-cf12-4329-960d-4dg68a3eb66f"
+.PARAMETER StartDate
+    The start date of the date range. Default: Today -89 days.
+.PARAMETER EndDate
+    The end date of the date range. Default: Now.
+.PARAMETER SubscriptionID
+    The subscription ID for which the collection of Activity logs is required. Default: All subscriptions.
+.PARAMETER OutputDir
+    The output directory. Default: Output\AzureActivityLogs.
+.PARAMETER Encoding
+    The encoding of the JSON output file. Default: UTF8.
+.NOTES
+    This functionality is currently in beta. If you encounter any issues or have suggestions for improvements, please let us know.
+#>
+
+[CmdletBinding()]
+param (
+    [Parameter(Mandatory=$false)]
+    [DateTime]$StartDate = (Get-Date).AddDays(-89),
+
+    [Parameter(Mandatory=$false)]
+    [DateTime]$EndDate = Get-Date,
+
+    [Parameter(Mandatory=$false)]
+    [string]$SubscriptionID,
+
+    [Parameter(Mandatory=$false)]
+    [string]$OutputDir = "Output\AzureActivityLogs",
+
+    [Parameter(Mandatory=$false)]
+    [string]$Encoding = "UTF8"
+    )
+
+$OutputPath = Join-Path -Path $PSScriptRoot -ChildPath "$($OutputDir)\ActivityLogs.json"
+
+$AzureActivityLogs = Get-AzActivityLog -StartTime $StartDate -EndTime $EndDate -Subscription $SubscriptionID
+
+$AzureActivityLogs | ConvertTo-Json -Depth 100 | Out-File -FilePath $OutputPath -Encoding $Encoding
+
+Write-Host "Activity logs saved to $OutputPath"
