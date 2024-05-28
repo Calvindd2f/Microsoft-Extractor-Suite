@@ -7,7 +7,7 @@ version: 2
 
 # Set the version of Python and other tools you might need
 build:
-  image: python:3.11-slim-buster
+  image: python:3.10-slim-buster  # Use a stable and well-tested version of Python
 
 # Build documentation in the docs/ directory with Sphinx
 sphinx:
@@ -21,7 +21,7 @@ python:
   install:
     - requirements: docs/requirements.txt
     - method: pip
-      index:
-        - name: jessie
-          url: https://packagecloud.io/AtlasSC/jessie/pip/
 
+# Remove the specific index URL as it may not be necessary and could cause issues
+# if the packagecloud.io server is down or unavailable
+# If you still need to use this index URL, please add a comment explaining why
