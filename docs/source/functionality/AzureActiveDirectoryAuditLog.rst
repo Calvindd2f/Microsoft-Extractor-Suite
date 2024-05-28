@@ -1,44 +1,62 @@
+<#
 Azure Active Directory Audit Log
-=======
-Use **Get-ADAuditLogs** to collect the contents of the Azure Active Directory Audit Log.
+- Use Get-ADAuditLogs to collect the contents of the Azure Active Directory Audit Log.
+- This GraphAPI functionality is currently in beta. If you encounter any issues or have suggestions for improvements please let us know.
+#>
 
-.. note::
+[CmdletBinding()]
+param(
+    [Parameter(Mandatory=$false)]
+    [DateTime]$startDate = (Get-Date).AddDays(-7),
 
-    This GraphAPI functionality is currently in beta. If you encounter any issues or have suggestions for improvements please let us know.
+    [Parameter(Mandatory=$false)]
+    [DateTime]$endDate = (Get-Date).AddDays(-1),
 
-Usage
-""""""""""""""""""""""""""
-Running the script without any parameters will gather the Azure Active Directory Audit Log for the last 7 days (Entra ID Free) or 30 days (Entra ID P1+P2):
-::
+    [Parameter(Mandatory=$false)]
+    [string]$OutputDir = "Output\AzureAD",
 
-   Get-ADAuditLogs
+    [Parameter(Mandatory=$false)]
+    [System.Text.Encoding]$Encoding = [System.Text.Encoding]::UTF8
+)
 
-Get the Azure Active Directory Audit Log before 2023-04-12:
-::
+# Validate startDate and endDate
+if ($startDate -gt $endDate) {
+    Write-Error "Error: startDate cannot be later than endDate."
+    return
+}
 
-   Get-ADAuditLogs -endDate 2023-04-12
+# Create Output directory if it doesn't exist
+if (!(Test-Path -Path $OutputDir)) {
+    New-Item -ItemType Directory -Force -Path $OutputDir
+}
 
-Get the Azure Active Directory Audit Log after 2023-04-12:
-::
+# Get-ADAuditLogs function
+function Get-ADAuditLogs {
+    [CmdletBinding()]
+    param()
 
-   Get-ADAuditLogs -startDate 2023-04-12
+    $headers = @{
+        'Content-Type'  = 'application/json'
+    }
 
-Parameters
-""""""""""""""""""""""""""
--startDate (optional)
-    - startDate is the parameter specifying the start date of the date range. The time format supported is limited to yyyy-mm-dd only.
+    $queryParams = @{
+        '$select'      = 'id,category,correlationId,result,resultReason,activityDisplayName,initiatedBy,targetResources,eventTime'
+        '$filter'      = "eventTime ge $($startDate.ToString("s")) and eventTime le $($endDate.ToString("s"))"
+    }
 
--endDate (optional)
-    - endDate is the parameter specifying the end date of the date range. The time format supported is limited to yyyy-mm-dd only.
+    $response = Invoke-RestMethod -Uri "https://graph.microsoft.com/v1.0/auditLogs/directoryAudits" `
+        -Headers $headers `
+        -Method Get `
+        -Query $queryParams
 
--OutputDir (optional)
-    - OutputDir is the parameter specifying the output directory.
-    - Default: Output\AzureAD
+    return $response.value
+}
 
--Encoding (optional)
-    - Encoding is the parameter specifying the encoding of the JSON output file.
-    - Default: UTF8
+# Call Get-ADAuditLogs function
+$auditLogs = Get-ADAuditLogs
 
-Output
-""""""""""""""""""""""""""
-The output will be saved to the 'AzureAD' directory within the 'Output' directory, with the file name 'Auditlogs.json'. Each time an acquisition is performed, the output JSON file will be overwritten. Therefore, if you perform multiple acquisitions, the JSON file will only contain the results from the latest acquisition.
+# Save output to JSON file
+$jsonOutput = $auditLogs | ConvertTo-Json
+Set-Content -Path (Join-Path -Path $OutputDir -ChildPath "AuditLogs.json") -Value $jsonOutput -Encoding $Encoding
+
+Write-Host "Azure Active Directory Audit Log saved to $(Join-Path -Path $OutputDir -ChildPath "AuditLogs.json")"
