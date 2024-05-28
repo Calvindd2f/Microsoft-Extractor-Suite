@@ -5,9 +5,17 @@ pushd %~dp0
 
 rem Command file for Sphinx documentation
 
-rem Check if SPHINXBUILD is set, if not set it to sphinx-build
+rem Check if SPHINXBUILD is set, if not set it to sphinx-build (with full path)
 if not defined SPHINXBUILD (
-    set "SPHINXBUILD=sphinx-build"
+    set "SPHINXBUILD=C:\Python39\Scripts\sphinx-build.exe"
+    if not exist "%SPHINXBUILD%" (
+        echo.
+        echo.The 'sphinx-build' command was not found. Make sure you have Sphinx
+        echo.installed, then set the SPHINXBUILD environment variable to point
+        echo.to the full path of the 'sphinx-build' executable.
+        echo.
+        exit /b 1
+    )
 )
 
 rem Set the source and build directories
@@ -19,30 +27,36 @@ if "%~1" == "" (
     goto help
 )
 
-rem Check if sphinx-build is installed
-%SPHINXBUILD% >nul 2>nul
-if errorlevel 9009 (
+rem Check if sphinx-build is installed and executable
+if not exist "%SPHINXBUILD%" (
     echo.
     echo.The 'sphinx-build' command was not found. Make sure you have Sphinx
     echo.installed, then set the SPHINXBUILD environment variable to point
-    echo.to the full path of the 'sphinx-build' executable. Alternatively you
-    echo.may add the Sphinx directory to PATH.
+    echo.to the full path of the 'sphinx-build' executable.
     echo.
-    echo.If you don't have Sphinx installed, grab it from
-    echo.http://sphinx-doc.org/
     exit /b 1
+) else (
+    "%SPHINXBUILD%" -V >nul 2>nul
+    if errorlevel 1 (
+        echo.
+        echo.The 'sphinx-build' command is not executable. Make sure the
+        echo.SPHINXBUILD environment variable points to the correct location.
+        echo.
+        exit /b 1
+    )
 )
 
 rem Build the documentation
-%SPHINXBUILD% -M %1 %SOURCEDIR% %BUILDDIR% %SPHINXOPTS% %O%
+"%SPHINXBUILD%" -M %1 %SOURCEDIR% %BUILDDIR% %SPHINXOPTS% %O%
 
 rem Go to the end label
 goto end
 
 :help
 rem Show the help message
-%SPHINXBUILD% -M help %SOURCEDIR% %BUILDDIR% %SPHINXOPTS% %O%
+"%SPHINXBUILD%" -M help %SOURCEDIR% %BUILDDIR% %SPHINXOPTS% %O%
 
 :end
 rem Go back to the previous directory
 popd
+
