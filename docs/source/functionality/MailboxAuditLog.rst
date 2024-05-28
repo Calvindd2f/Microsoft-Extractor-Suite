@@ -1,7 +1,6 @@
-<<<<<<< HEAD
 # Get-MailboxAuditLog.ps1
 
-[CmdletBinding()]
+[CmdletBinding(SupportsShouldProcess=$true)]
 param (
     [Parameter(Mandatory=$true, Position=0)]
     [string[]]$UserIds,
@@ -10,67 +9,49 @@ param (
     [datetime]$StartDate,
 
     [Parameter()]
-    [datetime]$EndDate
+    [datetime]$EndDate,
+
+    [Parameter()]
+    [string]$OutputDir = "Output\MailboxAuditLog",
+
+    [Parameter()]
+    [System.Text.Encoding]$Encoding = [System.Text.Encoding]::UTF8
 )
 
-if ($StartDate -and $EndDate) {
+# Set default start and end dates if not provided
+if (-not $StartDate) {
+    $StartDate = (Get-Date).AddDays(-90)
+}
+if (-not $EndDate) {
+    $EndDate = Get-Date
+}
+
+# Validate start and end dates
+if ($StartDate -gt $EndDate) {
+    Write-Error "Start date cannot be later than the end date."
+    exit 1
+}
+
+# Check if mailbox audit logging is enabled for the specified users
+$auditLogs = Search-MailboxAuditLog -Identity $UserIds -LogonTypes Delegated -ShowDetails -ErrorAction SilentlyContinue
+
+if (-not $auditLogs) {
+    Write-Warning "Mailbox audit logging is not enabled for one or more of the specified users."
+    exit 0
+}
+
+# Search for mailbox audit logs
+try {
     $auditLogs = Search-MailboxAuditLog -Identity $UserIds -LogonTypes Delegated -ShowDetails -StartDate $StartDate -EndDate $EndDate
 }
-else {
-    $auditLogs = Search-MailboxAuditLog -Identity $UserIds -LogonTypes Delegated -ShowDetails
+catch {
+    Write-Error "Error searching for mailbox audit logs: $_"
+    exit 1
 }
 
-$auditLogs | Format-Table -AutoSize
-=======
-Mailbox Audit Log
-=======
-Mailbox audit logs are generated for each mailbox that has mailbox audit logging enabled. This tracks all user actions on any items in a mailbox.
-Use **Get-MailboxAuditLog** to collect the mailbox audit log for a specific user or all user accounts.
+# Format and output the results
+$outputFile = Join-Path -Path $OutputDir -ChildPath ("mailboxAuditLog_$($UserIds)_$(Get-Date -Format yyyy-MM-dd).csv")
+$auditLogs | Format-Table -AutoSize |
+    Export-Csv -Path $outputFile -Encoding $Encoding -NoTypeInformation
 
-Usage
-""""""""""""""""""""""""""
-Running the script without any parameters will gather the maibox audit logs for the last 90 days for all users:
-::
-
-   Get-MailboxAuditLog
-
-Get mailbox audit log entries for the user HR[@]invictus-ir.com:
-::
-
-   Get-MailboxAuditLog -UserIds HR[@]invictus-ir.com
-
-Get mailbox audit log entries for the users HR[@]invictus-ir.com and test[@]invictus-ir.com:
-::
-
-   Get-MailboxAuditLog -UserIds "test@invictus-ir.com,HR@invictus-ir.com"
-
-Get mailbox audit log entries for the user test@invictus-ir.com between 1/4/2023 and 5/4/2023:
-::
-
-   Get-MailboxAuditLog -UserIds test[@]invictus-ir.com -StartDate 1/4/2023 -EndDate 5/4/2023
-
-Parameters
-""""""""""""""""""""""""""
--UserIds (optional)
-    - UserIds is the UserIds parameter filtering the log entries by the account of the user who performed the actions.
-
--StartDate (optional)
-    - StartDate is the parameter specifying the start date of the date range.
-    - Default: Today -90 days
-
--EndDate (optional)
-    - EndDate is the parameter specifying the end date of the date range.
-    - Default: Now
-
--OutputDir (optional)
-    - OutputDir is the parameter specifying the output directory.
-    - Default: Output\MailboxAuditLog
-
--Encoding (optional)
-    - Encoding is the parameter specifying the encoding of the CSV output file.
-    - Default: UTF8
-
-Output
-""""""""""""""""""""""""""
-The output will be saved to the 'MailboxAuditLog' directory within the 'Output' directory, with the file name 'mailboxAuditLog_$($UserIds)_$($date).csv"'.
->>>>>>> parent of 5b746d4 (improve)
+Write-Host "Mailbox audit log saved to $($outputFile)"
