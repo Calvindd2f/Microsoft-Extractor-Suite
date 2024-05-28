@@ -1,28 +1,15 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
     <title>My Sphinx Documentation</title>
     <link rel="stylesheet" href="sphinx_rtd_theme/theme.css" type="text/css" />
 </head>
 <body>
-    <header>
-        <nav>
-            <ul>
-                <li><a href="#">Home</a></li>
-                <li><a href="#">Section 1</a></li>
-                <li><a href="#">Section 2</a></li>
-                <li><a href="#">Section 3</a></li>
-            </ul>
-        </nav>
-    </header>
-    <main>
-        <section id="header">
-            <h1>My Sphinx Documentation</h1>
-        </section>
-        <section id="content">
-            <!-- Content goes here -->
-        </section>
-    </main>
+    <div id="header">
+        <h1>My Sphinx Documentation</h1>
+    </div>
+    <div id="content">
+        <!-- Content goes here -->
+    </div>
 </body>
 </html>
