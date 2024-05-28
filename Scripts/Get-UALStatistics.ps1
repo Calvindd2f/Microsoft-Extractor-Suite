@@ -19,14 +19,22 @@ function Write-Log {
         $logFile = Join-Path -Path (Join-Path -Path $PSScriptRoot -ChildPath "Logs") -ChildPath "$($MyInvocation.MyCommand.Name).log"
 
         if (-not (Test-Path -Path (Split-Path -Path $logFile -Parent))) {
-            New-Item -ItemType Directory -Force -Path (Split-Path -Path $logFile -Parent)
+            try {
+                New-Item -ItemType Directory -Force -Path (Split-Path -Path $logFile -Parent)
+            } catch {
+                Write-Log -Message "[ERROR] Failed to create log directory: $($_.Exception.Message)" -Color "Red" -ToFile
+            }
         }
 
-        Add-Content -Path $logFile -Value "$date - $Message"
+        try {
+            Add-Content -Path $logFile -Value "$date - $Message"
+        } catch {
+            Write-Log -Message "[ERROR] Failed to write to log file: $($_.Exception.Message)" -Color "Red" -ToFile
+        }
     }
 }
 
-function Invoke-MgGraphRequest {
+function Invoke-ApiRequest {
     [CmdletBinding()]
     param(
         [string]$Uri,
@@ -38,52 +46,57 @@ function Invoke-MgGraphRequest {
     $headers.Add("ConsistencyLevel", "eventual")
     $headers.Add("Prefer", "odata.maxversion=4.0")
 
-    $response = Invoke-RestMethod -Uri $Uri -Method $Method -Headers $headers -Body $Body -UseBasicParsing
+    try {
+        $response = Invoke-RestMethod -Uri $Uri -Method $Method -Headers $headers -Body $Body -UseBasicParsing
+    } catch {
+        Write-Log -Message "[ERROR] Failed to invoke API request: $($Uri) - $($_.Exception.Message)" -Color "Red" -ToFile
+        return $null
+    }
 
     if ($response.Error) {
-        Write-Log -Message "[ERROR] $($response.Error.Message)" -Color "Red"
+        Write-Log -Message "[ERROR] API request failed: $($response.Error.Message)" -Color "Red" -ToFile
 
         if ($response.Error.InnerError) {
-            Write-Log -Message "[ERROR] Inner error: $($response.Error.InnerError.Message)" -Color "Red"
+            Write-Log -Message "[ERROR] Inner error: $($response.Error.InnerError.Message)" -Color "Red" -ToFile
         }
 
         if ($response.Error.InnerError.RequestId) {
-            Write-Log -Message "[ERROR] Request ID: $($response.Error.InnerError.RequestId)" -Color "Red"
+            Write-Log -Message "[ERROR] Request ID: $($response.Error.InnerError.RequestId)" -Color "Red" -ToFile
         }
 
         if ($response.Error.InnerError.Date) {
-            Write-Log -Message "[ERROR] Date: $($response.Error.InnerError.Date)" -Color "Red"
+            Write-Log -Message "[ERROR] Date: $($response.Error.InnerError.Date)" -Color "Red" -ToFile
         }
 
         if ($response.Error.InnerError.Body) {
-            Write-Log -Message "[ERROR] Body: $($response.Error.InnerError.Body)" -Color "Red"
+            Write-Log -Message "[ERROR] Body: $($response.Error.InnerError.Body)" -Color "Red" -ToFile
         }
 
         if ($response.Error.InnerError.Path) {
-            Write-Log -Message "[ERROR] Path: $($response.Error.InnerError.Path)" -Color "Red"
+            Write-Log -Message "[ERROR] Path: $($response.Error.InnerError.Path)" -Color "Red" -ToFile
         }
 
         if ($response.Error.InnerError.StatusCode) {
-            Write-Log -Message "[ERROR] Status code: $($response.Error.InnerError.StatusCode)" -Color "Red"
+            Write-Log -Message "[ERROR] Status code: $($response.Error.InnerError.StatusCode)" -Color "Red" -ToFile
         }
 
         if ($response.Error.InnerError.SubStatusCode) {
-            Write-Log -Message "[ERROR] Sub status code: $($response.Error.InnerError.SubStatusCode)" -Color "Red"
+            Write-Log -Message "[ERROR] Sub status code: $($response.Error.InnerError.SubStatusCode)" -Color "Red" -ToFile
         }
 
         if ($response.Error.InnerError.Parameters) {
-            Write-Log -Message "[ERROR] Parameters: $($response.Error.InnerError.Parameters)" -Color "Red"
+            Write-Log -Message "[ERROR] Parameters: $($response.Error.InnerError.Parameters)" -Color "Red" -ToFile
         }
 
         if ($response.Error.InnerError.Message) {
-            Write-Log -Message "[ERROR] Message: $($response.Error.InnerError.Message)" -Color "Red"
+            Write-Log -Message "[ERROR] Message: $($response.Error.InnerError.Message)" -Color "Red" -ToFile
         }
 
         if ($response.Error.InnerError.Details) {
-            Write-Log -Message "[ERROR] Details: $($response.Error.InnerError.Details)" -Color "Red"
+            Write-Log -Message "[ERROR] Details: $($response.Error.InnerError.Details)" -Color "Red" -ToFile
         }
 
-        exit 1
+        return $null
     }
 
     return $response
@@ -115,6 +128,7 @@ function Format-RecordTypeName {
         [string]$RecordType
     )
 
+    # Replace the words with their corresponding abbreviations
     $formattedRecordType = $RecordType.Replace("Exchange", "EXCH")
     $formattedRecordType = $formattedRecordType.Replace("SharePoint", "SHAREPOINT")
     $formattedRecordType = $formattedRecordType.Replace("OneDrive", "ONEDRIVE")
@@ -151,4 +165,81 @@ function Format-RecordTypeName {
     $formattedRecordType = $formattedRecordType.Replace("ThreatIntelligenceAtpContent", "TIATPCONTENT")
     $formattedRecordType = $formattedRecordType.Replace("LabelContentExplorer", "LABELCONTENTEXP")
     $formattedRecordType = $formattedRecordType.Replace("TeamsHealthcare", "TEAMSHEALTHCARE")
-    $formattedRecordType = $formattedRecordType.Replace("ExchangeItemAggregated", "EXCHITEM
+    $formattedRecordType = $formattedRecordType.Replace("ExchangeItemAggregated", "EXCHITEM")
+
+    return $formattedRecordType
+}
+
+function Log-ScriptStart {
+    Write-Log -Message "Script execution started" -ToFile
+}
+
+function Log-ScriptEnd {
+    Write-Log -Message "Script execution ended" -ToFile
+}
+
+function Log-RecordTypeStart {
+    param(
+        [string]$RecordType
+    )
+
+    $formattedRecordType = Format-RecordTypeName -RecordType $RecordType
+    Write-Log -Message "Processing record type: $formattedRecordType" -ToFile
+}
+
+function Log-RecordTypeEnd {
+    param(
+        [string]$RecordType
+    )
+
+    $formattedRecordType = Format-RecordTypeName -RecordType $RecordType
+    Write-Log -Message "Finished processing record type: $formattedRecordType" -ToFile
+}
+
+function Log-ApiRequestStart {
+    param(
+        [string]$RecordType,
+        [string]$Uri
+    )
+
+    $formattedRecordType = Format-RecordTypeName -RecordType $RecordType
+    Write-Log -Message "Starting API request for record type: $formattedRecordType - Uri: $Uri" -ToFile
+}
+
+function Log-ApiRequestEnd {
+    param(
+        [string]$RecordType,
+        [string]$Uri
+    )
+
+    $formattedRecordType = Format-RecordTypeName -RecordType $RecordType
+    Write-Log -Message "Finished API request for record type: $formattedRecordType - Uri: $Uri" -ToFile
+}
+
+function Log-CsvExportStart {
+    param(
+        [string]$RecordType,
+        [string]$OutputFile
+    )
+
+    $formattedRecordType = Format-RecordTypeName -RecordType $RecordType
+    Write-Log -Message "Starting CSV export for record type: $formattedRecordType - Output file: $OutputFile" -ToFile
+}
+
+function Log-CsvExportEnd {
+    param(
+        [string]$RecordType,
+        [string]$OutputFile
+    )
+
+    $formattedRecordType = Format-RecordTypeName -RecordType $RecordType
+    Write-Log -Message "Finished CSV export for record type: $formattedRecordType - Output file: $OutputFile" -ToFile
+}
+
+# Log script start
+Log-ScriptStart
+
+# Process record types
+# Add your record type processing logic here
+
+
