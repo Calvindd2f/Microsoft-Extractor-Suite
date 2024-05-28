@@ -1,12 +1,14 @@
 # Load required modules
-$MSOnlineModule = Get-Module -ListAvailable -Name MSOnline -ErrorAction SilentlyContinue
-if ($MSOnlineModule -eq $null) {
-    Install-Module -Name MSOnline -Force
+try {
+    $null = Get-Module -ListAvailable -Name MSOnline -ErrorAction Stop
+} catch {
+    Install-Module -Name MSOnline -Force -ErrorAction Stop
 }
 
-$AzureADModule = Get-Module -ListAvailable -Name AzureAD -ErrorAction SilentlyContinue
-if ($AzureADModule -eq $null) {
-    Install-Module -Name AzureAD -Force
+try {
+    $null = Get-Module -ListAvailable -Name AzureAD -ErrorAction Stop
+} catch {
+    Install-Module -Name AzureAD -Force -ErrorAction Stop
 }
 
 # Import required modules
@@ -14,13 +16,13 @@ Import-Module MSOnline
 Import-Module AzureAD
 
 # Define constants
-$Domain = "lvin.ie"
-$Database = "AuthMe"
-$ApplicationName = "Partner Application" + " - " + "$Database"
-$HomePage = "https://" + $Domain
-$AppIdURL = "https://" + $Domain + "/$((New-Guid).ToString())"
-$LogoutURL = "https://portal.office.com"
-$PermissionList = @(
+$domain = "lvin.ie"
+$database = "AuthMe"
+$applicationName = "Partner Application" + " - " + "$database"
+$homePage = "https://$domain"
+$appIdUrl = "https://$domain/[System.Guid]::NewGuid().ToString()"
+$logoutUrl = "https://portal.office.com"
+$permissionList = @(
     "Directory.AccessAsUser.All",
     "Mail.Read",
     "offline_access",
@@ -73,17 +75,17 @@ function Confirm-MicrosoftGraphServicePrincipal {
     [CmdletBinding()]
     param ()
 
-    $GraphSP = Get-AzureADServicePrincipal -SearchString "Microsoft Graph" -ErrorAction Ignore
-    if ($GraphSP -eq $null) {
-        $GraphSP = Get-AzureADServicePrincipal -SearchString "Microsoft.Azure.AgregatorService" -ErrorAction Ignore
+    $graphSp = Get-AzureADServicePrincipal -SearchString "Microsoft Graph" -ErrorAction Ignore
+    if ($graphSp -eq $null) {
+        $graphSp = Get-AzureADServicePrincipal -SearchString "Microsoft.Azure.AgregatorService" -ErrorAction Ignore
     }
-    if ($GraphSP -eq $null) {
-        $Credential = Get-Credential
-        Login-AzureRmAccount -TenantId $customer.customercontextid -Credential $Credential
+    if ($graphSp -eq $null) {
+        $credential = Get-Credential
+        Login-AzureRmAccount -TenantId $customer.customercontextid -Credential $credential
         New-AzureRmADServicePrincipal -ApplicationId "00000003-0000-0000-c000-000000000000"
-        $GraphSP = Get-AzureADServicePrincipal -SearchString "Microsoft Graph" -ErrorAction Ignore
+        $graphSp = Get-AzureADServicePrincipal -SearchString "Microsoft Graph" -ErrorAction Ignore
     }
-    return $GraphSP
+    return $graphSp
 }
 
 # Confirm-MicrosoftManagementServicePrincipal
@@ -91,17 +93,17 @@ function Confirm-MicrosoftManagementServicePrincipal {
     [CmdletBinding()]
     param ()
 
-    $ReqSP = Get-AzureADServicePrincipal -SearchString "Office 365 Management APIs" -ErrorAction Ignore
-    if ($ReqSP -eq $null) {
-        $ReqSP = Get-AzureADServicePrincipal -SearchString "OfficeManagePlatform" -ErrorAction Ignore
+    $reqSp = Get-AzureADServicePrincipal -SearchString "Office 365 Management APIs" -ErrorAction Ignore
+    if ($reqSp -eq $null) {
+        $reqSp = Get-AzureADServicePrincipal -SearchString "OfficeManagePlatform" -ErrorAction Ignore
     }
-    if ($ReqSP -eq $null) {
-        $Credential = Get-Credential
-        Login-AzureRmAccount -TenantId $customer.customercontextid -Credential $Credential
+    if ($reqSp -eq $null) {
+        $credential = Get-Credential
+        Login-AzureRmAccount -TenantId $customer.customercontextid -Credential $credential
         New-AzureRmADServicePrincipal -ApplicationId "5393580-f805-4401-95e8-94b7a6ef2fc2"
-        $ReqSP = Get-AzureADServicePrincipal -SearchString "Office 365 Management APIs" -ErrorAction Ignore
+        $reqSp = Get-AzureADServicePrincipal -SearchString "Office 365 Management APIs" -ErrorAction Ignore
     }
-    return $ReqSP
+    return $reqSp
 }
 
 # New-AppKey
@@ -109,17 +111,35 @@ function New-AppKey {
     [CmdletBinding()]
     param (
         [Parameter(Mandatory=$true)]
-        [DateTime]$FromDate,
+        [DateTime]$fromDate,
         [Parameter(Mandatory=$true)]
-        [int]$DurationInYears,
+        [int]$durationInYears,
         [Parameter(Mandatory=$true)]
-        [string]$Pw
+        [string]$pw
     )
 
-    $EndDate = $FromDate.AddYears($DurationInYears)
-    $KeyId = (New-Guid).ToString()
-    $Key = New-Object Microsoft.Open.AzureAD.Model.PasswordCredential($null, $EndDate, $KeyId, $FromDate, $Pw)
-    return $Key
+    [Parameter(Mandatory=$true)]
+    [ValidateScript({ $_ -ge [DateTime]::UtcNow })]
+    [DateTime]$fromDate,
+
+    [Parameter(Mandatory=$true)]
+    [ValidateRange(1, [int]::MaxValue)]
+    [int]$durationInYears,
+
+    [Parameter(Mandatory=$true)]
+    [string]$pw
+)
+
+    $endDate = $fromDate.AddYears($durationInYears)
+    $keyId = [System.Guid]::NewGuid().ToString()
+    $key = [Microsoft.Open.AzureAD.Model.PasswordCredential]::new(
+        $null,
+        $endDate,
+        $keyId,
+        $fromDate,
+        $pw
+    )
+    return $key
 }
 
 # Initialize-AppKey
@@ -127,13 +147,15 @@ function Initialize-AppKey {
     [CmdletBinding()]
     param ()
 
-    $AesManaged = New-Object "System.Security.Cryptography.AesManaged"
-    $AesManaged.Mode = [System.Security.Cryptography.CipherMode]::CBC
-    $AesManaged.Padding = [System.Security.Cryptography.PaddingMode]::Zeros
-    $AesManaged.BlockSize = 128
-    $AesManaged.KeySize = 256
-    $AesManaged.GenerateKey()
-    return [System.Convert]::ToBase64String($AesManaged.Key)
+    $aesManaged = [System.Security.Cryptography.AesManaged]::new()
+    $aesManaged.Mode = [System.Security.Cryptography.CipherMode]::CBC
+    $aesManaged.Padding = [System.Security.Cryptography.PaddingMode]::Zeros
+    $aesManaged.BlockSize = 128
+    $aesManaged.KeySize = 256
+    $aesManaged.GenerateKey()
+    return [System.Convert]::ToBase64String(
+        [System.Text.Encoding]::UTF8.GetBytes($aesManaged.Key)
+    )
 }
 
 # Test-AppKey
@@ -141,20 +163,20 @@ function Test-AppKey {
     [CmdletBinding()]
     param (
         [Parameter(Mandatory=$true)]
-        [DateTime]$FromDate,
+        [DateTime]$fromDate,
         [Parameter(Mandatory=$true)]
-        [int]$DurationInYears,
+        [int]$durationInYears,
         [Parameter(Mandatory=$true)]
-        [string]$Pw
+        [string]$pw
     )
 
-    $TestKey = New-AppKey -FromDate $FromDate -DurationInYears $DurationInYears -Pw $Pw
-    while ($TestKey.Value -match "\+" -or $TestKey.Value -match "/") {
-        $Pw = Initialize-AppKey
-        $TestKey = New-AppKey -FromDate $FromDate -DurationInYears $DurationInYears -Pw $Pw
+    $testKey = New-AppKey -fromDate $fromDate -durationInYears $durationInYears -pw $pw
+    while ($testKey.Value -match "\+" -or $testKey.Value -match "/") {
+        $pw = Initialize-AppKey
+        $testKey = New-AppKey -fromDate $fromDate -durationInYears $durationInYears -pw $pw
     }
-    $Key = $TestKey
-    return $Key
+    $key = $testKey
+    return $key
 }
 
 # Get-RequiredPermissions
@@ -162,25 +184,39 @@ function Get-RequiredPermissions {
     [CmdletBinding()]
     param (
         [Parameter(Mandatory=$true)]
-        [string]$RequiredDelegatedPermissions,
+        [string]$requiredDelegatedPermissions,
         [Parameter(Mandatory=$true)]
-        [string]$RequiredApplicationPermissions,
+        [string]$requiredApplicationPermissions,
         [Parameter(Mandatory=$true)]
-        [object]$ReqSP
+        [object]$reqSp
     )
 
-    $SP = $ReqSP
-    $AppId = $SP.AppId
-    $RequiredAccess = New-Object Microsoft.Open.AzureAD.Model.RequiredResourceAccess
-    $RequiredAccess.ResourceAppId = $AppId
-    $RequiredAccess.ResourceAccess = New-Object System.Collections.Generic.List[Microsoft.Open.AzureAD.Model.ResourceAccess]
-    if ($RequiredDelegatedPermissions) {
-        Add-ResourcePermission $RequiredAccess -ExposedPermissions $SP.Oauth2Permissions -RequiredAccesses $RequiredDelegatedPermissions -PermissionType "Scope"
+    [Parameter(Mandatory=$true)]
+    [string]$requiredDelegatedPermissions,
+
+    [Parameter(Mandatory=$true)]
+    [string]$requiredApplicationPermissions,
+
+    [Parameter(Mandatory=$true)]
+    [object]$reqSp
+)
+
+    $sp = $reqSp
+    $appId = $sp.AppId
+    $requiredAccess = [Microsoft.Open.AzureAD.Model.RequiredResourceAccess]::new()
+    $requiredAccess.ResourceAppId = $appId
+    $requiredAccess.ResourceAccess = New-Object System.Collections.Generic.List[Microsoft.Open.AzureAD.Model.ResourceAccess]
+    if ($requiredDelegatedPermissions) {
+        $requiredAccess.ResourceAccess.Add(
+            Add-ResourcePermission -exposedPermissions $sp.Oauth2Permissions -requiredAccesses $requiredDelegatedPermissions -permissionType "Scope"
+        )
     }
-    if ($RequiredApplicationPermissions) {
-        Add-ResourcePermission $RequiredAccess -ExposedPermissions $SP.AppRoles -RequiredAccesses $RequiredApplicationPermissions -PermissionType "Role"
+    if ($requiredApplicationPermissions) {
+        $requiredAccess.ResourceAccess.Add(
+            Add-ResourcePermission -exposedPermissions $sp.AppRoles -requiredAccesses $requiredApplicationPermissions -permissionType "Role"
+        )
     }
-    return $RequiredAccess
+    return $requiredAccess
 }
 
 # Add-ResourcePermission
@@ -188,23 +224,32 @@ function Add-ResourcePermission {
     [CmdletBinding()]
     param (
         [Parameter(Mandatory=$true)]
-        [object]$RequiredAccess,
+        [object]$requiredAccess,
         [Parameter(Mandatory=$true)]
-        [object]$ExposedPermissions,
+        [object]$exposedPermissions,
         [Parameter(Mandatory=$true)]
-        [object]$RequiredAccesses,
+        [object]$requiredAccesses,
         [Parameter(Mandatory=$true)]
-        [string]$PermissionType
+        [string]$permissionType
     )
 
-    foreach ($Permission in $RequiredAccesses.Trim().Split(" ")) {
-        $ReqPermission = $null
-        $ReqPermission = $ExposedPermissions | Where-Object {$_.Value -contains $Permission}
-        $ResourceAccess = New-Object Microsoft.Open.AzureAD.Model.ResourceAccess
-        $ResourceAccess.Type = $PermissionType
-        $ResourceAccess.Id = $ReqPermission.Id
-        $RequiredAccess.ResourceAccess.Add($ResourceAccess)
-    }
+    [Parameter(Mandatory=$true)]
+    [object]$requiredAccess,
+
+    [Parameter(Mandatory=$true)]
+    [object]$exposedPermissions,
+
+    [Parameter(Mandatory=$true)]
+    [object]$requiredAccesses,
+
+    [Parameter(Mandatory=$true)]
+    [string]$permissionType
+)
+
+    $resourceAccess = [Microsoft.Open.AzureAD.Model.ResourceAccess]::new()
+    $resourceAccess.Type = $permissionType
+    $resourceAccess.Id = $exposedPermissions | Where-Object { $_.Value -contains $requiredAccesses } | Select-Object -ExpandProperty Id
+    return $resourceAccess
 }
 
 # Write-Error
@@ -212,13 +257,16 @@ function Write-Error {
     [CmdletBinding()]
     param (
         [Parameter(Mandatory=$true)]
-        [string]$Message
+        [string]$message
     )
+
+    [Parameter(Mandatory=$true)]
+    [string]$message
 
     Write-Host ""
     Write-Host "*************************************************************************************" -ForegroundColor Red
     Write-Host ""
-    Write-Host $Message -ForegroundColor Red
+    Write-Host $message -ForegroundColor Red
     Write-Host ""
     Write-Host "*************************************************************************************" -ForegroundColor Red
 }
@@ -228,10 +276,13 @@ function Write-Update {
     [CmdletBinding()]
     param (
         [Parameter(Mandatory=$true)]
-        [string]$Message
+        [string]$message
     )
 
-    Write-Host $Message -ForegroundColor Green
+    [Parameter(Mandatory=$true)]
+    [string]$message
+
+    Write-Host $message -ForegroundColor Green
 }
 
 # Verify-Modules
@@ -242,15 +293,14 @@ function Verify-Modules {
     try {
         Write-Host "Verifying MSOnline Module" -ForegroundColor Green
         if (-not (Get-Module -ListAvailable -Name MSOnline)) {
-            Install-Module -Name MSOnline -Force
+            Install-Module -Name MSOnline -Force -ErrorAction Stop
         }
         Write-Host "Verifying AzureAD Module" -ForegroundColor Green
         if (-not (Get-Module -ListAvailable -Name AzureAD)) {
-            Install-Module -Name AzureAD -Force
+            Install-Module -Name AzureAD -Force -ErrorAction Stop
         }
         return $true
-    }
-    catch {
+    } catch {
         return $false
     }
 }
@@ -270,71 +320,85 @@ Write-Host "If you rerun this application in the future, you will need to update
 Write-Host "More information at https://cpaq.it/Canary.txt"
 Write-Host ""
 
-$Prompt = Read-Host -Prompt "Specify domain or press Enter for default ($Domain)"
-if ($Prompt -ne "") {
-    $Domain = $Prompt
-    $HomePage = "https://" + $Domain
-    $AppIdURL = "https://" + $Domain + "/$((New-Guid).ToString())"
+$prompt = Read-Host -Prompt "Specify domain or press Enter for default ($domain)"
+if ($prompt -ne "") {
+    $domain = $prompt
+    $homePage = "https://$domain"
+    $appIdUrl = "https://$domain/[System.Guid]::NewGuid().ToString()"
 }
 
-$Success = Verify-Modules
+$success = Verify-Modules
 
-if ($Success) {
-    $Credential = Get-Credential
-    Connect-AzureAD -Credential $Credential
+if ($success) {
+    $credential = Get-Credential
+    Connect-AzureAD -Credential $credential
 
-    $AdminAgentsGroup = Get-AzureADGroup -Filter "displayName eq 'Adminagents'" -ErrorAction Ignore
-    if ($null -eq $AdminAgentsGroup) {
+    $adminAgentsGroup = Get-AzureADGroup -Filter "displayName eq 'Adminagents'" -ErrorAction Ignore
+    if ($null -eq $adminAgentsGroup) {
         Write-Error "This account is not setup as a Microsoft Partner"
-        $Success = $false
+        $success = $false
     }
 }
 
-if ($Success) {
+if ($success) {
     Write-Update "Checking for Microsoft Graph Service Principal"
-    $GraphSP = Confirm-MicrosoftGraphServicePrincipal
-    $GraphSP = $GraphSP[0]
-    $ReqSP = Confirm-MicrosoftManagementServicePrincipal
+    $graphSp = Confirm-MicrosoftGraphServicePrincipal
+    $graphSp = $graphSp[0]
+    $reqSp = Confirm-MicrosoftManagementServicePrincipal
 
     Write-Update "Checking for Existing Application"
-    $ExistingApp = Get-AzureADApplication -SearchString $ApplicationName -ErrorAction Ignore
-    if ($ExistingApp) {
+    $existingApp = Get-AzureADApplication -SearchString $applicationName -ErrorAction Ignore
+    if ($existingApp) {
         Write-Update "Removing Existing Application"
-        Remove-Azureadapplication -ObjectId $ExistingApp.objectId -Confirm:$False
-        $ExistingApp = $null
+        Remove-Azureadapplication -ObjectId $existingApp.objectId -Confirm:$False
+        $existingApp = $null
     }
 
     Write-Update "Installing Application"
 
-    $RequiredResourcesAccess = New-Object System.Collections.Generic.List[Microsoft.Open.AzureAD.Model.RequiredResourceAccess]
-    $MicrosoftGraphRequiredPermissions = Get-RequiredPermissions -RequiredDelegatedPermissions $PermissionList -RequiredApplicationPermissions $PermissionList -ReqSP $GraphSP
-    $RequiredResourcesAccess.Add($MicrosoftGraphRequiredPermissions)
+    $requiredResourcesAccess = New-Object System.Collections.Generic.List[Microsoft.Open.AzureAD.Model.RequiredResourceAccess]
+    $microsoftGraphRequiredPermissions = Get-RequiredPermissions -requiredDelegatedPermissions $permissionList -requiredApplicationPermissions $permissionList -reqSp $graphSp
+    $requiredResourcesAccess.Add($microsoftGraphRequiredPermissions)
 
-    $Pw = Initialize-AppKey
-    $FromDate = [System.DateTime]::Now
-    $AppKey = Test-AppKey -FromDate $FromDate -DurationInYears 99 -Pw $Pw
+    $pw = Initialize-AppKey
+    $fromDate = [System.DateTime]::UtcNow
+    $appKey = Test-AppKey -fromDate $fromDate -durationInYears 99 -pw $pw
 
-    $Params = @{
-        DisplayName = $ApplicationName
-        HomePage = $HomePage
-        ReplyUrls = @($HomePage)
-        IdentifierUris = @($AppIdURL)
-        LogoutUrl = $LogoutURL
-        RequiredResourceAccess = $RequiredResourcesAccess
-        PasswordCredentials = @($AppKey)
+    $params = @{
+        DisplayName = $applicationName
+        HomePage = $homePage
+        ReplyUrls = @($homePage)
+        IdentifierUris = @($appIdUrl)
+        LogoutUrl = $logoutUrl
+        RequiredResourceAccess = $requiredResourcesAccess
+        PasswordCredentials = @($appKey)
         AvailableToOtherTenants = $true
     }
 
-    Write-Update "Creating the application: $($Params.DisplayName)"
-    $App = New-AzureADApplication @Params -WhatIf
+    Write-Update "Creating the application: $($params.DisplayName)"
+    $app = New-AzureADApplication @params -WhatIf
 
-    $Params = @{
-        AppId = $App.AppId
+    $params = @{
+        AppId = $app.AppId
     }
 
-    $ServicePrincipal = New-AzureADServicePrincipal @Params
+    $servicePrincipal = New-AzureADServicePrincipal @params
 
     Write-Update "Assigning Permissions"
 
-    foreach ($App in $RequiredResourcesAccess) {
-        $ReqAppSP = $
+    foreach ($app in $requiredResourcesAccess) {
+        $reqAppSp = $null
+        $reqAppSp = New-AzureADApplication -AppId $app.ResourceAppId -RequiredResourceAccess $app.ResourceAccess
+        Add-AzureADApplicationPermission -Id $app.ResourceAppId -Type $app.ResourceAccess.Type -PermissionId $app.ResourceAccess.Id
+    }
+
+    Write-Update "Assigning Application to Admin Agents Group"
+    Add-AzureADGroupMember -ObjectId $adminAgentsGroup.ObjectId -RefObjectId $servicePrincipal.ObjectId
+
+    Write-Update "Application Installed Successfully"
+    Write-Host ""
+    Write-Host "To complete your teamserver setup, use the following values:" -ForegroundColor Green
+    Write-Host "Application ID: $($app.AppId)" -ForegroundColor Green
+    Write-Host "Application Key: $($appKey.Value)" -ForegroundColor Green
+    Write-Host ""
+}
