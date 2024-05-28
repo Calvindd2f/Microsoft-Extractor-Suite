@@ -1,116 +1,106 @@
-E-mails/Attachments
-=======
-This section comprises a variety of functions designed to gather e-mails and their attachments. 
+# E-mails and Attachments
+========================
+
+This section includes functions for handling e-mails and their attachments using the Microsoft Graph API.
 
 .. note::
 
-  **Important note** The following functions require the 'Mail.ReadBasic.All' scope which is an application-level permission, requiring an application-based connection through the 'Connect-MgGraph' command for its use. 
+    Important note: The following functions require the 'Mail.ReadBasic.All' scope, which is an application-level permission. You need to establish an application-based connection through the 'Connect-MgGraph' command to use this scope.
 
-Get a specific email.
-^^^^^^^^^^^
-Get a specific email based on userId and Internet Message Id and saves the output to a msg or txt file.
+get-email.ps1
+-------------
 
-Usage
-""""""""""""""""""""""""""
-Retrieves an email from fortunahodan@bonacu.onmicrosoft.com with the internet message identifier <d6f15b97-e3e3-4871-adb2-e8d999d51f34@az.westeurope.microsoft.com> to a msg file.
-::
+### Get a specific email
 
-   Get-Email -userIds fortunahodan@bonacu.onmicrosoft.com -internetMessageId "<d6f15b97-e3e3-4871-adb2-e8d999d51f34@az.westeurope.microsoft.com>" 
+Get a specific email based on user ID and Internet Message ID, and save the output to a .msg or .txt file.
 
-Retrieves an email and the attachment from fortunahodan@bonacu.onmicrosoft.com with the internet message identifier <d6f15b97-e3e3-4871-adb2-e8d999d51f34@az.westeurope.microsoft.com> to a msg file.
-::
+#### Usage
 
-   Get-Email -userIds fortunahodan@bonacu.onmicrosoft.com -internetMessageId "<d6f15b97-e3e3-4871-adb2-e8d999d51f34@az.westeurope.microsoft.com>" -attachment True
+Retrieve an email from user 'fortunahodan@bonacu.onmicrosoft.com' with the Internet Message ID '<d6f15b97-e3e3-4871-adb2-e8d999d51f34@az.westeurope.microsoft.com>' to a .msg file.
 
-Retrieves an email and saves it to C:\\Windows\\Temp folder.	
-::
 
-   Get-Email -userIds fortunahodan@bonacu.onmicrosoft.com -internetMessageId "<d6f15b97-e3e3-4871-adb2-e8d999d51f34@az.westeurope.microsoft.com>" -OutputDir C:\Windows\Temp
 
-Parameters
-""""""""""""""""""""""""""
--UserIds (Mandatory)
-    - The unique identifier of the user.
 
--InternetMessageId (Mandatory)
-    - The InternetMessageId parameter represents the Internet message identifier of an item.
+Retrieve an email and its attachment from 'fortunahodan@bonacu.onmicrosoft.com' with the Internet Message ID '<d6f15b97-e3e3-4871-adb2-e8d999d51f34@az.westeurope.microsoft.com>' to a .msg file.
 
--Output (optional)
-    - Output is the parameter specifying the msg or txt output type.
-    - Default: msg
 
--OutputDir (optional)
-    - OutputDir is the parameter specifying the output directory.
-    - Default: EmailExport
 
--Attachment (optional)
-    - The attachment parameter specifies whether the attachment should be saved or not. 
-    - Default: False
 
-Output
-""""""""""""""""""""""""""
+Retrieve an email and save it to the 'C:\Windows\Temp' folder.
+
+
+
+
+#### Parameters
+
+- `-UserIds` (Mandatory): The unique identifier of the user.
+- `-InternetMessageId` (Mandatory): The Internet Message ID representing the Internet message identifier of an item.
+- `-Output` (optional): The output format (.msg or .txt). Default: .msg
+- `-OutputDir` (optional): The output directory. Default: 'EmailExport'
+- `-Attachment` (optional): Whether to save the attachment. Default: False
+
+#### Output
+
 The output will be saved to the 'EmailExport' directory within the 'Output' directory.
 
-Permissions
-""""""""""""""""""""""""""
-- Before utilizing this function, it is essential to ensure that the appropriate permissions have been granted. This function relies on the Microsoft Graph API and requires an application to authenticate with specific scopes that grant the necessary access levels.
-- Make sure to connect using the following permission: 'Mail.ReadBasic.All'.
-- For instance, if you choose to use User.Read.All, your command would look like this: Connect-MgGraph -Scopes 'Mail.ReadBasic.All'
+#### Permissions
 
-Get a specific attachment.
-^^^^^^^^^^^
-Get a specific attachment based on userId and Internet Message Id and saves the output.
+Ensure you have the 'Mail.ReadBasic.All' permission before using this function. Connect using the following permission:
 
-Usage
-""""""""""""""""""""""""""
-Retrieves the attachment from fortunahodan@bonacu.onmicrosoft.com with the internet message identifier <d6f15b97-e3e3-4871-adb2-e8d999d51f34@az.westeurope.microsoft.com>.
-::
 
-   Get-Attachment -userIds fortunahodan@bonacu.onmicrosoft.com -internetMessageId "<d6f15b97-e3e3-4871-adb2-e8d999d51f34@az.westeurope.microsoft.com>"  
 
-Retrieves an attachment and saves it to C:\Windows\Temp folder.
-::
 
-   Get-Attachment -userIds fortunahodan@bonacu.onmicrosoft.com -internetMessageId "<d6f15b97-e3e3-4871-adb2-e8d999d51f34@az.westeurope.microsoft.com>" -OutputDir C:\Windows\Temp
+get-attachment.ps1
+------------------
 
-Parameters
-""""""""""""""""""""""""""
--UserIds (Mandatory)
-    - The unique identifier of the user.
+### Get a specific attachment
 
--InternetMessageId (Mandatory)
-    - The InternetMessageId parameter represents the Internet message identifier of an item.
+Get a specific attachment based on user ID and Internet Message ID, and save the output.
 
--OutputDir (optional)
-    - OutputDir is the parameter specifying the output directory.
-    - Default: EmailExport
+#### Usage
 
-Output
-""""""""""""""""""""""""""
+Retrieve the attachment from 'fortunahodan@bonacu.onmicrosoft.com' with the Internet Message ID '<d6f15b97-e3e3-4871-adb2-e8d999d51f34@az.westeurope.microsoft.com>'.
+
+
+
+
+Retrieve an attachment and save it to the 'C:\Windows\Temp' folder.
+
+
+
+
+#### Parameters
+
+- `-UserIds` (Mandatory): The unique identifier of the user.
+- `-InternetMessageId` (Mandatory): The Internet Message ID representing the Internet message identifier of an item.
+- `-OutputDir` (optional): The output directory. Default: 'EmailExport'
+
+#### Output
+
 The output will be saved to the 'EmailExport' directory within the 'Output' directory.
 
-Permissions
-""""""""""""""""""""""""""
-- Before utilizing this function, it is essential to ensure that the appropriate permissions have been granted. This function relies on the Microsoft Graph API and requires an application to authenticate with specific scopes that grant the necessary access levels.
-- Make sure to connect using the following permission: 'Mail.ReadBasic.All'.
-- For instance, if you choose to use User.Read.All, your command would look like this: Connect-MgGraph -Scopes 'Mail.ReadBasic.All'
+#### Permissions
 
-Show e-mail.
-^^^^^^^^^^^
+Ensure you have the 'Mail.ReadBasic.All' permission before using this function. Connect using the following permission:
+
+
+
+
+show-email.ps1
+--------------
+
+### Show an email
+
 Show a specific email in the PowerShell Window.
 
-Usage
-""""""""""""""""""""""""""
+#### Usage
+
 Show a specific email in the PowerShell Window.
-::
 
-   Show-Email -userIds {userId} -internetMessageId {InternetMessageId}
 
-Parameters
-""""""""""""""""""""""""""
--UserIds (Mandatory)
-    - The unique identifier of the user.
 
--InternetMessageId (Mandatory)
-    - The InternetMessageId parameter represents the Internet message identifier of an item.
 
+#### Parameters
+
+- `-UserIds` (Mandatory): The unique identifier of the user.
+- `-InternetMessageId` (Mandatory): The Internet Message ID representing the Internet message identifier of an item.
