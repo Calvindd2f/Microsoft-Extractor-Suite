@@ -11,33 +11,73 @@ namespace MicrosoftExtractorSuite
 {
     public abstract class BaseConnectCmdlet : Cmdlet
     {
-        protected virtual void Connect() { }
         protected virtual void VersionCheck() { }
         protected virtual void WriteLogFile(string message, ConsoleColor color) { }
     }
 
+    public static class ConnectHelper
+    {
+        public static async Task ConnectExchangeOnline(Action writeLogFile)
+        {
+            writeLogFile("Connecting to Exchange Online...");
+            // Add actual implementation here
+            await Task.CompletedTask;
+        }
+
+        public static async Task ConnectAzureAD(Action writeLogFile)
+        {
+            writeLogFile("Connecting to Azure AD...");
+            // Add actual implementation here
+            await Task.CompletedTask;
+        }
+
+        public static async Task ConnectAzAccount(Action writeLogFile)
+        {
+            writeLogFile("Connecting to Azure...");
+            // Add actual implementation here
+            await Task.CompletedTask;
+        }
+
+        public static async Task<string> GetToken(string resource, Action<string> writeLogFile)
+        {
+            writeLogFile("Getting token...");
+            // Add actual implementation here
+            return await Task.FromResult<string>(default);
+        }
+
+        public static void CheckToken(string token, Action<string> writeLogFile)
+        {
+            writeLogFile("Checking token...");
+            // Add actual implementation here
+        }
+
+        public static async Task ConnectMgGraph(string[] scopes, Action<string> writeLogFile)
+        {
+            writeLogFile("Connecting to Microsoft Graph...");
+            // Add actual implementation here
+            await Task.CompletedTask;
+        }
+    }
+
     public class ConnectM365Cmdlet : BaseConnectCmdlet
     {
-        protected override void Connect() => ConnectExchangeOnline();
-        private void ConnectExchangeOnline() => WriteLogFile("Connecting to Exchange Online...", ConsoleColor.Yellow);
-        private void VersionCheck() => WriteLogFile("Version check performed.", ConsoleColor.Yellow);
-        private void WriteLogFile(string message, ConsoleColor color) => Console.ForegroundColor = color;
+        protected override void Connect() => ConnectHelper.ConnectExchangeOnline(WriteLogFile);
+        protected override void VersionCheck() => WriteLogFile("Version check performed.", ConsoleColor.Yellow);
+        protected override void WriteLogFile(string message, ConsoleColor color) => Console.ForegroundColor = color;
     }
 
     public class ConnectAzureCmdlet : BaseConnectCmdlet
     {
-        protected override void Connect() => ConnectAzureAD();
-        private void ConnectAzureAD() => WriteLogFile("Connecting to Azure AD...", ConsoleColor.Yellow);
-        private void VersionCheck() => WriteLogFile("Version check performed.", ConsoleColor.Yellow);
-        private void WriteLogFile(string message, ConsoleColor color) => Console.ForegroundColor = color;
+        protected override void Connect() => ConnectHelper.ConnectAzureAD(WriteLogFile);
+        protected override void VersionCheck() => WriteLogFile("Version check performed.", ConsoleColor.Yellow);
+        protected override void WriteLogFile(string message, ConsoleColor color) => Console.ForegroundColor = color;
     }
 
     public class ConnectAzureAZCmdlet : BaseConnectCmdlet
     {
-        protected override void Connect() => ConnectAzAccount();
-        private void ConnectAzAccount() => WriteLogFile("Connecting to Azure...", ConsoleColor.Yellow);
-        private void VersionCheck() => WriteLogFile("Version check performed.", ConsoleColor.Yellow);
-        private void WriteLogFile(string message, ConsoleColor color) => Console.ForegroundColor = color;
+        protected override void Connect() => ConnectHelper.ConnectAzAccount(WriteLogFile);
+        protected override void VersionCheck() => WriteLogFile("Version check performed.", ConsoleColor.Yellow);
+        protected override void WriteLogFile(string message, ConsoleColor color) => Console.ForegroundColor = color;
     }
 
     public class ConnectExtractorSuiteCmdlet : BaseConnectCmdlet
@@ -67,49 +107,52 @@ namespace MicrosoftExtractorSuite
                 appThumbprint = Environment.GetEnvironmentVariable("AppThumbprint");
                 tenantID = Environment.GetEnvironmentVariable("TenantId");
 
-                string token = GetToken("https://graph.microsoft.com/.default").Result;
-                CheckToken(token);
+                if (appID == null || appSecret == null || appThumbprint == null || tenantID == null)
+                {
+                    throw new Exception("Missing environment variables required for authentication with Application Auth");
+                }
+
+                Task.Run(async () =>
+                {
+                    string token = await ConnectHelper.GetToken("https://graph.microsoft.com/.default", WriteLogFile);
+                    ConnectHelper.CheckToken(token, WriteLogFile);
+                }).Wait();
             }
             else if (DeviceCode)
             {
-                ConnectDeviceCode();
+                ConnectHelper.ConnectDeviceCode(WriteLogFile);
             }
             else if (Delegate)
             {
-                ConnectMgGraph(new[] {
+                await ConnectHelper.ConnectMgGraph(new[] {
                     "AuditLogsQuery.Read.All", "UserAuthenticationMethod.Read.All", "User.Read.All",
                     "Mail.ReadBasic.All", "Mail.ReadWrite", "Mail.Read", "Mail.ReadBasic", "Policy.Read.All",
                     "Directory.Read.All"
-                });
+                }, WriteLogFile);
             }
             else
             {
-                ConnectDeviceCode();
+                ConnectHelper.ConnectDeviceCode(WriteLogFile);
             }
         }
 
         // ... (other methods remain the same)
 
-        private void WriteLogFile(string message, ConsoleColor color) => Console.ForegroundColor = color;
+        protected override void WriteLogFile(string message, ConsoleColor color) => Console.ForegroundColor = color;
     }
 
     public class ConnectAquisitionGraphCmdlet : BaseConnectCmdlet
     {
-        protected override void Connect() => ConnectMgGraph(new[] {
+        protected override void Connect() => ConnectHelper.ConnectMgGraph(new[] {
             "User.Read.All", "Policy.Read.All", "Organization.Read.All", "RoleManagement.Read.Directory",
             "GroupMember.Read.All", "Directory.Read.All", "PrivilegedEligibilitySchedule.Read.AzureADGroup",
             "PrivilegedAccess.Read.AzureADGroup", "RoleManagementPolicy.Read.AzureADGroup"
-        });
-
-        private void ConnectMgGraph(string[] scopes) => WriteLogFile("Connecting to Microsoft Graph with acquisition scopes...", ConsoleColor.Yellow);
-        private void WriteLogFile(string message, ConsoleColor color) => Console.ForegroundColor = color;
+        }, WriteLogFile);
     }
 
     public class ConnectAquisitionExoCmdlet : BaseConnectCmdlet
     {
-        protected override void Connect() => ConnectExchangeOnline();
-        private void ConnectExchangeOnline() => WriteLogFile("Connecting to Exchange Online...", ConsoleColor.Yellow);
-        private void WriteLogFile(string message, ConsoleColor color) => Console.ForegroundColor = color;
+        protected override void Connect() => ConnectHelper.ConnectExchangeOnline(WriteLogFile);
     }
 
     public class GetAquisitionServicePrincipalParamsCmdlet : Cmdlet
