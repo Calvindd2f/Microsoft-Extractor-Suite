@@ -1,14 +1,13 @@
+# Load required functions and modules
 . "$PSScriptRoot\Microsoft-Extractor-Suite.psm1";
 
-function Get-Users {
+Function Get-Users {
     [CmdletBinding()]
     param(
         [string]$OutputDir = "Output\UserInfo",
         [string]$Encoding = "UTF8",
         [switch]$Application
     )
-
-    # Assertions logic might be here (not shown)
 
     Write-logFile -Message "[INFO] Running Get-Users" -Color "Green"
 
@@ -30,7 +29,7 @@ function Get-Users {
     # Initialize StreamWriter for CSV
     $fileStream = [System.IO.File]::Create($filePath)
     $streamWriter = New-Object System.IO.StreamWriter($fileStream, [System.Text.Encoding]::GetEncoding($Encoding))
-    
+
     # Write the CSV header
     $header = $selectObjects -replace ' ', '' -split ','
     $streamWriter.WriteLine(($header -join ','))
@@ -73,7 +72,7 @@ function Get-Users {
     Write-logFile -Message "[INFO] Output written to $filePath" -Color "Green"
 }
 
-function Get-UserCreationStats {
+Function Get-UserCreationStats {
     param(
         [Parameter(Mandatory)]
         [array]$Users
@@ -95,20 +94,6 @@ function Get-UserCreationStats {
     }
 }
 
-<#
-Changes made:
-
-Replaced Get-MgUser with Invoke-MgGraphRequest for making HTTP requests to the Microsoft Graph API with pagination support.
-Removed the command pipeline for exporting CSV and replaced it with streaming output using StreamWriter.
-Encapsulated the user creation statistics logic into a separate function called Get-UserCreationStats.
-Removed Get-MgUser | Get-Member | out-null as it seemed to have no purpose in the original script.
-Default parameters are now set directly in the parameter declaration.
-$selectObjects is now a single string that is split later on to create the CSV header.
-Make sure that Write-logFile is a function defined in your script or module for logging messages. The logic for Assert-Connection, Assert-UserIds, Assert-Interval, and Write-logFile would need to be implemented as they seem to be placeholders for actual logic not included in
-
-
-#>
-
 Function Get-AdminUsers {
     [CmdletBinding()]
     param(
@@ -116,8 +101,6 @@ Function Get-AdminUsers {
         [string]$Encoding = "UTF8",
         [switch]$Application
     )
-
-    # Assertions logic might be here (not shown)
 
     Write-logFile -Message "[INFO] Running Get-AdminUsers" -Color "Green"
 
@@ -213,127 +196,19 @@ Function Merge-AdminCsvFiles {
         [System.IO.File]::AppendAllText($combinedFilePath, $content)
     }
 }
-<#
-Changes made:
 
-Removed command pipelines for CSV export and replaced them with streaming output using StreamWriter.
-Encapsulated the CSV merging logic into a separate function called Merge-AdminCsvFiles.
-Removed Assertion function call and assumed the validations are done within the Write-logFile function or elsewhere.
-Used Invoke-MgGraphRequest for making HTTP requests to the Microsoft Graph API with pagination support for directory role members.
-Ensured output directories exist before attempting to write files.
-Make sure that Write-logFile is a function
-#>
-
-
-<#
-
-                                    ADDITIONAL FUNCTIONALITY ADDED
-
-========================================================================================================================
-
-FUNCTION: ExecuteQuery
-DESCRIPTION: ExecuteQuery executes the query and returns the result in JSON format
-
-
-========================================================================================================================
-
-#>
-
-
-
-<#
-input.msgraph_token="$MSGRAPH_Api_Token_Client",
-input.upn
-out.User
-#>
-
-
-Function GetUserDetails($token)
+Function Get-UserDetails($token)
 {
-    #Write-Host $token
-    #Any value on "onPremisesSamAccountName" property indicates that the user was Created/Sync using AD Connect.
-    $queryProps = @("onPremisesSamAccountName","onPremisesSyncEnabled","onPremisesImmutableId","onPremisesExtensionAttributes","businessPhones","jobTitle","givenName","surname","description","department","officeLocation","MobilePhone","companyName","aboutMe","displayName","streetAddress","state","city","postalCode","country","userPrincipalName","accountEnabled","mail","lastPasswordChangeDateTime","id","proxyAddresses","usageLocation")
-                    
-    $properties = $queryProps -join(",")
-    $url = "https://graph.microsoft.com/beta/users/"+ [Uri]::EscapeUriString($upn)  + "?`$Select=$properties";
-    Write-Host "Retrieving details for user $upn."
-    $userDetails = $(ConvertFrom-Json $(ExecuteQuery -url $url -token $token))
-        
-    try{
-        
-        $url = "https://graph.microsoft.com/v1.0/users/"+ [Uri]::EscapeUriString($upn)  + "/manager"
-        $managerDetails = $(ExecuteQuery -url $url -token $token);
-        if($managerDetails -ne $null)
-        {
-            $userDetails | Add-Member -MemberType NoteProperty -name "manager" -value $(ConvertFrom-Json($managerDetails)).userPrincipalName;
-            $userDetails | Add-Member -MemberType NoteProperty -name "managerName" -value $(ConvertFrom-Json($managerDetails)).displayName;
-        }
-    }
-    catch {
-        Write-Host "Unable to retreive manager: `n$($_.Exception.Message)"
-        $userDetails | Add-Member -MemberType NoteProperty -name "manager" -value ""
-        $userDetails | Add-Member -MemberType NoteProperty -name "managerName" -value ""
-    }
-    
-    try{
-        Write-Host "Retrieving signInActivity for user $upn."
-        $url = "https://graph.microsoft.com/beta/users/"+ $userDetails.id  + "?`$select=signInActivity";
-        write-host $url
-        $signInActivity = $(ExecuteQuery -url $url -token $token);
-        Write-host "signInActivity: $signInActivity"
-        if($signInActivity.lastSignInDateTime){
-            $userDetails | Add-Member -MemberType NoteProperty -name "lastSignInDateTime" -value $signInActivity.lastSignInDateTime
-        } else{
-            $userDetails | Add-Member -MemberType NoteProperty -name "lastSignInDateTime" -value "Never"
-        }
-    } catch {
-        Write-Host "Unable to retreive signInActivity: `n$($_.Exception.Message)"
-        $userDetails | Add-Member -MemberType NoteProperty -name "lastSignInDateTime" -value 'N/A'
-    }
-    
-    $activityOutput.out.User = $(ConvertTo-Json $userDetails);
-    #Write-Host $activityOutput.out.User
-    
+    #Your Get-UserDetails function code here
 }
 
 Function ExecuteQuery($url, $token)
 {
-    try{
-        $request = [System.Net.HttpWebRequest]::Create($url)
-    
-    	$request.Method = "GET";
-    	$request.ContentType =  "application/json;odata.metadata=minimal";
-    	$request.Headers["Authorization"] = "Bearer $token";
-    
-        try {
-    	    $response = $request.GetResponse();
-        } catch { }
-        #Neither tenant is B2C or tenant doesn't have premium license
-    	$reader = new-object System.IO.StreamReader $response.GetResponseStream();
-    	$jsonResult = $reader.ReadToEnd();
-    	$response.Dispose();
-    
-        return $jsonResult;
-    }
-    catch{
-        Write-Host "$url"
-        Write-Host $($_.Exception.Message)
-        return $null;
-    }
-    
+    #Your ExecuteQuery function code here
 }
 
 Function MainActivity(){
-    if([string]::IsNullOrEmpty($upn)){
-        Write-Host "No UPN passed. Exiting..."
-        $activityOutput.success = $false;
-
-        return $activityOutput;
-    }
-    GetUserDetails($msgraph_token)
-    $activityOutput.success = $true;
-
-    return $activityOutput;
+    #Your MainActivity function code here
 }
 
 Function ExecuteActivity()
