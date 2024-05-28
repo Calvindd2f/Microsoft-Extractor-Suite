@@ -17,10 +17,11 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v2
       - name: Setup Config File
-        run: cp Testing/Linting/MegaLinter/.mega-linter-powershell.yml .mega-linter.yml
+        run: cp ${{ secrets.GITHUB_WORKSPACE }}/Testing/Linting/MegaLinter/.mega-linter-powershell.yml ${{ secrets.GITHUB_WORKSPACE }}/.mega-linter.yml
       - name: Setup PSScriptAnalyzer settings
-        run: cp Testing/Linting/MegaLinter/.powershell-psscriptanalyzer.psd1 .powershell-psscriptanalyzer.psd1
+        run: cp ${{ secrets.GITHUB_WORKSPACE }}/Testing/Linting/MegaLinter/.powershell-psscriptanalyzer.psd1 ${{ secrets.GITHUB_WORKSPACE }}/.powershell-psscriptanalyzer.psd1
       - name: Lint PowerShell
         uses: oxsecurity/megalinter@v4
         with:
           args: --flavor=dotnet
+          working-directory: ${{ secrets.GITHUB_WORKSPACE }}
