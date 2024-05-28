@@ -1,55 +1,64 @@
-Azure Activity Logs
-=======
-Use **Get-ActivityLogs** to collect the contents of the Azure Activity Log.
+Get-AzureActivityLogs
 
-.. note::
 
-    This functionality is currently in beta. If you encounter any issues or have suggestions for improvements please let us know.
+Get-AzureActivityLogs -EndDate 2023-04-12
 
-Usage
-""""""""""""""""""""""""""
-Running the script without any parameters will gather the Azure Activity Logs for all subscriptions for the last 89 days:
-::
 
-   Get-ActivityLogs
+Get-AzureActivityLogs -StartDate 2023-04-12
 
-Get all the activity logs before 2023-04-12:
-::
 
-   Get-ActivityLogs -EndDate 2023-04-12
+Get-AzureActivityLogs -SubscriptionID "4947f939-cf12-4329-960d-4dg68a3eb66f"
 
-Get all the activity logs after 2023-04-12:
-::
 
-   Get-ActivityLogs -StartDate 2023-04-12
+<#
+.SYNOPSIS
+    Collect Azure Activity Logs
+.DESCRIPTION
+    This script collects the Azure Activity Logs for the specified time period and subscription.
+.EXAMPLE
+    Get-AzureActivityLogs
+.EXAMPLE
+    Get-AzureActivityLogs -EndDate 2023-04-12
+.EXAMPLE
+    Get-AzureActivityLogs -StartDate 2023-04-12
+.EXAMPLE
+    Get-AzureActivityLogs -SubscriptionID "4947f939-cf12-4329-960d-4dg68a3eb66f"
+.PARAMETER StartDate
+    The start date of the date range. Default: Today -89 days.
+.PARAMETER EndDate
+    The end date of the date range. Default: Now.
+.PARAMETER SubscriptionID
+    The subscription ID for which the collection of Activity logs is required. Default: All subscriptions.
+.PARAMETER OutputDir
+    The output directory. Default: Output\AzureActivityLogs.
+.PARAMETER Encoding
+    The encoding of the JSON output file. Default: UTF8.
+.NOTES
+    This functionality is currently in beta. If you encounter any issues or have suggestions for improvements, please let us know.
+#>
 
-Get all the activity logs for the subscription 4947f939-cf12-4329-960d-4dg68a3eb66f:
-::
+[CmdletBinding()]
+param (
+    [Parameter(Mandatory=$false)]
+    [DateTime]$StartDate = (Get-Date).AddDays(-89),
 
-   Get-ActivityLogs -SubscriptionID "4947f939-cf12-4329-960d-4dg68a3eb66f"
+    [Parameter(Mandatory=$false)]
+    [DateTime]$EndDate = Get-Date,
 
-Parameters
-""""""""""""""""""""""""""
--StartDate (optional)
-    - StartDate is the parameter specifying the start date of the date range.
-    - Default: Today -89 days
+    [Parameter(Mandatory=$false)]
+    [string]$SubscriptionID,
 
--EndDate (optional)
-    - EndDate is the parameter specifying the end date of the date range.
-    - Default: Now
+    [Parameter(Mandatory=$false)]
+    [string]$OutputDir = "Output\AzureActivityLogs",
 
--SubscriptionID (optional)
-    - SubscriptionID is the parameter specifies the subscription ID for which the collection of Activity logs is required.
-    - Default: All subscriptions
+    [Parameter(Mandatory=$false)]
+    [string]$Encoding = "UTF8"
+    )
 
--OutputDir (optional)
-    - OutputDir is the parameter specifying the output directory.
-    - Default: Output\AzureActivityLogs
+$OutputPath = Join-Path -Path $PSScriptRoot -ChildPath "$($OutputDir)\ActivityLogs.json"
 
--Encoding (optional)
-    - Encoding is the parameter specifying the encoding of the JSON output file.
-    - Default: UTF8
+$AzureActivityLogs = Get-AzActivityLog -StartTime $StartDate -EndTime $EndDate -Subscription $SubscriptionID
 
-Output
-""""""""""""""""""""""""""
-The output will be saved to the 'AzureAD' directory within the 'Output' directory, with the file name 'SignInLogs.json'. Each time an acquisition is performed, the output JSON file will be overwritten. Therefore, if you perform multiple acquisitions, the JSON file will only contain the results from the latest acquisition.
+$AzureActivityLogs | ConvertTo-Json -Depth 100 | Out-File -FilePath $OutputPath -Encoding $Encoding
+
+Write-Host "Activity logs saved to $OutputPath"
