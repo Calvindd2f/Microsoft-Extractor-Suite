@@ -1,1 +1,15 @@
-sphinx-rtd-theme
+<!DOCTYPE html>
+<html>
+<head>
+    <title>My Sphinx Documentation</title>
+    <link rel="stylesheet" href="sphinx_rtd_theme/theme.css" type="text/css" />
+</head>
+<body>
+    <div id="header">
+        <h1>My Sphinx Documentation</h1>
+    </div>
+    <div id="content">
+        <!-- Content goes here -->
+    </div>
+</body>
+</html>
