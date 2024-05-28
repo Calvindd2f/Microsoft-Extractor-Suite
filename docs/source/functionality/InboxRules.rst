@@ -1,63 +1,66 @@
-Inbox Rules
-=======
-Inbox rules process messages in the inbox based on conditions and take actions such as moving a message to a specified folder or deleting a message.
+function Show-MailboxRules {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory=$false, Position=0)]
+        [string[]]$UserIds
+    )
 
-Show mailbox rules
-^^^^^^^^^^^
-**Show-MailboxRules** shows the mailbox rules in your organization.
+    if ($UserIds) {
+        Get-MailboxRule -Identity $UserIds -ErrorAction SilentlyContinue
+    } else {
+        Get-MailboxRule -ErrorAction SilentlyContinue
+    }
+}
 
-Usage
-""""""""""""""""""""""""""
-Show all mailbox rules in your organization:
-::
 
-   Show-MailboxRules
+# Show all mailbox rules in your organization
+Show-MailboxRules
 
-Show the mailbox rules for the users test[@]invictus-ir.com and HR[@]invictus-ir.com:
-::
+# Show the mailbox rules for the users test@invictus-ir.com and HR@invictus-ir.com
+Show-MailboxRules -UserIds "HR@invictus-ir.com","test@Invictus-ir.com"
 
-   Show-MailboxRules -UserIds "HR@invictus-ir.com,test@Invictus-ir.com"
 
-Parameters
-""""""""""""""""""""""""""
--UserIds (optional)
-    - UserIds is the UserIds parameter filtering the log entries by the account of the user who performed the actions.
+function Get-MailboxRules {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory=$false, Position=0)]
+        [string[]]$UserIds,
 
-Get mailbox rules
+        [Parameter(Mandatory=$false)]
+        [string]$OutputDir = "Output\Rules",
 
-^^^^^^^^^^^
-**Get-MailboxRules** collects all the mailbox rules in your organization.
+        [Parameter(Mandatory=$false)]
+        [System.Text.Encoding]$Encoding = [System.Text.Encoding]::UTF8
+    )
 
-Usage
-""""""""""""""""""""""""""
-Get all mailbox rules in your organization:
-::
+    $mailboxRules = @()
 
-   Get-MailboxRules
+    if ($UserIds) {
+        foreach ($userId in $UserIds) {
+            $mailboxRules += Get-MailboxRule -Identity $userId -ErrorAction SilentlyContinue
+        }
+    } else {
+        $mailboxRules += Get-MailboxRule -ErrorAction SilentlyContinue
+    }
 
-Get the mailbox rules for the user test[@]invictus-ir.com:
-::
+    if ($PSCmdlet.ShouldProcess("Exporting mailbox rules to CSV", "")) {
+        $csvPath = Join-Path -Path $OutputDir -ChildPath "MailboxRules.csv"
+        $mailboxRules | Export-Csv -Path $csvPath -Encoding $Encoding -NoTypeInformation
+        Write-Host "Mailbox rules exported to $csvPath"
+    }
 
-    Get-MailboxRules -UserIds Test@Invictus-ir.com
+    $mailboxRules
+}
 
-Get the mailbox rules for the users test[@]invictus-ir.com and HR[@]invictus-ir.com:
-::
 
-   Get-MailboxRules -UserIds "HR@invictus-ir.com,test@Invictus-ir.com"
+# Get all mailbox rules in your organization
+Get-MailboxRules
 
-Parameters
-""""""""""""""""""""""""""
--UserIds (optional)
-    - UserIds is the UserIds parameter filtering the log entries by the account of the user who performed the actions.
+# Get the mailbox rules for the user test@invictus-ir.com
+Get-MailboxRules -UserIds Test@Invictus-ir.com
 
--OutputDir (optional)
-    - OutputDir is the parameter specifying the output directory.
-    - Default: Output\Rules
+# Get the mailbox rules for the users test@invictus-ir.com and HR@invictus-ir.com
+Get-MailboxRules -UserIds "HR@invictus-ir.com","test@Invictus-ir.com"
 
--Encoding (optional)
-    - Encoding is the parameter specifying the encoding of the CSV output file.
-    - Default: UTF8
-
-Output
-""""""""""""""""""""""""""
-The output will be saved to the 'Rules' directory within the 'Output' directory, with the file name 'MailboxRules.csv'.
+# Export the mailbox rules to a CSV file
+Get-MailboxRules -OutputDir "C:\Exports"
