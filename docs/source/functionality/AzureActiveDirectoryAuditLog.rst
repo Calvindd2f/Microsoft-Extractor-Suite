@@ -1,7 +1,7 @@
 <#
 Azure Active Directory Audit Log
-- Use Get-ADAuditLogs to collect the contents of the Azure Active Directory Audit Log.
-- This GraphAPI functionality is currently in beta. If you encounter any issues or have suggestions for improvements please let us know.
+- Use Microsoft Graph API to collect the contents of the Azure Active Directory Audit Log.
+- This functionality is currently in beta. If you encounter any issues or have suggestions for improvements please let us know.
 #>
 
 [CmdletBinding()]
@@ -30,10 +30,13 @@ if (!(Test-Path -Path $OutputDir)) {
     New-Item -ItemType Directory -Force -Path $OutputDir
 }
 
-# Get-ADAuditLogs function
+# Get-ADAuditLogs function with pagination support
 function Get-ADAuditLogs {
     [CmdletBinding()]
-    param()
+    param(
+        [Parameter(Mandatory=$false)]
+        [string]$nextLink
+    )
 
     $headers = @{
         'Content-Type'  = 'application/json'
@@ -44,12 +47,25 @@ function Get-ADAuditLogs {
         '$filter'      = "eventTime ge $($startDate.ToString("s")) and eventTime le $($endDate.ToString("s"))"
     }
 
-    $response = Invoke-RestMethod -Uri "https://graph.microsoft.com/v1.0/auditLogs/directoryAudits" `
-        -Headers $headers `
-        -Method Get `
-        -Query $queryParams
+    $response = if ($nextLink) {
+        Invoke-RestMethod -Uri $nextLink `
+            -Headers $headers `
+            -Method Get `
+            -Query $queryParams
+    } else {
+        Invoke-RestMethod -Uri "https://graph.microsoft.com/v1.0/auditLogs/directoryAudits" `
+            -Headers $headers `
+            -Method Get `
+            -Query $queryParams
+    }
 
-    return $response.value
+    $auditLogs = $response.value
+
+    if ($response. '@odata.nextLink') {
+        $auditLogs += Get-ADAuditLogs -NextLink $response.'@odata.nextLink'
+    }
+
+    return $auditLogs
 }
 
 # Call Get-ADAuditLogs function
