@@ -1,5 +1,63 @@
 using module "$PSScriptRoot\Microsoft-Extractor-Suite.psm1"
 
+function ConvertTo-QueryString {
+    param([hashtable]$Parameters)
+    return ($Parameters.GetEnumerator() | ForEach-Object { "$($_.Key)=$($_.Value)" }) -join '&'
+}
+
+function ConvertTo-Iso8601 {
+    param([datetime]$Date)
+    return $Date.ToString('s') + 'Z'
+}
+
+function Invoke-MgGraphRequest {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$Method,
+        [Parameter(Mandatory=$true)]
+        [string]$Uri,
+        [Parameter()]
+        [hashtable]$Headers,
+        [Parameter()]
+        [hashtable]$QueryParameters,
+        [Parameter()]
+        [object]$Body
+    )
+
+    $headers = @{
+        'Content-Type' = 'application/json'
+    }
+    if ($Headers) {
+        $headers.AddRange($Headers)
+    }
+
+    $queryParameters = @{
+        filter = @{
+            properties = @{
+                activityDateTime = @{
+                    ge = ConvertTo-Iso8601 (Get-Date $queryParameters.filter.properties.activityDateTime.ge)
+                    le = ConvertTo-Iso8601 (Get-Date $queryParameters.filter.properties.activityDateTime.le)
+                }
+            }
+        }
+    }
+    if ($queryParameters) {
+        $queryParameters = ConvertTo-QueryString $queryParameters.filter
+    }
+
+    $apiUrl = "$Uri?$queryParameters"
+
+    try {
+        $response = Invoke-RestMethod -Method $Method -Uri $apiUrl -Headers $headers -Body $Body
+        return $response
+    }
+    catch {
+        Write-Error "Error fetching data: $_"
+        return $null
+    }
+}
+
 function Get-ADSignInAuditLogs {
     [CmdletBinding()]
     param(
@@ -15,7 +73,10 @@ function Get-ADSignInAuditLogs {
         [int]$Interval
     )
 
-    Write-Log -Message "Starting Get-ADSignInAuditLogs" -Color "Green"
+    if ($StartDate -gt $EndDate) {
+        Write-Error "Start date cannot be later than end date."
+        return
+    }
 
     $outputFiles = Get-OutputFiles -OutputDir $OutputDirectory -FilePrefix "$($StartDate)-SignInAudit" -FileExtension json
 
@@ -47,21 +108,14 @@ function Get-ADSignInAuditLogs {
 
     $apiUrl = "$baseUri$($queryParameters.filter.properties.activityDateTime.ge),$($queryParameters.filter.properties.activityDateTime.le),$($queryParameters.filter.properties.initiatedBy.user.id | ToQueryString)/@odata.type=#microsoft.graph.auditLogSignIn"
 
-    $response = Try {
-        $response = Invoke-MgGraphRequest -Method Get -Uri $apiUrl -ContentType 'application/json'
-        return $response
-    }
-    Catch {
-        Write-Error "Error fetching data: $_"
-        return $null
-    }
+    $response = Invoke-MgGraphRequest -Method Get -Uri $apiUrl
 
     if ($response) {
         do {
             $logs = $response
 
             $currentDate = Get-Date -Format "yyyy-MM-ddTHH:mm:ss"
-            $logs.Values | ConvertTo-Json -Depth 100 | Out-File -FilePath $filePath -Encoding utf8BOM
+            $logs.Values | ConvertTo-Json -Depth 100 | Out-File -FilePath $filePath -Encoding utf8BOM -ErrorAction Stop
             Write-Host "Sign-in audit logs written to $filePath" -ForegroundColor Green
 
             $apiUrl = $response.'@odata.nextLink'  # Update the URL to the nextLink for pagination
@@ -70,7 +124,7 @@ function Get-ADSignInAuditLogs {
 
             Start-Sleep -Seconds $Interval
 
-            $response = Invoke-MgGraphRequest -Method Get -Uri $apiUrl -ContentType 'application/json'
+            $response = Invoke-MgGraphRequest -Method Get -Uri $apiUrl
 
         } while ($response.'@odata.nextLink')
     }
@@ -79,7 +133,7 @@ function Get-ADSignInAuditLogs {
         try {
             Write-Host 'Merging output files...' -ForegroundColor Green
             $mergedFile = Join-Path $OutputDirectory "$($dateStamp)-SignInAudit-MERGED.json"
-            Merge-OutputFiles -OutputDir $OutputDirectory -Encoding $Encoding -mergedFile $mergedFile -Files $outputFiles
+            Merge-OutputFiles -OutputDir $OutputDirectory -Encoding $Encoding -mergedFile $mergedFile -Files $outputFiles -ErrorAction Stop
         }
         catch {
             Write-Error "Error merging files: $_" -ForegroundColor Red
@@ -104,6 +158,11 @@ function Get-ADDirectoryAuditLogs {
         [string]$UserIds,
         [string]$Encoding = 'UTF8'
     )
+
+    if ($StartDate -gt $EndDate) {
+        Write-Error "Start date cannot be later than end date."
+        return
+    }
 
     $dateStamp = Get-Date -Format "yyyyMMddHHmmss"
     $filePath = Join-Path $OutputDirectory "$($dateStamp)-DirectoryAudit.json"
@@ -135,21 +194,14 @@ function Get-ADDirectoryAuditLogs {
 
     $apiUrl = "$baseUri$($queryParameters.filter.properties.activityDateTime.ge),$($queryParameters.filter.properties.activityDateTime.le),$($queryParameters.filter.properties.initiatedBy.user.id | ToQueryString)/@odata.type=#microsoft.graph.auditLogDirectoryAudit"
 
-    $response = Try {
-        $response = Invoke-MgGraphRequest -Method Get -Uri $apiUrl -ContentType 'application/json'
-        return $response
-    }
-    Catch {
-        Write-Error "Error fetching data: $_"
-        return $null
-    }
+    $response = Invoke-MgGraphRequest -Method Get -Uri $apiUrl
 
     if ($response) {
         do {
             $logs = $response
 
             $currentDate = Get-Date -Format "yyyy-MM-ddTHH:mm:ss"
-            $logs.Values | ConvertTo-Json -Depth 100 | Out-File -FilePath $filePath -Encoding utf8BOM
+            $logs.Values | ConvertTo-Json -Depth 100 | Out-File -FilePath $filePath -Encoding utf8BOM -ErrorAction Stop
             Write-Host "Directory audit logs written to $filePath" -ForegroundColor Green
 
             $apiUrl = $response.'@odata.nextLink'  # Update the URL to the nextLink for pagination
@@ -158,7 +210,7 @@ function Get-ADDirectoryAuditLogs {
 
             Start-Sleep -Seconds $Interval
 
-            $response = Invoke-MgGraphRequest -Method Get -Uri $apiUrl -ContentType 'application/json'
+            $response = Invoke-MgGraphRequest -Method Get -Uri $apiUrl
 
         } while ($response.'@odata.nextLink')
     }
