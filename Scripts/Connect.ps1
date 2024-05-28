@@ -79,7 +79,7 @@ Function Check-Token($token)
         $jsonResult = $reader.ReadToEnd()
         $response.Dispose()
 
-        Write-Host 'MS Graph Token is valid.'
+        [console] 'MS Graph Token is valid.'
         return $true
     }
     catch
@@ -185,15 +185,13 @@ Function Connect-AquisitonGraph
     }
     if ($ServicePrincipalParams.CertThumbprintParams)
     {
-        $GraphParams += @{
-            CertificateThumbprint = $ServicePrincipalParams.CertThumbprintParams.CertificateThumbprint
-            ClientID              = $ServicePrincipalParams.CertThumbprintParams.AppID
-            TenantId              = $ServicePrincipalParams.CertThumbprintParams.Organization; # Organization also works here
-        }
+        [System.Text.StringBuilder]::AppendAllText($GraphParams, "CertificateThumbprint = '$($ServicePrincipalParams.CertThumbprintParams.CertificateThumbprint)'")
+        [System.Text.StringBuilder]::AppendAllText($GraphParams, "ClientId = '$($ServicePrincipalParams.CertThumbprintParams.AppID)'")
+        [System.Text.StringBuilder]::AppendAllText($GraphParams, "TenantId = '$($ServicePrincipalParams.CertThumbprintParams.Organization)'")
     }
     else
     {
-        $GraphParams += @{Scopes = $GraphScopes; }
+        [System.Text.StringBuilder]::AppendAllText($GraphParams, "Scopes = `$$GraphScopes")
     }
     Connect-MgGraph @GraphParams | Out-Null
     $EntraAuthRequired = $false
@@ -208,10 +206,9 @@ Function Connect-AquisitonExo
 
     if ($ServicePrincipalParams.CertThumbprintParams)
     {
-        $EXOParams += $ServicePrincipalParams.CertThumbprintParams
+        [System.Text.StringBuilder]::AppendAllText($EXOParams, "CertificateThumbprint = '$($ServicePrincipalParams.CertThumbprintParams.CertificateThumbprint)'")
     }
-
-    Connect-ExchangeOnline @EXOParams > Out-Null
+    Connect-ExchangeOnline @EXOParams > $null
 }
 
 function Get-AquisitionServicePrincipalParams
@@ -243,7 +240,7 @@ function Get-AquisitionServicePrincipalParams
             AppID                 = $BoundParameters.AppID
             Organization          = $BoundParameters.Organization
         }
-        $ServicePrincipalParams += @{CertThumbprintParams = $CertThumbprintParams }
+        [System.Text.StringBuilder]::AppendAllText($ServicePrincipalParams, "CertificateThumbprintParams = `$CertThumbprintParams")
     }
     else
     {

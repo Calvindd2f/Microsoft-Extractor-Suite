@@ -205,11 +205,8 @@ function Get-ModuleVersion
 	Write-Verbose "Computed version info: $script:ModuleVersion"
 	return $script:ModuleVersion
 }
-
 Get-ModuleVersion
 
-##########################################################################
-# PR Functions
 function Set-OutputEncoding 
 {
     if ($PSVersionTable.PSVersion.Major -lt 6) 
@@ -229,7 +226,7 @@ function Merge-OutputFiles
     param(
         [string]$OutputDir,
         [string]$Encoding,
-        [string]$mergedFile,
+        [string]$mergedFile
     )
     
     $mergedFilePath = Join-Path -Path $OutputDir -ChildPath $mergedFile
