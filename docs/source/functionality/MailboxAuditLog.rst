@@ -49,6 +49,11 @@ catch {
     exit 1
 }
 
+# Create the output directory if it doesn't exist
+if (!(Test-Path -Path $OutputDir)) {
+    New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null
+}
+
 # Format and output the results
 $outputFile = Join-Path -Path $OutputDir -ChildPath ("mailboxAuditLog_$($UserIds)_$(Get-Date -Format yyyy-MM-dd).csv")
 $auditLogs | Format-Table -AutoSize |
