@@ -17,7 +17,7 @@ classifiers = [
   "Operating System :: OS Independent",
 ]
 requires-python = ">=3.6"
-dynamic = ["version", "description"]
+dynamic = ["version", "description", "requires-extra"]
 
 [tool.flit.metadata.requires-extra]
 test = [
@@ -28,3 +28,12 @@ test = [
 Documentation = "https://invictus-microsoft.readthedocs.io/en/latest/"
 Source = "https://github.com/Invictus-ir/Invictus-Microsoft"
 
+[tool.flit.sdist]
+include = [
+    "LICENSE",
+]
+
+[tool.flit.wheel]
+include = [
+    "invictus_microsoft.pyd",
+]
