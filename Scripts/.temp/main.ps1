@@ -2,8 +2,8 @@ using namespace System.Net
 using namespace System.Collections.Generic
 
 # Dot sourcing the required scripts
-. "$PSScriptRoot\Microsoft-Extractor-Suite.psm1"
-. "$PSScriptRoot\Scripts\*.ps1"
+#. "$PSScriptRoot\Microsoft-Extractor-Suite.psm1"
+#. "$PSScriptRoot\Scripts\*.ps1"
 
 function Invoke-Aquisition {
     [CmdletBinding()]
@@ -26,19 +26,27 @@ function Invoke-Aquisition {
     }
 
     # Setting the query parameters as global variables
-    $global:Name = $Request.Query.Get("Name")
-    $global:Value = $Request.Query.Get("Value")
+    if ($null -ne $global:Request) {
+        $global:Name = $global:Request.Query.Get("Name")
+        $global:Value = $global:Request.Query.Get("Value")
+    } else {
+        Write-Warning "Global variable 'Request' is not set."
+    }
 }
 
 # Creating a custom object
-[PSCustomObject]@{
+$params = [PSCustomObject]@{
     Name = 'thing1'
     Value = 'value1'
 }
 
 # Displaying the query parameters
-$Request.Query.GetEnumerator() | ForEach-Object {
-    Write-Output "Key: $($_.Key), Value: $($_.Value)"
+if ($null -ne $global:Request) {
+    $global:Request.Query.GetEnumerator() | ForEach-Object {
+        Write-Output "Key: $($_.Key), Value: $($_.Value)"
+    }
+} else {
+    Write-Warning "Global variable 'Request' is not set."
 }
 
 # Calling the function
