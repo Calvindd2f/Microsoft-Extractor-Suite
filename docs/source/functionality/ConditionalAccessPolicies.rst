@@ -1,66 +1,34 @@
-<#
-.SYNOPSIS
-Retrieves the conditional access policies from Microsoft Graph API
+Conditional Access Policies
+=======
+Retrieves the risky users from the Entra ID Identity Protection, which marks an account as being at risk based on the pattern of activity for the account.
 
-.DESCRIPTION
-This command retrieves all the conditional access policies from Microsoft Graph API.
+Usage
+""""""""""""""""""""""""""
+Retrieves all the conditional access policies.
+::
 
-.PARAMETER OutputDir
-Specifies the output directory for the CSV/JSON file. Default is 'UserInfo' directory within the 'Output' directory.
+   Get-ConditionalAccessPolicies
 
-.PARAMETER Encoding
-Specifies the encoding of the CSV/JSON output file. Default is UTF8.
+Parameters
+""""""""""""""""""""""""""
+-OutputDir (optional)
+    - OutputDir is the parameter specifying the output directory.
+    - Default: UserInfo
 
-.PARAMETER Application
-Specifies App-only access (access without a user) or Delegated access (access on behalf a user) for authentication and authorization. Default is Delegated access.
+-Encoding (optional)
+    - Encoding is the parameter specifying the encoding of the CSV/JSON output file.
+    - Default: UTF8
 
-.OUTPUTS
-The output will be saved to the specified output directory.
+-Application (optional)
+    - Application is the parameter specifying App-only access (access without a user) for authentication and authorization.
+    - Default: Delegated access (access on behalf a user)
 
-.EXAMPLE
-Get-ConditionalAccessPolicies -OutputDir 'C:\MyOutput' -Encoding UTF8 -Application 'App-only'
-#>
+Output
+""""""""""""""""""""""""""
+The output will be saved to the 'UserInfo' directory within the 'Output' directory.
 
-function Get-ConditionalAccessPolicies {
-    [CmdletBinding(SupportsShouldProcess=$true)]
-    param (
-        [Parameter(Mandatory=$false)]
-        [string]$OutputDir = "UserInfo",
-
-        [Parameter(Mandatory=$false)]
-        [string]$Encoding = "UTF8",
-
-        [Parameter(Mandatory=$false)]
-        [string]$Application = "Delegated"
-    )
-
-    # Check if the output directory exists, if not create it
-    if (!(Test-Path -Path $OutputDir)) {
-        New-Item -ItemType Directory -Force -Path $OutputDir
-    }
-
-    # Connect to Microsoft Graph API with the specified authentication and authorization method
-    $connectionName = "Microsoft Graph"
-    if ($Application -eq "App-only") {
-        Connect-MgGraph -Scopes "Policy.Read.All" -ClientSecret $clientSecret -TenantId $tenantId
-    } else {
-        Connect-MgGraph -Scopes "Policy.Read.All"
-    }
-
-    # Get the conditional access policies
-    $policies = Get-MgConditionalAccessPolicy
-
-    # Export the policies to a CSV/JSON file
-    $outputFile = $OutputDir + "\" + "ConditionalAccessPolicies_" + (Get-Date -Format yyyy-MM-dd_HH-mm-ss) + "." + $Encoding
-    $policies | Export-Csv -Path $outputFile -Encoding $Encoding -NoTypeInformation
-
-    Write-Host "Conditional access policies have been saved to $outputFile"
-}
-
-# Connect to Microsoft Graph API with App-only access
-$clientSecret = "your_client_secret"
-$tenantId = "your_tenant_id"
-Connect-MgGraph -Scopes "Policy.Read.All" -ClientSecret $clientSecret -TenantId $tenantId
-
-# Get and export the conditional access policies
-Get-ConditionalAccessPolicies
+Permissions
+""""""""""""""""""""""""""
+- Before utilizing this function, it is essential to ensure that the appropriate permissions have been granted. This function relies on the Microsoft Graph API and requires an application or user to authenticate with specific scopes that grant the necessary access levels.
+- Make sure to connect using the following permission: "Policy.Read.All".
+- Your command would look like this: Connect-MgGraph -Scopes 'Policy.Read.All'
