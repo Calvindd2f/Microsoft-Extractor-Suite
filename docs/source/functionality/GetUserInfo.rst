@@ -1,104 +1,203 @@
-<#
-.SYNOPSIS
-This script gathers information about user accounts, including creation dates, last password change dates, risky detections, administrator users, and MFA status.
+User Information
+=======
+This section comprises a variety of functions designed to gather information about user accounts. These functions include retrieving all users' creation dates and their last password change dates, the risky detections and users, as well as identifying all administrator users and the MFA status of all accounts.
 
-.DESCRIPTION
-This script provides functions to retrieve user account information using the Microsoft Graph API. It can retrieve the creation time and date of the last password change for all users, identify administrator directory roles and users, retrieve the MFA status for all users, and get risky users and detections from Entra ID Identity Protection.
+Retrieve information for all users.
+^^^^^^^^^^^
+Retrieves the creation time and date of the last password change for all users.
 
-.NOTES
-Before using this script, ensure that you have connected to the Microsoft Graph API with the appropriate permissions.
-#>
+Usage
+""""""""""""""""""""""""""
+Running the script without any parameters retrieves the creation time and date of the last password change for all users.
+::
 
-# Set default output directory and encoding
-$defaultOutputDir = "UserInfo"
-$defaultEncoding = "UTF8"
+   Get-Users
 
-# Function to retrieve user creation time and last password change date
-function Get-Users {
-    [CmdletBinding()]
-    param (
-        [Parameter(Mandatory=$false)]
-        [string]$OutputDir = $defaultOutputDir,
+Retrieves the creation time and date of the last password change for all users and exports the output to a CSV file with UTF-32 encoding.
+::
 
-        [Parameter(Mandatory=$false)]
-        [string]$Encoding = $defaultEncoding,
+   Get-Users -Encoding utf32
 
-        [Parameter(Mandatory=$false)]
-        [string]$Application = "Delegated"
-    )
+Retrieves the creation time and date of the last password change for all users and saves the output to the C:\Windows\Temp folder.	
+::
 
-    # Add code here to implement the Get-Users function using the Microsoft Graph API
-    # ...
-}
+   Get-Users -OutputDir C:\Windows\Temp
 
-# Function to retrieve administrator directory roles and users
-function Get-AdminUsers {
-    [CmdletBinding()]
-    param (
-        [Parameter(Mandatory=$false)]
-        [string]$OutputDir = $defaultOutputDir,
+Parameters
+""""""""""""""""""""""""""
+-OutputDir (optional)
+    - OutputDir is the parameter specifying the output directory.
+    - Default: UserInfo
 
-        [Parameter(Mandatory=$false)]
-        [string]$Encoding = $defaultEncoding,
+-Encoding (optional)
+    - Encoding is the parameter specifying the encoding of the CSV/JSON output file.
+    - Default: UTF8
 
-        [Parameter(Mandatory=$false)]
-        [string]$Application = "Delegated"
-    )
+-Application (optional)
+    - Application is the parameter specifying App-only access (access without a user) for authentication and authorization.
+    - Default: Delegated access (access on behalf a user)
 
-    # Add code here to implement the Get-AdminUsers function using the Microsoft Graph API
-    # ...
-}
+Output
+""""""""""""""""""""""""""
+The output will be saved to the 'UserInfo' directory within the 'Output' directory.
 
-# Function to retrieve MFA status for all users
-function Get-MFA {
-    [CmdletBinding()]
-    param (
-        [Parameter(Mandatory=$false)]
-        [string]$OutputDir = $defaultOutputDir,
+Permissions
+""""""""""""""""""""""""""
+- Before utilizing this function, it is essential to ensure that the appropriate permissions have been granted. This function relies on the Microsoft Graph API and requires an application or user to authenticate with specific scopes that grant the necessary access levels.
+- Make sure to connect using at least one of the following permissions: "User.Read.All", "Directory.AccessAsUser.All", "Directory.Read.All".
+- For instance, if you choose to use User.Read.All, your command would look like this: Connect-MgGraph -Scopes 'User.Read.All'
 
-        [Parameter(Mandatory=$false)]
-        [string]$Encoding = $defaultEncoding,
+Retrieve all Administrator directory roles.
+^^^^^^^^^^^
+Retrieves Administrator directory roles, including the identification of users associated with each specific role.
 
-        [Parameter(Mandatory=$false)]
-        [string]$Application = "Delegated"
-    )
+Usage
+""""""""""""""""""""""""""
+Running the script without any parameters retrieves Administrator directory roles, including the identification of users associated with each specific role.
+::
 
-    # Add code here to implement the Get-MFA function using the Microsoft Graph API
-    # ...
-}
+   Get-AdminUsers
 
-# Function to retrieve risky users from Entra ID Identity Protection
-function Get-RiskyUsers {
-    [CmdletBinding()]
-    param (
-        [Parameter(Mandatory=$false)]
-        [string]$OutputDir = $defaultOutputDir,
+Retrieves the creation time and date of the last password change for all users and exports the output to a CSV file with UTF-32 encoding.
+::
 
-        [Parameter(Mandatory=$false)]
-        [string]$Encoding = $defaultEncoding,
+   Get-AdminUsers -Encoding utf32
 
-        [Parameter(Mandatory=$false)]
-        [string]$Application = "Delegated"
-    )
+Retrieves the creation time and date of the last password change for all users and saves the output to the C:\Windows\Temp folder.	
+::
 
-    # Add code here to implement the Get-RiskyUsers function using the Microsoft Graph API
-    # ...
-}
+   Get-AdminUsers -OutputDir C:\Windows\Temp
 
-# Function to retrieve risky detections from Entra ID Identity Protection
-function Get-RiskyDetections {
-    [CmdletBinding()]
-    param (
-        [Parameter(Mandatory=$false)]
-        [string]$OutputDir = $defaultOutputDir,
+Parameters
+""""""""""""""""""""""""""
+-OutputDir (optional)
+    - OutputDir is the parameter specifying the output directory.
+    - Default: UserInfo
 
-        [Parameter(Mandatory=$false)]
-        [string]$Encoding = $defaultEncoding,
+-Encoding (optional)
+    - Encoding is the parameter specifying the encoding of the CSV/JSON output file.
+    - Default: UTF8
 
-        [Parameter(Mandatory=$false)]
-        [string]$Application = "Delegated"
-    )
+-Application (optional)
+    - Application is the parameter specifying App-only access (access without a user) for authentication and authorization.
+    - Default: Delegated access (access on behalf a user)
 
-    # Add code here to implement the Get-RiskyDetections function using the Microsoft Graph API
-    # ...
-}
+Output
+""""""""""""""""""""""""""
+The output will be saved to the 'UserInfo' directory within the 'Output' directory.
+
+Permissions
+""""""""""""""""""""""""""
+- Before utilizing this function, it is essential to ensure that the appropriate permissions have been granted. This function relies on the Microsoft Graph API and requires an application or user to authenticate with specific scopes that grant the necessary access levels.
+- Make sure to connect using at least one of the following permissions: "User.Read.All", "Directory.AccessAsUser.All", "Directory.Read.All".
+- For instance, if you choose to use User.Read.All, your command would look like this: Connect-MgGraph -Scopes 'User.Read.All'
+
+Retrieves MFA status
+^^^^^^^^^^^
+Retrieves the MFA status for all users.
+
+Usage
+""""""""""""""""""""""""""
+Running the script without any parameters retrieves the MFA status for all users.
+::
+
+   Get-MFA
+
+Retrieves the MFA status for all users and exports the output to a CSV file with UTF-32 encoding.
+::
+
+   Get-MFA -Encoding utf32
+
+Parameters
+""""""""""""""""""""""""""
+-OutputDir (optional)
+    - OutputDir is the parameter specifying the output directory.
+    - Default: UserInfo
+
+-Encoding (optional)
+    - Encoding is the parameter specifying the encoding of the CSV/JSON output file.
+    - Default: UTF8
+
+-Application (optional)
+    - Application is the parameter specifying App-only access (access without a user) for authentication and authorization.
+    - Default: Delegated access (access on behalf a user)
+
+Output
+""""""""""""""""""""""""""
+The output will be saved to the 'UserInfo' directory within the 'Output' directory.
+
+Permissions
+""""""""""""""""""""""""""
+- Before utilizing this function, it is essential to ensure that the appropriate permissions have been granted. This function relies on the Microsoft Graph API and requires an application or user to authenticate with specific scopes that grant the necessary access levels.
+- Make sure to connect using both of the following permissions: "UserAuthenticationMethod.Read.All",'User.Read.All".
+- Your command would look like this: Connect-MgGraph -Scopes 'User.Read.All','UserAuthenticationMethod.Read.All'
+
+Retrieves the risky users
+^^^^^^^^^^^
+Retrieves the risky users from the Entra ID Identity Protection, which marks an account as being at risk based on the pattern of activity for the account.
+
+Usage
+""""""""""""""""""""""""""
+Running the script without any parameters retrieves all risky users.
+::
+
+   Get-RiskyUsers
+
+Parameters
+""""""""""""""""""""""""""
+-OutputDir (optional)
+    - OutputDir is the parameter specifying the output directory.
+    - Default: UserInfo
+
+-Encoding (optional)
+    - Encoding is the parameter specifying the encoding of the CSV/JSON output file.
+    - Default: UTF8
+
+-Application (optional)
+    - Application is the parameter specifying App-only access (access without a user) for authentication and authorization.
+    - Default: Delegated access (access on behalf a user)
+
+Output
+""""""""""""""""""""""""""
+The output will be saved to the 'UserInfo' directory within the 'Output' directory.
+
+Permissions
+""""""""""""""""""""""""""
+- Before utilizing this function, it is essential to ensure that the appropriate permissions have been granted. This function relies on the Microsoft Graph API and requires an application or user to authenticate with specific scopes that grant the necessary access levels.
+- Make sure to connect using the following permission: "IdentityRiskyUser.Read.All".
+- Your command would look like this: Connect-MgGraph -Scopes 'IdentityRiskyUser.Read.All'
+
+Retrieves the risky detections
+^^^^^^^^^^^
+Retrieves the risky detections from the Entra ID Identity Protection.
+
+Usage
+""""""""""""""""""""""""""
+Running the script without any parameters retrieves all the risky detections.
+::
+
+   Get-RiskyDetections
+
+Parameters
+""""""""""""""""""""""""""
+-OutputDir (optional)
+    - OutputDir is the parameter specifying the output directory.
+    - Default: UserInfo
+
+-Encoding (optional)
+    - Encoding is the parameter specifying the encoding of the CSV/JSON output file.
+    - Default: UTF8
+
+-Application (optional)
+    - Application is the parameter specifying App-only access (access without a user) for authentication and authorization.
+    - Default: Delegated access (access on behalf a user)
+
+Output
+""""""""""""""""""""""""""
+The output will be saved to the 'UserInfo' directory within the 'Output' directory.
+
+Permissions
+""""""""""""""""""""""""""
+- Before utilizing this function, it is essential to ensure that the appropriate permissions have been granted. This function relies on the Microsoft Graph API and requires an application or user to authenticate with specific scopes that grant the necessary access levels.
+- Make sure to connect using the following permission: "IdentityRiskEvent.Read.All".
+- Your command would look like this: Connect-MgGraph -Scopes 'IdentityRiskEvent.Read.All'
