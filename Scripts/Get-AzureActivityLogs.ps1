@@ -3,15 +3,21 @@ using module  "$PSScriptRoot\Microsoft-Extractor-Suite.psm1";
 
 # Function to get activity logs
 function Get-ActivityLogs {
-    <#_removed for brevity_#>
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]
-        [string]$StartDate,
+        [ValidateScript({$_ -as [datetime]})]
+        [datetime]$StartDate,
+
         [Parameter(Mandatory)]
-        [string]$EndDate,
+        [ValidateScript({$_ -as [datetime]})]
+        [datetime]$EndDate,
+
         [string]$SubscriptionID,
-        [string]$OutputDir = $(Throw "OutputDir parameter is mandatory."),
+
+        [string]$OutputDir = (Throw "OutputDir parameter is mandatory."),
+
+        [ValidateSet('utf8', 'ascii', 'unicode', 'bigendianunicode', 'utf7', 'utf32')]
         [string]$Encoding = 'utf8'
     )
 
@@ -29,16 +35,16 @@ function Get-ActivityLogs {
         Set-AzContext -Subscription $sub.Id
 
         try {
-            $logs = Get-AzActivityLog -StartTime (Get-Date).AddDays(-89) -EndTime (Get-Date) -ErrorAction Stop -WarningAction SilentlyContinue
+            $logs = Get-AzActivityLog -StartTime $StartDate -EndTime $EndDate -ErrorAction Stop -WarningAction SilentlyContinue
 
             if ($logs) {
-                [console]::writeline("[INFO] Activity logs found in subscription: $($sub.Id)")# -ForegroundColor Green
+                Write-Host "Activity logs found in subscription: $($sub.Id)" -ForegroundColor Green
                 Export-Logs -Logs $logs -OutputDir $OutputDir -Encoding $Encoding
             } else {
-                [console]::writeline("[WARNING] No Activity logs in subscription: $($sub.Id)")# -ForegroundColor Yellow
+                Write-Host "No Activity logs in subscription: $($sub.Id)" -ForegroundColor Yellow
             }
         } catch {
-            [console]::writeline("[WARNING] An error occurred while retrieving logs from subscription: $($sub.Id): $_")# -ForegroundColor Yellow
+            Write-Host "An error occurred while retrieving logs from subscription: $($sub.Id): $_" -ForegroundColor Yellow
         }
     }
 }
@@ -49,15 +55,18 @@ function Export-Logs {
     param(
         [Parameter(Mandatory)]
         [object]$Logs,
+
         [string]$OutputDir,
+
+        [ValidateSet('utf8', 'ascii', 'unicode', 'bigendianunicode', 'utf7', 'utf32')]
         [string]$Encoding = 'utf8'
     )
 
-    $date = [datetime]::Now.ToString('yyyyMMddHHmmss')
-    $filePath = Join-Path $OutputDir "$($date)-ActivityLog.json"
+    $date = Get-Date -Format 'yyyyMMddHHmmss'
+    $filePath = Join-Path -Path $OutputDir -ChildPath "$($date)-ActivityLog.json"
 
     $Logs | ConvertTo-Json -Depth 100 | Out-File -FilePath $filePath -Encoding $Encoding
-    Write-LogFile -Message "[INFO] Successfully retrieved and exported $($Logs.Count) Activity logs to $filePath" -Color "Green"
+    Write-Host "Successfully retrieved and exported $($Logs.Count) Activity logs to $filePath" -ForegroundColor Green
 }
 
 # Function to write log messages
@@ -66,6 +75,8 @@ function Write-LogFile {
     param(
         [Parameter(Mandatory)]
         [string]$Message,
+
+        [ValidateSet('Black', 'DarkBlue', 'DarkGreen', 'DarkCyan', 'DarkRed', 'DarkMagenta', 'DarkYellow', 'Gray', 'DarkGray', 'Blue', 'Green', 'Cyan', 'Red', 'Magenta', 'Yellow', 'White')]
         [string]$Color = 'White'
     )
 
@@ -73,4 +84,4 @@ function Write-LogFile {
 }
 
 # Call the Get-ActivityLogs function
-Get-ActivityLogs -StartDate '2022-01-01' -EndDate '2022-02-01' -SubscriptionID 'your_subscription_id' -OutputDir 'C:\temp'
+Get-ActivityLogs -StartDate (Get-Date '2022-01-01') -EndDate (Get-Date '2022-02-01') -SubscriptionID 'your_subscription_id' -OutputDir 'C:\temp'
