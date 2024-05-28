@@ -1,6 +1,8 @@
 using module  "$PSScriptRoot\Microsoft-Extractor-Suite.psm1";
 
-function Export-MailboxAuditLog {
+# This contains a function for getting Mailbox Audit logging
+
+function Get-MailboxAuditLog {
     [CmdletBinding(
         SupportsShouldProcess = $true,
         ConfirmImpact = 'Medium',
@@ -13,13 +15,6 @@ function Export-MailboxAuditLog {
             ParameterSetName = 'SingleUser',
             ValueFromPipelineByPropertyName = $true
         )]
-        [ValidateScript({
-            if ($_ -match '^\s*[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\s*($|\s*,\s*[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\s*)*$') {
-                $true
-            } else {
-                throw 'UserIds must be a comma-separated list of valid email addresses.'
-            }
-        })]
         [string]$UserIds,
 
         [Parameter(
@@ -35,7 +30,6 @@ function Export-MailboxAuditLog {
             ParameterSetName = 'DateRange',
             ValueFromPipelineByPropertyName = $true
         )]
-        [ValidatePattern('^(\d{4})-(\d{2})-(\d{2})$')]
         [string]$StartDate,
 
         [Parameter(
@@ -44,14 +38,12 @@ function Export-MailboxAuditLog {
             ParameterSetName = 'DateRange',
             ValueFromPipelineByPropertyName = $true
         )]
-        [ValidatePattern('^(\d{4})-(\d{2})-(\d{2})$')]
         [string]$EndDate,
 
         [Parameter(
             Mandatory = $false,
             ParameterSetName = 'OutputParams'
         )]
-        [ValidateNotNullOrEmpty()]
         [string]$OutputDir,
 
         [Parameter(
@@ -76,69 +68,20 @@ function Export-MailboxAuditLog {
             Mandatory = $false,
             ParameterSetName = 'OutputParams'
         )]
-        [switch]$Confirm,
-
-        [Parameter()]
-        [switch]$Verbose,
-
-        [Parameter()]
-        [switch]$Debug,
-
-        [Parameter()]
-        [ValidateNotNullOrEmpty()]
-        [string]$LogFile,
-
-        [Parameter()]
-        [ValidateSet('Stop','Continue','Inquire')]
-        [string]$ErrorAction,
-
-        [Parameter()]
-        [switch]$ErrorActionPreference,
-
-        [Parameter()]
-        [switch]$WarningActionPreference,
-
-        [Parameter()]
-        [switch]$WarningPreference,
-
-        [Parameter()]
-        [switch]$InformationActionPreference,
-
-        [Parameter()]
-        [switch]$InformationPreference,
-
-        [Parameter()]
-        [switch]$InformationVariable,
-
-        [Parameter()]
-        [switch]$VerbosePreference,
-
-        [Parameter()]
-        [switch]$VerboseVariable,
-
-        [Parameter()]
-        [switch]$DebugPreference,
-
-        [Parameter()]
-        [switch]$DebugVariable,
-
-        [Parameter()]
-        [switch]$ErrorVariable,
-
-        [Parameter()]
-        [switch]$OutVariable,
-
-        [Parameter()]
-        [switch]$OutBuffer,
-
-        [Parameter()]
-        [switch]$PipelineVariable
+        [switch]$Confirm
     )]
 
     begin {
         if ($PSCmdlet.ParameterSetName -eq 'OutputParams') {
-            if (!(Test-Path $OutputDir)) {
-                New-Item -ItemType Directory -Force -Path $OutputDir -Confirm:$Confirm | Out-Null
+            if ($OutputDir) {
+                if (!(Test-Path $OutputDir)) {
+                    New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null
+                }
+            } else {
+                $OutputDir = "Output\MailboxAuditLog"
+                if (!(Test-Path $OutputDir)) {
+                    New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null
+                }
             }
 
             if ($Encoding) {
@@ -165,7 +108,7 @@ function Export-MailboxAuditLog {
                 if ($PSCmdlet.ShouldProcess($outputFile, 'Exporting Mailbox Audit Log')) {
                     try {
                         $result = Search-MailboxAuditlog -Identity $userId -LogonTypes Delegate,Admin,Owner -StartDate $StartDate -EndDate $EndDate -ShowDetails -ResultSize 250000 -ErrorAction Stop
-                        $result | Export-Csv -NoTypeInformation -Path $outputFile -Encoding $encoding -WhatIf:$WhatIf -Force
+                        $result | Export-Csv -NoTypeInformation -Path $outputFile -Encoding $encoding -Force
 
                         Write-Host "##[info] Output is written to: $outputFile"
                     } catch {
@@ -182,7 +125,7 @@ function Export-MailboxAuditLog {
                 if ($PSCmdlet.ShouldProcess($outputFile, 'Exporting Mailbox Audit Log')) {
                     try {
                         $result = Search-MailboxAuditlog -Identity $userId -LogonTypes Delegate,Admin,Owner -StartDate $StartDate -EndDate $EndDate -ShowDetails -ResultSize 250000 -ErrorAction Stop
-                        $result | Export-Csv -NoTypeInformation -Path $outputFile -Encoding $encoding -WhatIf:$WhatIf
+                        $result | Export-Csv -NoTypeInformation -Path $outputFile -Encoding $encoding -Force
 
                         Write-Host "##[info] Output is written to: $outputFile"
                     } catch {
@@ -199,7 +142,7 @@ function Export-MailboxAuditLog {
                 if ($PSCmdlet.ShouldProcess($outputFile, 'Exporting Mailbox Audit Log')) {
                     try {
                         $result = Search-MailboxAuditlog -Identity $userId -LogonTypes Delegate,Admin,Owner -StartDate $StartDate -EndDate $EndDate -ShowDetails -ResultSize 250000 -ErrorAction Stop
-                        $result | Export-Csv -NoTypeInformation -Path $outputFile -Encoding $encoding -WhatIf:$WhatIf
+                        $result | Export-Csv -NoTypeInformation -Path $outputFile -Encoding $encoding -Force
 
                         Write-Host "##[info] Output is written to: $outputFile"
                     } catch {
@@ -213,52 +156,4 @@ function Export-MailboxAuditLog {
     end {
         Write-Host "##[section]Finished exporting Mailbox Audit Logs."
     }
-}
-
-function Export-CsvWithEncoding {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory=$true)]
-        [string]$InputFile,
-
-        [Parameter(Mandatory=$true)]
-        [string]$OutputFile,
-
-        [Parameter(Mandatory=$true)]
-        [string]$Encoding
-    )
-
-    Get-Content -Path $InputFile -Encoding $Encoding | Export-Csv -Path $OutputFile -NoTypeInformation
-}
-
-function Search-MailboxAuditlog {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory=$true)]
-        [string]$Identity,
-
-        [Parameter(Mandatory=$false)]
-        [string]$LogonTypes,
-
-        [Parameter(Mandatory=$false)]
-        [string]$StartDate,
-
-        [Parameter(Mandatory=$false)]
-        [string]$EndDate,
-
-        [Parameter(Mandatory=$false)]
-        [switch]$ShowDetails
-    )
-
-    $params = @{
-        Identity          = $Identity
-        LogonTypes        = $LogonTypes
-        StartDate         = $StartDate
-        EndDate           = $EndDate
-        ShowDetails       = $ShowDetails
-        ResultSize        = 250000
-        ErrorAction       = 'Stop'
-    }
-
-    Search-MailboxAuditLog @params
 }
