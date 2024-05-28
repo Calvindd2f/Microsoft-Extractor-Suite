@@ -6,20 +6,18 @@ function Get-AdminAuditLogs {
     [CmdletBinding()]
     param (
         [Parameter(Mandatory)]
-        [ValidateScript({$_ -as [datetime]})]
-        [datetime]$StartDate,
+        [string]$StartDate,
 
         [Parameter(Mandatory)]
-        [ValidateScript({$_ -as [datetime]})]
-        [datetime]$EndDate,
+        [string]$EndDate,
 
         [Parameter(Mandatory)]
         [string]$OutputDirectory
     )
 
     # Convert input dates to universal time
-    $startDateUtc = $StartDate.ToUniversalTime()
-    $endDateUtc = $EndDate.ToUniversalTime()
+    $startDateUtc = [DateTime]::Parse($StartDate).ToUniversalTime()
+    $endDateUtc = [DateTime]::Parse($EndDate).ToUniversalTime()
 
     # Generate output file name
     $outputFileName = "{0}-AdminAuditLog-$(Get-Date -Format yyyyMMddHHmmss).csv" -f $startDateUtc.ToString("yyyy-MM-ddTHH:mm:ssK")
@@ -70,4 +68,4 @@ function Get-AdminAuditLogs {
 }
 
 # Call the function
-Get-AdminAuditLogs -StartDate (Get-Date "2022-01-01T00:00:00Z") -EndDate (Get-Date "2022-01-31T23:59:59Z") -OutputDirectory "C:\Temp"
+Get-AdminAuditLogs -StartDate "2022-01-01T00:00:00Z" -EndDate "2022-01-31T23:59:59Z" -OutputDirectory "C:\Temp"
