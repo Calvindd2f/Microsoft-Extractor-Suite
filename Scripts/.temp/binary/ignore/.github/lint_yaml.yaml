@@ -4,10 +4,28 @@ name: Lint Check for YAML
 
 # This is a reusable workflow called by the pipeline.
 on:
+  pull_request:
+    branches:
+      - main
   workflow_call:
     inputs:
       repo-full-name:
         required: false
         type: string
-        default: ${{ github.event.pull_request.head.repo.full_name }}
+        default: ${{ github.repository }}
 
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Setup yamllint
+        uses: yamllint/action@v2
+
+      - name: Lint YAML files
+        uses: yamllint/action@v2
+        with:
+          files: '**.yml'
+          exclude: 'node_modules/**'
