@@ -1,5 +1,4 @@
-function versionCheck
-{
+function Global:VersionCheck {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $true)]
@@ -11,25 +10,18 @@ function versionCheck
 
     $ErrorActionPreference = 'Stop'
 
-    $PSVersionTable = Get-Variable PSVersionTable -ErrorAction SilentlyContinue
-
-    if ($PSVersionTable)
-    {
-        $PSVersion = $PSVersionTable.Value.PSVersion
-
-        if ($PSVersion.Major -lt 5)
-        {
-            Write-Error -Message 'This script requires PowerShell version 5.0 or higher.'
-        }
+    if (-not (Get-Variable PSVersionTable -ErrorAction SilentlyContinue)) {
+        Write-Error -Message 'This script requires PowerShell version 5.0 or higher.'
     }
-    else
-    {
+
+    $psVersion = $PSVersionTable.Value.PSVersion
+
+    if ($psVersion.Major -lt 5) {
         Write-Error -Message 'This script requires PowerShell version 5.0 or higher.'
     }
 }
 
-function Connect-M365
-{
+function Global:Connect-M365 {
     [CmdletBinding()]
     param()
 
@@ -37,11 +29,10 @@ function Connect-M365
 
     $ErrorActionPreference = 'Stop'
 
-    Connect-ExchangeOnline > $null
+    Connect-ExchangeOnline -ErrorAction SilentlyContinue
 }
 
-function Connect-Azure
-{
+function Global:Connect-Azure {
     [CmdletBinding()]
     param()
 
@@ -49,11 +40,10 @@ function Connect-Azure
 
     $ErrorActionPreference = 'Stop'
 
-    Connect-AzureAD > $null
+    Connect-AzureAD -ErrorAction SilentlyContinue
 }
 
-function Connect-AzureAZ
-{
+function Global:Connect-AzureAZ {
     [CmdletBinding()]
     param()
 
@@ -61,11 +51,10 @@ function Connect-AzureAZ
 
     $ErrorActionPreference = 'Stop'
 
-    Connect-AzAccount > $null
+    Connect-AzAccount -ErrorAction SilentlyContinue
 }
 
-function Connect-ExtractorSuite
-{
+function Global:Connect-ExtractorSuite {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $false)]
@@ -85,11 +74,48 @@ function Connect-ExtractorSuite
 
     $ErrorActionPreference = 'Stop'
 
-    if ($Application)
-    {
+    if ($Application) {
         $appID = $env:AppId
         $appSecret = $env:AppSecret
         $appThumbprint = $env:AppThumbprint
         $tenantID = $env:TenantId
 
         $token = Get-Token -scope 'https://graph.microsoft.com/.default' -appID $appID -appSecret $appSecret -tenantID $tenantID
+    }
+}
+
+function Global:Get-Token {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$scope,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$appID,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$appSecret,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$tenantID
+    )
+
+    [OutputType([string])]
+
+    $ErrorActionPreference = 'Stop'
+
+    $body = @{
+        'grant_type'    = 'client_credentials'
+        'client_id'     = $appID
+        'client_secret' = $appSecret
+        'scope'         = $scope
+    }
+
+    $response = Invoke-RestMethod -Uri "https://login.microsoftonline.com/$tenantID/oauth2/v2.0/token" -Method Post -Body $body
+
+    $response.access_token
+}
