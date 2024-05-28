@@ -1,5 +1,4 @@
-function Test-ScriptOptimization
-{
+function Test-ScriptOptimization {
     param (
         [string]$ScriptContent
     )
@@ -26,21 +25,48 @@ function Test-ScriptOptimization
         'OrderedDictionary'                                   = 'Use [ordered] hashtable to [pscustomobject] cast, Add-Member, or PSObject.Properties.Add for dynamically creating new objects.'
     }
 
-    foreach ($pattern in $patterns.GetEnumerator())
-    {
-        if ($ScriptContent -match $pattern.Value)
-        {
-            Write-Output "Detected: $($pattern.Key)"
-            Write-Output "Recommendation: $($recommendations[$pattern.Key])"
-            Write-Output ''
+    $issuesFound = @()
+
+    foreach ($pattern in $patterns.GetEnumerator()) {
+        if ($ScriptContent -match $pattern.Value) {
+            $issuesFound += [PSCustomObject]@{
+                Pattern     = $pattern.Key
+                Recommendation = $recommendations[$pattern.Key]
+            }
+        }
+    }
+
+    if ($issuesFound.Count -eq 0) {
+        Write-Output "No issues found in the script."
+    } else {
+        Write-Output "Issues found in the script:"
+
+        $issuesFound | ForEach-Object {
+            Write-Output " - $($_.Pattern): $($_.Recommendation)"
         }
     }
 }
 
+$scripts = Get-ChildItem -Path .\scripts -Filter *.ps1 -Recurse
 
-$scripts=(Get-ChildItem -r .\scripts\*.ps1)
-$scripts | ForEach-Object -ThrottleLimit 5 -Parallel {
-   #Action that will run in Parallel. Reference the current object via PSItem and bring in outside variables with USING:varname
-   $ScriptContent = Get-Content -Path $_.FullName
-   Test-ScriptOptimization -ScriptContent $ScriptContent 
+$runningJobs = @()
+
+foreach ($script in $scripts) {
+    $runningJob = Start-Job -ScriptBlock {
+        param (
+            [string]$scriptPath
+        )
+
+        $scriptContent = Get-Content -Path $scriptPath
+        Test-ScriptOptimization -ScriptContent $scriptContent
+    } -ArgumentList $script.FullName
+
+    $runningJobs += $runningJob
 }
+
+Wait-Job -Job $runningJobs
+
+$results = Receive-Job -Job $runningJobs
+
+Write-Output "Optimization results:"
+$results
