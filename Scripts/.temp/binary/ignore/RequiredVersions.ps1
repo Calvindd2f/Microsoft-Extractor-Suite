@@ -12,12 +12,12 @@ function Install-Module {
         New-Item -ItemType Directory -Path $modulePath -Force | Out-Null
     }
 
-    $modulePath = Join-Path -Path $modulePath -ChildPath " $($ModuleVersion.Major).$($ModuleVersion.Minor)"
+    $modulePath = "$modulePath\$($ModuleVersion.Major).$($ModuleVersion.Minor)"
 
     if (!(Test-Path -Path $modulePath)) {
         Write-Verbose "Installing module $ModuleName version $ModuleVersion"
         try {
-            Install-Module -Name $ModuleName -RequiredVersion $ModuleVersion -Force -AllowClobber -Scope CurrentUser
+            $installedModule = Install-Module -Name $ModuleName -RequiredVersion $ModuleVersion -Force -AllowClobber -Scope CurrentUser -ErrorAction Stop -ErrorVariable error
         } catch {
             Write-Error "Failed to install module $ModuleName version $ModuleVersion: $_"
             return $false
@@ -27,10 +27,11 @@ function Install-Module {
 
         if ($installedModuleVersion) {
             Write-Verbose "Module $ModuleName version $ModuleVersion already installed"
+            $installedModule = $installedModuleVersion
         } else {
             Write-Verbose "Updating module $ModuleName to version $ModuleVersion"
             try {
-                Update-Module -Name $ModuleName -RequiredVersion $ModuleVersion -Force -AllowClobber -Scope CurrentUser
+                $installedModule = Update-Module -Name $ModuleName -RequiredVersion $ModuleVersion -Force -AllowClobber -Scope CurrentUser -ErrorAction Stop -ErrorVariable error
             } catch {
                 Write-Error "Failed to update module $ModuleName to version $ModuleVersion: $_"
                 return $false
@@ -38,7 +39,7 @@ function Install-Module {
         }
     }
 
-    $maximumModuleVersionPath = Join-Path -Path $modulePath -ChildPath " $($MaximumVersion.Major).$($MaximumVersion.Minor)"
+    $maximumModuleVersionPath = "$modulePath\$($MaximumVersion.Major).$($MaximumVersion.Minor)"
 
     if (!(Test-Path -Path $maximumModuleVersionPath)) {
         Write-Verbose "Creating directory for maximum version of module $ModuleName"
@@ -46,7 +47,7 @@ function Install-Module {
     }
 
     Write-Verbose "Module $ModuleName installed and configured successfully"
-    return $true
+    return $true, $installedModule
 }
 
 $ModuleList = @(
@@ -123,14 +124,24 @@ foreach ($module in $ModuleList) {
     $maximumVersion = $module.MaximumVersion
 
     if (!(Get-Module -Name $moduleName -ListAvailable)) {
-        Install-Module -ModuleName $moduleName -ModuleVersion $moduleVersion -MaximumVersion $maximumVersion
+        $result = Install-Module -ModuleName $moduleName -ModuleVersion $moduleVersion -MaximumVersion $maximumVersion
     } else {
         $installedModuleVersion = Get-Module -Name $moduleName -ListAvailable | Select-Object -ExpandProperty Version
 
         if ($installedModuleVersion -lt $moduleVersion) {
-            Install-Module -ModuleName $moduleName -ModuleVersion $moduleVersion -MaximumVersion $maximumVersion
+            $result = Install-Module -ModuleName $moduleName -ModuleVersion $moduleVersion -MaximumVersion $maximumVersion
+        } elseif ($installedModuleVersion -eq $moduleVersion) {
+            Write-Warning "Module $moduleName is already installed at version $installedModuleVersion"
+            $result = $true, $installedModuleVersion
         } elseif ($installedModuleVersion -gt $maximumVersion) {
             Write-Warning "Module $moduleName is already installed at a higher version than the maximum allowed version"
+            $result = $false, $installedModuleVersion
         }
+    }
+
+    if ($result[0]) {
+        Write-Verbose "Module $moduleName installed and configured successfully"
+    } else {
+        Write-Error "Failed to install module $moduleName: $($result[1])"
     }
 }
