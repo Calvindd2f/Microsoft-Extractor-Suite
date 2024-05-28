@@ -1,17 +1,15 @@
-
 # Created by https://www.toptal.com/developers/gitignore/api/python,jupyternotebooks
 # Edit at https://www.toptal.com/developers/gitignore?templates=python,jupyternotebooks
 
-### JupyterNotebooks ###
+### Jupyter Notebooks ###
 # gitignore template for Jupyter Notebooks
 # website: http://jupyter.org/
 
 .changelog/*
-.ipynb_checkpoints
-*/.ipynb_checkpoints/*
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/
 
 # IPython
-profile_default/
 ipython_config.py
 
 # Remove previous ipynb_checkpoints
@@ -27,7 +25,7 @@ __pycache__/
 *.so
 
 # Distribution / packaging
-.Python
+.Python/
 build/
 develop-eggs/
 dist/
@@ -47,8 +45,6 @@ share/python-wheels/
 MANIFEST
 
 # PyInstaller
-#  Usually these files are written by a python script from a template
-#  before PyInstaller builds the exe, so as to inject date/other infos into it.
 *.manifest
 *.spec
 
@@ -75,99 +71,3 @@ cover/
 *.mo
 *.pot
 
-# Django stuff:
-*.log
-local_settings.py
-db.sqlite3
-db.sqlite3-journal
-
-# Flask stuff:
-instance/
-.webassets-cache
-
-# Scrapy stuff:
-.scrapy
-
-# Sphinx documentation
-docs/_build/
-
-# PyBuilder
-.pybuilder/
-target/
-
-# Jupyter Notebook
-
-# IPython
-
-# pyenv
-#   For a library or package, you might want to ignore these files since the code is
-#   intended to run in multiple environments; otherwise, check them in:
-# .python-version
-
-# pipenv
-#   According to pypa/pipenv#598, it is recommended to include Pipfile.lock in version control.
-#   However, in case of collaboration, if having platform-specific dependencies or dependencies
-#   having no cross-platform support, pipenv may install dependencies that don't work, or not
-#   install all needed dependencies.
-#Pipfile.lock
-
-# PEP 582; used by e.g. github.com/David-OConnor/pyflow
-__pypackages__/
-
-# Celery stuff
-celerybeat-schedule
-celerybeat.pid
-
-# SageMath parsed files
-*.sage.py
-
-# Environments
-.env
-.venv
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
-
-# Spyder project settings
-.spyderproject
-.spyproject
-
-# Rope project settings
-.ropeproject
-
-# mkdocs documentation
-/site
-
-# mypy
-.mypy_cache/
-.dmypy.json
-dmypy.json
-
-# Pyre type checker
-.pyre/
-
-# pytype static type analyzer
-.pytype/
-
-# Cython debug symbols
-cython_debug/
-
-# End of https://www.toptal.com/developers/gitignore/api/python,jupyternotebooks
-Scripts\Igore
-Scripts\Igore\*
-Scripts/Igore/Connection.psm1
-Scripts/Igore/ConnectHelpers.psm1
-Scripts/Igore/Dependencies.ps1
-Scripts/Igore/orchestr8.psm1
-Scripts/Igore/RequiredVersions.ps1
-Scripts/Igore/.github/FUNDING.yml
-Scripts/Igore/.github/lint_powershell.yaml
-Scripts/Igore/.github/lint_yaml.yaml
-Scripts/Igore/.github/run_module_version_bump.yml
-Scripts/Igore/.github/run_pipeline.yaml
-/.vs
-/Scripts/param(.ps1
-/Scripts/Invoke-Aquisition.ps1
-/Scripts/Invoke-AppRegistrationAquisition.ps1
