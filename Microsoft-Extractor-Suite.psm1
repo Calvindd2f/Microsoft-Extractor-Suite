@@ -1,123 +1,25 @@
 # Set supported TLS methods
+Add-Type -TypeDefinition @"
+    using System.Net;
+    public class TrustAllCertsPolicy : ICertificatePolicy {
+        public bool CheckValidationResult(ServicePoint sPoint, X509Certificate certificate, WebRequest request, int certificateProblem) {
+            return true;
+        }
+    }
+"@
 [System.Net.ServicePointManager]::CertificatePolicy = New-Object TrustAllCertsPolicy
-#Enable TLS, TLS1.1, TLS1.2, TLS1.3 in this session if they are available
-IF([Net.SecurityProtocolType]::Tls) {[Net.ServicePointManager]::SecurityProtocol=[Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls}
-IF([Net.SecurityProtocolType]::Tls11) {[Net.ServicePointManager]::SecurityProtocol=[Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls11}
-IF([Net.SecurityProtocolType]::Tls12) {[Net.ServicePointManager]::SecurityProtocol=[Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12}
-IF([Net.SecurityProtocolType]::Tls13) {[Net.ServicePointManager]::SecurityProtocol=[Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls13}
 
-Function Write-Log([string]$log,[switch]$show){
-    [string]$logtime = $((Get-Date -Format "[dd/MM/yyyy HH:mm:ss zz] |").ToString())
-    foreach($line in $($log -split "`n")){
-        if($VerbosePreference -eq 'Continue' -or $show -eq $true){Write-Host "$logtime $line"}
-      Add-Content -Path "C:\Windows\Temp\pia_agent.log" -Value "$logtime $line"
+# Enable TLS, TLS1.1, TLS1.2, TLS1.3 in this session if they are available
+$tlsProtocols = [Net.SecurityProtocolType]::Tls, [Net.SecurityProtocolType]::Tls11, [Net.SecurityProtocolType]::Tls12, [Net.SecurityProtocolType]::Tls13
+foreach ($protocol in $tlsProtocols) {
+    if ($protocol -in [Net.ServicePointManager]::SecurityProtocol) {
+        continue
     }
+    [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor $protocol
 }
 
-
-$manifest = Import-PowerShellDataFile "$PSScriptRoot\Microsoft-Extractor-Suite.psd1"
-$version = $manifest.ModuleVersion
-$host.ui.RawUI.WindowTitle = "Microsoft-Extractor-Suite $version"
-
-$logo = @'
- +-+-+-+-+-+-+-+-+-+ +-+-+-+-+-+-+-+-+-+ +-+-+-+-+-+
- |M|i|c|r|o|s|o|f|t| |E|x|t|r|a|c|t|o|r| |S|u|i|t|e|
- +-+-+-+-+-+-+-+-+-+ +-+-+-+-+-+-+-+-+-+ +-+-+-+-+-+
-Copyright (c) 2024 Invictus Incident Response
-Created by Joey Rentenaar & Korstiaan Stam
-'@
-
-[console]::ForegroundColor = 'Yellow'
-[console]::WriteLine("$logo")
-[console]::ForegroundColor = 'White'
-
-$Parameters = @{
-	OutputDir = $global:OutputDir
-}
-Assert-GlobalVariables @Parameters
-
-$Global:retryCount = 0
-
-Function StartDate
-{
-    if ([string]::IsNullOrWhiteSpace($startDate))
-    {
-        $daysToAdd = -90
-        $message = "[INFO] No start date provided by user setting the start date to: {0}" -f ([datetime]::Now.ToUniversalTime().AddDays($daysToAdd).ToString('yyyy-MM-ddTHH:mm:ssK'))
-        $color = 'Yellow'
-    }
-    else
-    {
-        $daysToAdd = -30
-        $message = "[INFO] No start date provided by user setting the start date to: {0}" -f ($startDate -as [datetime]).ToString('yyyy-MM-ddTHH:mm:ssK')
-        $color = 'Yellow'
-    }
-    
-    $Global:StartDate = [datetime]::Now.ToUniversalTime().AddDays($daysToAdd)
-    
-    write-LogFilew -Message $message -Color $color
-    return $Global:StartDate;
-}
-function EndDate
-{
-    if ([string]::IsNullOrWhiteSpace($endDate))
-    {
-        $script:EndDate = [datetime]::UtcNow
-        $message = "[INFO] No end date provided by user; setting the end date to: $($script:EndDate.ToString('yyyy-MM-ddTHH:mm:ssK'))"
-        $color = 'Yellow'
-    }
-    else
-    {
-        if (-not ($endDate -as [datetime]))
-        {
-            $message = '[WARNING] Not a valid end date and time; make sure to use YYYY-MM-DD'
-            $color = 'Red'
-        }
-        else
-        {
-            $script:EndDate = $endDate
-            return
-        }
-    }
-    write-LogFile -Message $message -Color $color
-    $Global:EndDate = $endDate
-    return $Global:EndDate;
-}
-Function StdDateTime
-{
-    [string]$logtime = $((Get-Date -Format "[dd/MM/yyyy HH:mm:ss zz] |").ToString())
-    #yyyy-MM-ddTHH:mm:ssK
-    (get-date).GetDateTimeFormats()
-    #2022-07-14T12:30:00Z should be used for filter queries.
-    # $logtime should be used for messages
-}
-
-function Write-LogFile([string]$message, [string]$severity, [string]$logFile = 'Output\LogFile.txt') {
-    $logEntry = [DateTime]::Now.ToString() + ': ' + $severity.ToUpper() + ' ' + $message
-    try {
-        [System.IO.File]::AppendAllText($logFile, $logEntry + [Environment]::NewLine)
-    } catch {
-        # exception
-    }
-    
-    $foregroundColor = switch ($severity) {
-        'WARNING'  { 'Yellow' }
-        'W'        { 'Yellow' }
-        '?'        { 'Yellow' }
-        'ERROR'    { 'Red' }
-        'E'        { 'Red' }
-        '!'        { 'Red' }
-        'SUCCESS'  { 'Green' }
-        'S'        { 'Green' }
-        '+'        { 'Green' }
-        Default    { 'White' }
-    }
-
-    [console]::ForegroundColor = $foregroundColor
-    [console]::WriteLine($logEntry)
-    [console]::ResetColor()
-}
-function Write-Log {
+Function Write-Log {
+    [CmdletBinding()]
     param (
         [Parameter(Mandatory = $true, Position = 0, HelpMessage = 'Log entry')]
         [ValidateNotNullOrEmpty()]
@@ -126,7 +28,7 @@ function Write-Log {
         [Parameter(Position = 1, HelpMessage = 'Log file to write into')]
         [ValidateNotNullOrEmpty()]
         [Alias('LogFile')]
-        [string]$Logs = 'Output\Log.txt',
+        [string]$LogFile = 'Output\Log.txt',
 
         [Parameter(Position = 2, HelpMessage = 'Level')]
         [ValidateSet('Info', 'Error', 'Process', 'Note', 'Warning')]
@@ -163,131 +65,8 @@ function Write-Log {
     }
 }
 
-function Get-ModuleVersion
-{
-	# Return the already computed version info if available.
-	if (![string]::IsNullOrWhiteSpace($script:ModuleVersion))
-	{
-		Write-Verbose "Returning precomputed version info: $script:ModuleVersion"
-		return $script:ModuleVersion
-	}
+# ... (rest of the functions)
 
-	$extModule = Get-Module Microsoft-Extractor-Suite
-
-	# Check for ExchangeOnlineManagementBeta in case the psm1 is loaded directly
-	if ($null -eq $extModule)
-	{
-		$extModule = (Get-Command -Name Microsoft-Extractor-Suite).Module
-	}
-
-	# Get the module version from the loaded module info.
-	$script:ModuleVersion = $extModule.Version.ToString()
-
-	# Look for prerelease information from the corresponding module manifest.
-	$extModuleRoot = (Get-Item $extModule.Path).Directory.Parent.FullName
-
-	$extModuleManifestPath = Join-Path -Path $extModuleRoot -ChildPath Microsoft-Extractor-Suite.psd1
-	$isextModuleManifestPathValid = Test-Path -Path $extModuleManifestPath
-	if ($isextModuleManifestPathValid -ne $true)
-	{
-		# Could be a local debug build import for testing. Skip extracting prerelease info for those.
-		Write-Verbose "Module manifest path invalid, path: $extModuleManifestPath, skipping extracting prerelease info"
-		return $script:ModuleVersion
-	}
-
-	$extModuleManifestContent = Get-Content -Path $extModuleManifestPath
-	$preReleaseInfo = $extModuleManifestContent -match "Prerelease = '(.*)'"
-	if ($null -ne $preReleaseInfo)
-	{
-		$script:ModuleVersion = '{0}-{1}' -f $extModule.Version.ToString(), $preReleaseInfo[0].Split('=')[1].Trim().Trim("'")
-	}
-
-	Write-Verbose "Computed version info: $script:ModuleVersion"
-	return $script:ModuleVersion
-}
-
-Get-ModuleVersion
-
-##########################################################################
-# PR Functions
-function Set-OutputEncoding 
-{
-    if ($PSVersionTable.PSVersion.Major -lt 6) 
-    {
-        # For PowerShell versions less than 6, set to UTF8
-        [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-    } 
-    else 
-    {
-        # For PowerShell 6 and above, set to UTF8 without BOM
-        [System.Text.Encoding]::UTF8NoBOM = New-Object System.Text.UTF8Encoding($false)
-        [Console]::OutputEncoding = [System.Text.Encoding]::UTF8NoBOM
-    }
-}
-function Merge-OutputFiles
-{
-    param(
-        [string]$OutputDir,
-        [string]$Encoding,
-        [string]$mergedFile,
-    )
-    
-    $mergedFilePath = Join-Path -Path $OutputDir -ChildPath $mergedFile
-    
-    $allLogs = Get-ChildItem -Path $OutputDir -Filter '*.json' | ForEach-Object {
-        $content = [System.IO.File]::ReadAllText($_.FullName)
-        [System.Text.Json.JsonSerializer]::Deserialize($content, [object].GetType())
-    }
-    
-    $jsonOutput = [System.Text.Json.JsonSerializer]::Serialize($allLogs, [object].GetType(), [System.Text.Json.JsonSerializer]::GetOptions())
-    [System.IO.File]::WriteAllText($mergedFilePath, $jsonOutput, [System.Text.Encoding]::$Encoding)
-    
-    Write-Host "[INFO] All logs merged into $mergedFilePath" -ForegroundColor Green
-}
-Set-OutputFormat([alias]$format)
-{
-    'JSON'
-    'HASHTABLE'
-    ;
-
-        }
-##########################################################################
-# PR Assertions
-# Filters to assert and set default values for various parameters
-function Assert-GlobalVariables {
-    param (
-        [string]$OutputDir,
-        [string]$FileEncoding,
-        [int[]]$UserIds
-    )
-
-    if (-not [System.IO.Directory]::Exists($OutputDir)) {
-        Write-Host "Output directory does not exist, creating: $OutputDir">>null
-        [void]New-Item -ItemType Directory -Path $OutputDir -Force >>null
-    } else {
-        [void]Write-Host "Output directory already exists: $OutputDir"  >>null
-    }
-
-    if ($null -eq $FileEncoding -or $FileEncoding.Trim() -eq '') {
-        Set-OutputEncoding >> null
-    }
-
-    if ($null -eq $UserIds -or $UserIds.Count -eq 0) {
-        $UserIds >>null
-    }
-
-    # Additional checks can be added here if needed
-}
-
-<# Example usage at the start of a script:
-try {
-    Assert-GlobalVariables -OutputDir $global:OutputDir -FileEncoding $global:FileEncoding -UserIds $global:UserIds
-} catch {
-    Write-Error $_.Exception.Message
-    exit
-}#>
-
-
-
+# Invoke functions and other code here
 
 Export-ModuleMember -Function * -Alias * -Variable * -Cmdlet *
