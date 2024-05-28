@@ -17,27 +17,26 @@ Function Connect-AzureAZ
     versionCheck
     Connect-AzAccount > $null
 }
-##########################################################################
-# PR 1
+
 Function Connect-ExtractorSuite([bool]$Application = $false, [bool]$DeviceCode = $false, [bool]$Delegate = $false)
 {
     versionCheck
 
-    if ($Application -eq $true)
+    if ($Application)
     {
         $appID = "$env:AppId"
         $appSecret = "$env:AppSecret"
         $appThumbprint = "$env:AppThumbprint"
         $tenantID = "$env:TenantId"
 
-        Get-Token -scope 'https://graph.microsoft.com/.default'
+        $token = Get-Token -scope 'https://graph.microsoft.com/.default' -appID $appID -appSecret $appSecret -tenantID $tenantID
         Check-Token -token $token
     }
-    elseif ($DeviceCode -eq $true)
+    elseif ($DeviceCode)
     {
         Connect-DeviceCode
     }
-    elseif ($Delegate -eq $true)
+    elseif ($Delegate)
     {
         $delegate_scopes = @('AuditLogsQuery.Read.All', 'UserAuthenticationMethod.Read.All', 'User.Read.All', 'Mail.ReadBasic.All', 'Mail.ReadWrite', 'Mail.Read', 'Mail.ReadBasic', 'Policy.Read.All', 'Directory.Read.All')
 
@@ -49,7 +48,7 @@ Function Connect-ExtractorSuite([bool]$Application = $false, [bool]$DeviceCode =
     }
 }
 
-Function Get-Token($scope = ('https://graph.microsoft.com/.default', 'https://outlook.office365.com/.default'))
+Function Get-Token($scope, [string]$appID, [string]$appSecret, [string]$tenantID)
 {
     $body = @{
         grant_type    = 'client_credentials'
@@ -64,6 +63,7 @@ Function Get-Token($scope = ('https://graph.microsoft.com/.default', 'https://ou
     $token = $res.access_token
     return $token
 }
+
 Function Check-Token($token)
 {
     try
@@ -88,6 +88,7 @@ Function Check-Token($token)
         return $false
     }
 }
+
 function Connect-DeviceCode
 {
     [CmdletBinding()]
@@ -101,7 +102,6 @@ function Connect-DeviceCode
         [ValidateSet('Outlook', 'MSTeams', 'Graph', 'AzureCoreManagement', 'AzureManagement', 'MSGraph', 'DODMSGraph', 'Custom', 'Substrate')]
         [String[]]$Client = 'MSGraph'
     )
-
 
     $body = @{
         'client_id' = $ClientID
@@ -167,9 +167,6 @@ function Connect-DeviceCode
     }
 }
 
-##########################################################################
-# PR 2
-
 Function Connect-AquisitonGraph
 {
     $GraphScopes = (
@@ -217,7 +214,6 @@ Function Connect-AquisitonExo
     Connect-ExchangeOnline @EXOParams > Out-Null
 }
 
-
 function Get-AquisitionServicePrincipalParams
 {
     <#
@@ -258,16 +254,5 @@ function Get-AquisitionServicePrincipalParams
 
 # Authentications parameters use below
 #$SPparams = 'AppID', 'CertificateThumbprint', 'Organization'
-
-##########################################################################
-# PR 3
-
-
-function Get-GraphApiToken {
-            <# Implementation details for obtaining an access token for Microsoft Graph API #>
-            # This would involve registering an app in Azure AD, acquiring client credentials, and then getting a token
-            # For brevity, the implementation details are omitted
-        }
-
 
 Export-ModuleMember -Function '*' -Cmdlet '*' -Alias '*' -Variable '*'
