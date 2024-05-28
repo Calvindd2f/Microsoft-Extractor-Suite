@@ -8,9 +8,9 @@ function Get-ADSignInLogs {
         [Parameter(Mandatory=$false)]
         [datetime]$EndDate = Get-Date,
         [Parameter(Mandatory=$false)]
-        [string]$OutputDirectory = "$((Get-Location).Path)\Output\",
+        [string[]]$UserIds,
         [Parameter(Mandatory=$false)]
-        [string]$UserIds,
+        [string]$OutputDirectory = Join-Path -Path (Get-Location).Path -ChildPath "Output\",
         [Parameter(Mandatory=$false)]
         [string]$Encoding = 'UTF8',
         [Parameter(Mandatory=$false)]
@@ -22,40 +22,29 @@ function Get-ADSignInLogs {
     $requiredScopes = @('AuditLog.Read.All', 'Directory.Read.All')
     EnsureScopes $requiredScopes
 
-    $baseUri = 'https://graph.microsoft.com/v1.0/auditLogs/signIns?'
-    $queryParameters = @()
-    if ($StartDate) { $queryParameters += "`$filter=activityDateTime ge $($StartDate.ToString('yyyy-MM-ddTHH:mm:ss'))" }
-    if ($EndDate) { $queryParameters += "activityDateTime le $($EndDate.ToString('yyyy-MM-ddTHH:mm:ss'))" }
-    if ($UserIds) { $queryParameters += " and initiatedBy/user/id eq $UserIds" }
-    $filterQuery = $queryParameters -join ' and '
-    $apiUrl = "$baseUri$filterQuery"
+    $apiUrl = 'https://graph.microsoft.com/v1.0/auditLogs/signIns?'
+    $queryParameters = @{}
+    if ($StartDate) { $queryParameters['$filter'] = "activityDateTime ge $($StartDate.ToString('yyyy-MM-ddTHH:mm:ss'))" }
+    if ($EndDate) { $queryParameters['$filter'] += " and activityDateTime le $($EndDate.ToString('yyyy-MM-ddTHH:mm:ss'))" }
+    if ($UserIds) { $queryParameters['$filter'] += " and initiatedBy/user/id eq $($UserIds -join ' or ')" }
 
     try {
-        Do {
-            $response = Invoke-MgGraphRequest -Method Get -Uri $baseUri -ContentType 'application/json'
-            $logs = $response
-            $filePath = "ADSignInLogsGraph.json"
-            $logs.Values | ConvertTo-Json -Depth 100 | Out-File -FilePath $filePath -Encoding utf8BOM
-            Write-Host "[INFO] Sign-in logs written to $filePath" -ForegroundColor Green
-            $baseUri = $response.'@odata.nextLink'  # Update the URL to the nextLink for pagination
-            [System.GC]::Collect()
-            [System.GC]::WaitForPendingFinalizers()
-        } While ($response.'@odata.nextLink')
+        $logs = Invoke-GraphRequest -Method Get -Uri $apiUrl -QueryParameters $queryParameters
+        $filePath = "ADSignInLogsGraph_$(Get-Date -Format yyyy-MM-dd_HH-mm-ss).json"
+        $logs | ConvertTo-Json -Depth 100 | Out-File -FilePath $filePath -Encoding utf8BOM -Force
+        Write-Host "[INFO] Sign-in logs written to $filePath" -ForegroundColor Green
     }
     catch {
         Write-Error "Error fetching data: $_"
     }
     finally {
-        Remove-Variable response -ErrorAction Ignore
         Remove-Variable logs -ErrorAction Ignore
-        [System.GC]::Collect()
-        [System.GC]::WaitForPendingFinalizers()
     }
 
     if ($MergeOutput) {
         try {
             Write-Host '[INFO] Merging output files...' -ForegroundColor Green
-            $mergedFile = "ADSignInLogsGraph-Combined.json"
+            $mergedFile = "ADSignInLogsGraph-Combined_$(Get-Date -Format yyyy-MM-dd_HH-mm-ss).json"
             Merge-OutputFiles -OutputDirectory $OutputDirectory -Encoding $Encoding -MergedFile $mergedFile
         }
         catch {
@@ -75,9 +64,9 @@ function Get-ADAuditLogsGraph {
         [Parameter(Mandatory=$false)]
         [datetime]$EndDate = (Get-Date),
         [Parameter(Mandatory=$false)]
-        [string]$OutputDirectory = Join-Path -Path (Get-Location).Path -ChildPath "Output\",
+        [string[]]$UserIds,
         [Parameter(Mandatory=$false)]
-        [string]$UserIds,
+        [string]$OutputDirectory = Join-Path -Path (Get-Location).Path -ChildPath "Output\",
         [Parameter(Mandatory=$false)]
         [string]$Encoding = 'UTF8'
     )
@@ -85,35 +74,54 @@ function Get-ADAuditLogsGraph {
     $requiredScopes = @('AuditLog.Read.All', 'Directory.Read.All')
     EnsureScopes $requiredScopes
 
-    $baseUri = 'https://graph.microsoft.com/v1.0/auditLogs/directoryAudits?'
-    $queryParameters = @()
-    if ($StartDate) { $queryParameters += "`$filter=activityDateTime ge $($StartDate.ToString('yyyy-MM-ddTHH:mm:ss'))" }
-    if ($EndDate) { $queryParameters += "activityDateTime le $($EndDate.ToString('yyyy-MM-ddTHH:mm:ss'))" }
-    if ($UserIds) { $queryParameters += " and initiatedBy/user/id eq $UserIds" }
-    $filterQuery = $queryParameters -join ' and '
-    $apiUrl = "$baseUri$filterQuery"
+    $apiUrl = 'https://graph.microsoft.com/v1.0/auditLogs/directoryAudits?'
+    $queryParameters = @{}
+    if ($StartDate) { $queryParameters['$filter'] = "activityDateTime ge $($StartDate.ToString('yyyy-MM-ddTHH:mm:ss'))" }
+    if ($EndDate) { $queryParameters['$filter'] += " and activityDateTime le $($EndDate.ToString('yyyy-MM-ddTHH:mm-ss'))" }
+    if ($UserIds) { $queryParameters['$filter'] += " and initiatedBy/user/id eq $($UserIds -join ' or ')" }
 
     try {
-        Do {
-            $response = Invoke-MgGraphRequest -Method Get -Uri $baseUri -ContentType 'application/json'
-            $logs = $response
-            $filePath = "AuditlogsGraph.json"
-            $logs.Values | ConvertTo-Json -Depth 100 | Out-File -FilePath $filePath -Encoding utf8BOM
-            Write-Host "[INFO] Audit logs written to $filePath" -ForegroundColor Green
-            $baseUri = $response.'@odata.nextLink'  # Update the URL to the nextLink for pagination
-            [System.GC]::Collect()
-            [System.GC]::WaitForPendingFinalizers()
-        } While ($response.'@odata.nextLink')
+        $logs = Invoke-GraphRequest -Method Get -Uri $apiUrl -QueryParameters $queryParameters
+        $filePath = "AuditlogsGraph_$(Get-Date -Format yyyy-MM-dd_HH-mm-ss).json"
+        $logs | ConvertTo-Json -Depth 100 | Out-File -FilePath $filePath -Encoding utf8BOM -Force
+        Write-Host "[INFO] Audit logs written to $filePath" -ForegroundColor Green
     }
     catch {
         Write-Error "Error fetching data: $_"
     }
     finally {
-        Remove-Variable response -ErrorAction Ignore
         Remove-Variable logs -ErrorAction Ignore
-        [System.GC]::Collect()
-        [System.GC]::WaitForPendingFinalizers()
     }
+}
+
+function Invoke-GraphRequest {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$Method,
+        [Parameter(Mandatory=$true)]
+        [string]$Uri,
+        [Parameter(Mandatory=$false)]
+        [hashtable]$QueryParameters
+    )
+
+    $headers = @{
+        'Authorization' = 'Bearer ' + (Get-MgAccessToken).AccessToken
+        'ConsistencyLevel' = 'eventual'
+    }
+
+    if ($QueryParameters) {
+        $Uri += '?' + ($QueryParameters | foreach { "$($_.Key)=$($_.Value)" } | join '&')
+    }
+
+    try {
+        $response = Invoke-RestMethod -Method $Method -Uri $Uri -Headers $headers -ContentType 'application/json'
+    }
+    catch {
+        throw $_.Exception
+    }
+
+    return $response
 }
 
 function EnsureScopes($requiredScopes) {
@@ -155,6 +163,6 @@ function Merge-OutputFiles {
         $mergedContent += $content
     }
 
-    $mergedContent | Out-File -FilePath $MergedFile -Encoding $Encoding
+    $mergedContent | Out-File -FilePath $MergedFile -Encoding $Encoding -Force
     Write-Host "[INFO] Merged output files to: $MergedFile" -ForegroundColor Green
 }
