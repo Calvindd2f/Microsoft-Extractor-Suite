@@ -1,24 +1,48 @@
 using namespace System.Net
-. "$PSScriptRoot\Microsoft-Extractor-Suite.psm1";
+using namespace System.Collections.Generic
+
+# Dot sourcing the required scripts
+. "$PSScriptRoot\Microsoft-Extractor-Suite.psm1"
 . "$PSScriptRoot\Scripts\*.ps1"
 
+function Invoke-Aquisition {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory=$true)]
+        [string]$user,
 
-function Invoke-Aquisition([string]$user, [string]$OutputDir, [string]$Encoding)
-{
-	$jobs=@();
+        [Parameter(Mandatory=$true)]
+        [string]$OutputDir,
+
+        [Parameter(Mandatory=$true)]
+        [string]$Encoding
+    )
+
+    $jobs = @()
+
+    # Creating a custom object
+    $response = [PSCustomObject]@{
+        Body = "The name passed was [$($global:Name)] with value of [$($global:Value)]"
+    }
+
+    # Setting the query parameters as global variables
+    $global:Name = $Request.Query.Get("Name")
+    $global:Value = $Request.Query.Get("Value")
 }
 
-
-
-[pscustomobject]@{
-	Name = 'thing1'
-	Value = 'value1'
+# Creating a custom object
+[PSCustomObject]@{
+    Name = 'thing1'
+    Value = 'value1'
 }
 
+# Displaying the query parameters
 $Request.Query.GetEnumerator() | ForEach-Object {
-	New-Variable -Name $_.Key -Value $_.Value
+    Write-Output "Key: $($_.Key), Value: $($_.Value)"
 }
 
-$response = @{
-	Body = "The name passed was [$Name] with value of [$Value]
-}
+# Calling the function
+Invoke-Aquisition -user "testUser" -OutputDir "C:\Output" -Encoding "UTF-8"
+
+# Displaying the response
+Write-Output $response.Body
