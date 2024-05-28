@@ -1,61 +1,69 @@
-Azure Sign-in Logs via Graph API
-=======
-Use **Get-ADSignInLogsGraph** to collect the contents of the Azure Active Directory sign-in log.
+# Azure Active Directory Sign-in Logs via Graph API
 
-.. note::
+function Get-ADSignInLogsGraph {
+    [CmdletBinding(SupportsShouldProcess=$true)]
+    param (
+        [Parameter(Mandatory=$false)]
+        [DateTime]$startDate = (Get-Date).AddDays(-30).Date,
 
-    This GraphAPI functionality is currently in beta. If you encounter any issues or have suggestions for improvements please let us know.
+        [Parameter(Mandatory=$false)]
+        [DateTime]$endDate = (Get-Date).Date,
 
-Usage
-""""""""""""""""""""""""""
-Running the script without any parameters will gather the Azure Active Directory sign-in log for the last 30 days:
-::
+        [Parameter(Mandatory=$false)]
+        [string]$OutputDir = "AzureAD",
 
-   Get-ADSignInLogsGraph
+        [Parameter(Mandatory=$false)]
+        [string]$Encoding = "utf8",
 
-Get the Azure Active Directory Audit Log before 2023-04-12:
-::
+        [Parameter(Mandatory=$false)]
+        [Microsoft.Graph.AuthProvider]$AuthProvider,
 
-   Get-ADSignInLogsGraph -endDate 2023-04-12
+        [Parameter(Mandatory=$false)]
+        [string]$UserIds,
 
-Get the Azure Active Directory Audit Log after 2023-04-12:
-::
+        [Parameter(Mandatory=$false)]
+        [switch]$MergeOutput
+    )
 
-   Get-ADSignInLogsGraph -startDate 2023-04-12
+    # Check if the start date is before the end date
+    if ($startDate -gt $endDate) {
+        Write-Error "Start date cannot be later than end date."
+        return
+    }
 
-Parameters
-""""""""""""""""""""""""""
--startDate (optional)
-    - startDate is the parameter specifying the start date of the date range. The time format supported is limited to yyyy-mm-dd only.
+    # Create the output directory if it doesn't exist
+    if (!(Test-Path $OutputDir)) {
+        New-Item -ItemType Directory -Force -Path $OutputDir
+    }
 
--endDate (optional)
-    - endDate is the parameter specifying the end date of the date range. The time format supported is limited to yyyy-mm-dd only.
+    # Get the sign-in logs from the Graph API
+    try {
+        $signInLogs = Get-MgUserSignInLogs -Top 999 -Filter "signInTime ge $($startDate.ToString("s")) and signInTime le $($endDate.ToString("s"))" -Property "id,userId,signInTime,application,ipAddress,clientAppUsed,deviceDetail,location,status,additionalDetails" -AuthProvider $AuthProvider
+    } catch {
+        Write-Error "Failed to retrieve sign-in logs: $_"
+        return
+    }
 
--OutputDir (optional)
-    - OutputDir is the parameter specifying the output directory.
-    - Default: AzureAD
+    # Convert the sign-in logs to CSV format
+    $csvContent = $signInLogs | ConvertTo-Csv -NoTypeInformation | Select-Object -Skip 1
+    $csvContent = $csvContent -join [Environment]::NewLine
 
--Encoding (optional)
-    - Encoding is the parameter specifying the encoding of the JSON output file.
-    - Default: UTF8
+    # Save the CSV content to a file
+    $outputFile = Join-Path $OutputDir "SignInLogsGraph_$(Get-Date -Format yyyy-MM-dd).csv"
+    $csvContent | Out-File -Encoding $Encoding -FilePath $outputFile
 
--Application (optional)
-    - Application is the parameter specifying App-only access (access without a user) for authentication and authorization.
-    - Default: Delegated access (access on behalf a user)
+    # Merge the CSV outputs if specified
+    if ($MergeOutput) {
+        $mergedContent = Import-Csv -Path (Get-ChildItem -Path $OutputDir -Filter "SignInLogsGraph*.csv").FullName | Sort-Object signInTime -Unique
+        $mergedContent | Export-Csv -Path (Join-Path $OutputDir "SignInLogsGraph_Merged.csv") -NoTypeInformation -Encoding $Encoding
+    }
 
--MergeOutput (optional)
-    - MergeOutput is the parameter specifying if you wish to merge CSV outputs to a single file.
-    - Default: No
+    Write-Host "Sign-in logs saved to $outputFile"
+}
 
--UserIds (optional)
-    - UserIds is the UserIds parameter filtering the log entries by the account of the user who performed the actions.
+# Connect to the Microsoft Graph API
+$AuthProvider = Get-MgAuthProvider -ClientId "your-client-id" -ClientSecret "your-client-secret" -TenantId "your-tenant-id"
+Connect-MgGraph -AuthProvider $AuthProvider -Scopes "AuditLog.Read.All", "Directory.Read.All"
 
-Output
-""""""""""""""""""""""""""
-The output will be saved to the 'AzureAD' directory within the 'Output' directory, with the file name 'SignInLogsGraph.json'. Each time an acquisition is performed, the output JSON file will be overwritten. Therefore, if you perform multiple acquisitions, the JSON file will only contain the results from the latest acquisition.
-
-Permissions
-""""""""""""""""""""""""""
-- Before utilizing this function, it is essential to ensure that the appropriate permissions have been granted. This function relies on the Microsoft Graph API and requires an application or user to authenticate with specific scopes that grant the necessary access levels.
-- Make sure to connect using at least one of the following permissions: "AuditLog.Read.All", "Directory.Read.All".
-- For instance, if you choose to use User.Read.All, your command would look like this: Connect-MgGraph -Scopes "Directory.Read.All"
+# Call the function to retrieve the sign-in logs
+Get-ADSignInLogsGraph -startDate "2023-04-01" -endDate "2023-04-12" -OutputDir "C:\Temp" -MergeOutput
