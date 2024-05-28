@@ -197,21 +197,7 @@ Function Merge-AdminCsvFiles {
     }
 }
 
-Function Get-UserDetails($token)
-{
-    #Your Get-UserDetails function code here
-}
-
-Function ExecuteQuery($url, $token)
-{
-    #Your ExecuteQuery function code here
-}
-
-Function MainActivity(){
-    #Your MainActivity function code here
-}
-
-Function ExecuteActivity()
-{
-    return MainActivity;
-	}
+#Function Get-UserDetails($token)
+#{
+#    #Placeholder
+#}

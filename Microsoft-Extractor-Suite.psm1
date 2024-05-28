@@ -250,8 +250,7 @@ Function Set-OutputFormat([alias]$format)
         => $PSBoundParameters['format']
 }
 ##########################################################################
-# PR Assertions
-# Filters to assert and set default values for various parameters
+
 function Assert-GlobalVariables {
     param (
         [string]$OutputDir,
@@ -277,13 +276,7 @@ function Assert-GlobalVariables {
     # Additional checks can be added here if needed
 }
 
-<# Example usage at the start of a script:
-try {
-    Assert-GlobalVariables -OutputDir $global:OutputDir -FileEncoding $global:FileEncoding -UserIds $global:UserIds
-} catch {
-    Write-Error $_.Exception.Message
-    exit
-}#>
+
 
 
 

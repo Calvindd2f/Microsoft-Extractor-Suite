@@ -1,4 +1,4 @@
-using module "$PSScriptRoot\Microsoft-Extractor-Suite.psm1";
+. "$PSScriptRoot\Microsoft-Extractor-Suite.psm1";
 
 Function Connect-M365
 {
