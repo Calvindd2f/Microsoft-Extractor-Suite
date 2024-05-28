@@ -2,80 +2,12 @@ using module  "$PSScriptRoot\Microsoft-Extractor-Suite.psm1";
 
 Function Get-UALGraph 
 {
-    <#    .SYNOPSIS
-    Gets all the unified audit log entries.
-
-    .DESCRIPTION
-    Makes it possible to extract all unified audit data out of a Microsoft 365 environment.
-	The output will be written to: Output\UnifiedAuditLog\
-
-	.PARAMETER UserIds
-    UserIds is the UserIds parameter filtering the log entries by the account of the user who performed the actions.
-
-	.PARAMETER StartDate
-    startDate is the parameter specifying the start date of the date range.
-	Default: today -90 days
-
-	.PARAMETER EndDate
-    endDate is the parameter specifying the end date of the date range.
-	Default: Now
-
-	.PARAMETER OutputDir
-	OutputDir is the parameter specifying the output directory.
-	Default: Output\UnifiedAuditLog
-
-	.PARAMETER Encoding
-    Encoding is the parameter specifying the encoding of the CSV/JSON output file.
-	Default: UTF8
-
-    .PARAMETER Application
-    Application is the parameter specifying App-only access (access without a user) for authentication and authorization.
-    Default: Delegated access (access on behalf a user)
-
-    .PARAMETER RecordType
-    The RecordType parameter filters the log entries by record type.
-	Options are: ExchangeItem, ExchangeAdmin, etc. A total of 236 RecordTypes are supported.
-
-    .PARAMETER Keyword
-    The Keyword parameter allows you to filter the Unified Audit Log for specific keywords.
-
-    .PARAMETER Service
-    The Service parameter filters the Unified Audit Log based on the specific services.
-    Options are: Exchange,Skype,Sharepoint etc.
-
-    .PARAMETER Operations
-    The Operations parameter filters the log entries by operation or activity type. Usage: -Operations UserLoggedIn,MailItemsAccessed
-	Options are: New-MailboxRule, MailItemsAccessed, etc.
-
-    .PARAMETER IPAddress
-    The IP address parameter is used to filter the logs by specifying the desired IP address.
-
-	.PARAMETER SearchName
-    Specifies the name of the search query. This parameter is required.
-
-    .EXAMPLE
-    Get-UALGraph -SearchName Test
-	Gets all the unified audit log entries.
-
-	.EXAMPLE
-	Get-UALGraph -SearchName Test -UserIds Test@invictus-ir.com
-	Gets all the unified audit log entries for the user Test@invictus-ir.com.
-
-	.EXAMPLE
-	Get-UALGraph -SearchName Scan1GraphAPI -startDate "2024-03-10T09:28:56Z" -endDate "2024-03-20T09:28:56Z" -Service Exchange
-    Retrieves audit log data for the specified time rangeMarch 10, 2024 to March 20, 2024 and filters the results to include only events related to the Exchange service.
-
-	.EXAMPLE
-	Get-UALGraph -searchName scan1 -startDate "2024-03-01" -endDate "2024-03-10" -IPAddress 182.74.242.26
-	Retrieve audit log data for the specified time rangeMarch 1, 2024 to March 10, 2024 and filter the results to include only entries associated with the IP address 182.74.242.26.
-
-    #>
     [CmdletBinding()]
     param(
 		[Parameter(Mandatory=$true)]$searchName,
         [switch]$Application,
-        [string]$OutputDir,
-        [string]$Encoding,
+        [string]$OutputDir = "Output\UnifiedAuditLog",
+        [string]$Encoding = "UTF8",
         [string]$startDate,
 		[string]$endDate,
         [string[]]$RecordType = @(),
@@ -87,29 +19,30 @@ Function Get-UALGraph
     )
 
     if (!($Application.IsPresent)) {
-        Connect-MgGraph -Scopes AuditLogsQuery.Read.All -NoWelcome
+        try {
+            Connect-MgGraph -Scopes AuditLogsQuery.Read.All -NoWelcome
+        }
+        catch {
+            Write-logFile -Message "[WARNING] You must call Connect-MgGraph -Scopes 'AuditLogsQuery.Read.All' before running this script" -Color "Red"
+            break
+        }
     }
 
     try {
         $areYouConnected = Get-MgBetaSecurityAuditLogQuery -ErrorAction stop
     }
     catch {
-        Write-logFile -Message "[WARNING] You must call Connect-MgGraph -Scopes 'AuditLogsQuery.Read.All' before running this script" -Color "Red"
+        Write-logFile -Message "[ERROR] Failed to connect to Microsoft Graph API. $_" -Color "Red"
         break
     }
 
-    #Assert-OutputDir
-    #Assert-Encoding
+    if (-not (Test-Path $OutputDir)) {
+        New-Item -ItemType Directory -Force -Path $OutputDir
+    }
 
     $script:startTime = Get-Date
 
-    StartDate
-    EndDate
-
-    write-logFile -Message "[INFO] Running Get-UALGraph" -Color "Green"
-
-	$params =
-	@{
+    $params = @{
         "@odata.type" = "#microsoft.graph.security.auditLogQuery"
         displayName = $searchName
         filterStartDateTime = $script:startDate
@@ -126,75 +59,17 @@ Function Get-UALGraph
     }
 
     $queryString = @{
-        "auditLogQueryId" = $startScan.Id
+        "auditLogQueryId" = (Invoke-MgGraphRequest -Uri "beta/security/auditLogs/queries" -Method POST -Body $params | Select-Object -ExpandProperty Id)
     } | ConvertTo-Json -Compress
 
-    do {
-        try {
-            $auditLogQuery = Invoke-MgGraphRequest -Method GET -Uri "beta/security/auditLogs/queries/$($startScan.Id)" -ErrorAction Stop
-            $scanId = $startScan.Id
-        }
-        catch {
-            write-logFile -Message "[ERROR] Failed to get Unified Audit Log search status. $_" -Color "Red"
-            break
-        }
+    $startScan = Invoke-MgGraphRequest -Method GET -Uri "beta/security/auditLogs/queries/$($queryString.auditLogQueryId)"
 
-        if ($auditLogQuery.Status -eq "running") {
-            write-logFile -Message "[INFO] Unified Audit Log search is still running. Waiting..."
-            Start-Sleep -Seconds 10
-        }
-        elseif ($auditLogQuery.Status -eq "failed") {
-            write-logFile -Message "[INFO] Unified Audit Log search failed." -Color "Red"
-            break
-        }
-        elseif ($auditLogQuery.Status -eq "succeeded") {
-            write-logFile -Message "[INFO] Unified Audit Log search succeeded." -Color "Green"
-
-            $continueQuery = $true
-            $pageNumber = 1
-            $nextLink = "beta/security/auditLogs/queries/$($startScan.Id)/results?`$top=1000"
-
-            while ($continueQuery) {
-                try {
-                    $response = Invoke-MgGraphRequest -Method GET -Uri $nextLink -ErrorAction Stop
-                }
-                catch {
-                    write-logFile -Message "[ERROR] Failed to get Unified Audit Log results. $_" -Color "Red"
-                    break
-                }
-
-                $stream = [IO.File]::OpenWrite("$OutputDir\$($date)-$searchName-UnifiedAuditLog.json")
-                $streamWriter = New-Object System.IO.StreamWriter($stream)
-                $jsonWriter = [System.Text.Json.JsonWriter]::Create($streamWriter)
-                foreach ($entry in $response.Value) {
-                    $jsonWriter.WriteStartObject()
-                    foreach ($property in $entry.PSObject.Properties) {
-                        $jsonWriter.WritePropertyName($property.Name)
-                        $jsonWriter.WriteValue($property.Value)
-                    }
-                    $jsonWriter.WriteEndObject()
-                    $jsonWriter.Flush()
-                }
-                $jsonWriter.Dispose()
-                $streamWriter.Dispose()
-                $stream.Dispose()
-
-                if (-not [string]::IsNullOrEmpty($response.'@odata.nextLink')) {
-                    $pageNumber++
-                    $nextLink = $response.'@odata.nextLink' -replace '\$skip=\d+', "`$skip=$($pageNumber * 1000)"
-                }
-                else {
-                    $continueQuery = $false
-                }
-            }
-
-            Clear-Variable -Name response, nextLink, pageNumber, continueQuery
-        }
-        else {
-            write-logFile -Message "[INFO] Unified Audit Log search is still running. Waiting..."
-            Start-Sleep -Seconds 10
-        }
-    } until ($auditLogQuery.Status -eq "succeeded")
+    if ($startScan.Status -eq "succeeded") {
+        DownloadUAL -scanId $queryString.auditLogQueryId -searchName $searchName -Encoding $Encoding -OutputDir $OutputDir
+    }
+    else {
+        Write-logFile -Message "[ERROR] Failed to start Unified Audit Log search. $_" -Color "Red"
+    }
 }
 
 Function DownloadUAL($scanId, $searchName, $Encoding, $OutputDir) {
