@@ -10,7 +10,7 @@ Function Write-Log([string]$log,[switch]$show){
     [string]$logtime = $((Get-Date -Format "[dd/MM/yyyy HH:mm:ss zz] |").ToString())
     foreach($line in $($log -split "`n")){
         if($VerbosePreference -eq 'Continue' -or $show -eq $true){Write-Host "$logtime $line"}
-      Add-Content -Path "C:\Windows\Temp\pia_agent.log" -Value "$logtime $line"
+      Add-Content -Path "Log.log" -Value "$logtime $line"
     }
 }
 
