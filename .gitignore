@@ -71,4 +71,4 @@ cover/
 *.mo
 *.pot
 
-/Scripts/Ignore/*
+/Scripts/.temp/*
