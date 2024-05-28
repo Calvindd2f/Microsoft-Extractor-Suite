@@ -9,7 +9,7 @@ IF([Net.SecurityProtocolType]::Tls13) {[Net.ServicePointManager]::SecurityProtoc
 Function Write-Log([string]$log,[switch]$show){
     [string]$logtime = $((Get-Date -Format "[dd/MM/yyyy HH:mm:ss zz] |").ToString())
     foreach($line in $($log -split "`n")){
-        if($VerbosePreference -eq 'Continue' -or $show -eq $true){Write-Host "$logtime $line"}
+        if($VerbosePreference -eq 'Continue' -or $show -eq $true){[console]::WriteLine( "$logtime $line"}
       Add-Content -Path "Log.log" -Value "$logtime $line"
     }
 }
@@ -56,7 +56,7 @@ Function StartDate
     $Global:StartDate = [datetime]::Now.ToUniversalTime().AddDays($daysToAdd)
     
     write-LogFilew -Message $message -Color $color
-    return $Global:StartDate;
+    return @(($Global:StartDate).ToString('yyyy-MM-ddTHH:mm:ssK'),)
 }
 function EndDate
 {
@@ -83,17 +83,17 @@ function EndDate
     $Global:EndDate = $endDate
     return $Global:EndDate;
 }
-Function StdDateTime
+Function logtime
 {
-    [string]$logtime = $((Get-Date -Format "[dd/MM/yyyy HH:mm:ss zz] |").ToString())
+        [string]$logtime = $((Get-Date -Format '[yyyy-MM-dd HH:mm:ssK] |').ToString())
     #yyyy-MM-ddTHH:mm:ssK
-    (get-date).GetDateTimeFormats()
+    #(get-date).GetDateTimeFormats()
     #2022-07-14T12:30:00Z should be used for filter queries.
     # $logtime should be used for messages
 }
 
 function Write-LogFile([string]$message, [string]$severity, [string]$logFile = 'Output\LogFile.txt') {
-    $logEntry = [DateTime]::Now.ToString() + ': ' + $severity.ToUpper() + ' ' + $message
+        $logEntry = [string]$logtime + $severity.ToUpper() + ' ' + $message
     try {
         [System.IO.File]::AppendAllText($logFile, $logEntry + [Environment]::NewLine)
     } catch {
@@ -156,7 +156,7 @@ function Write-Log {
 
     if (-not $global:NoLog) {
         try {
-            [System.IO.File]::AppendAllText($Log, (Get-Date -Format 'yyyy-MM-dd HH:mm:ss.fff') + ' ' + $message + [Environment]::NewLine)
+            [System.IO.File]::AppendAllText($Log, (Get-Date -Format 'Export-ModuleMember -Function StartDate, EndDate') + ' ' + $message + [Environment]::NewLine)
         } catch {
             # Handle exception
         }
@@ -239,15 +239,16 @@ function Merge-OutputFiles
     $jsonOutput = [System.Text.Json.JsonSerializer]::Serialize($allLogs, [object].GetType(), [System.Text.Json.JsonSerializer]::GetOptions())
     [System.IO.File]::WriteAllText($mergedFilePath, $jsonOutput, [System.Text.Encoding]::$Encoding)
     
-    Write-Host "[INFO] All logs merged into $mergedFilePath" -ForegroundColor Green
+    [console]::WriteLine("[INFO] All logs merged into $mergedFilePath")
 }
-Set-OutputFormat([alias]$format)
+Function Set-OutputFormat([alias]$format)
 {
     'JSON'
     'HASHTABLE'
     ;
 
-        }
+        => $PSBoundParameters['format']
+}
 ##########################################################################
 # PR Assertions
 # Filters to assert and set default values for various parameters
@@ -259,10 +260,10 @@ function Assert-GlobalVariables {
     )
 
     if (-not [System.IO.Directory]::Exists($OutputDir)) {
-        Write-Host "Output directory does not exist, creating: $OutputDir">>null
-        [void]New-Item -ItemType Directory -Path $OutputDir -Force >>null
+        [console]::WriteLine( "Output directory does not exist, creating: $OutputDir")>>null
+        [void](New-Item -ItemType Directory -Path $OutputDir -Force >>null)
     } else {
-        [void]Write-Host "Output directory already exists: $OutputDir"  >>null
+        [void]([console]::WriteLine( "Output directory already exists: $OutputDir")  >>null)
     }
 
     if ($null -eq $FileEncoding -or $FileEncoding.Trim() -eq '') {
