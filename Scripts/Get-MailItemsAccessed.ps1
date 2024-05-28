@@ -4,14 +4,32 @@ function Test-HasRequiredPermissions {
     param ()
 
     try {
-        Get-AdminAuditLogConfig -ErrorAction Stop
+        Get-EXOAdminAuditLog -ErrorAction Stop
     }
     catch {
-        Write-Error "You must call Connect-M365 before running this script"
+        Write-Error "You must call Connect-EXO before running this script"
         return $false
     }
 
     return $true
+}
+
+# Connect to Exchange Online
+function Connect-EXO {
+    $UserCredential = Get-Credential
+    $Session = New-PSSession -ConfigurationName Microsoft.Exchange -ConnectionUri "https://outlook.office365.com/powershell-liveid/" -Credential $UserCredential -Authentication Basic -AllowRedirection
+    Import-PSSession $Session
+}
+
+# Get the user's email address
+function Get-UserEmail {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory=$true)]
+        [string]$UserId
+    )
+
+    Get-EXOMailbox -Identity $UserId | Select-Object -ExpandProperty PrimarySmtpAddress
 }
 
 # Get the sessions
@@ -54,7 +72,7 @@ function Get-Sessions {
         $params.FreeText = $IP
     }
 
-    $results = Search-UnifiedAuditLog @params
+    $results = Search-EXOUnifiedAuditLog @params
 
     if ($UserIds) {
         $results = $results | Where-Object { $_.AuditData.UserId -eq $UserIds }
@@ -124,7 +142,7 @@ function Get-MessageIDs {
         $params.FreeText = $IP
     }
 
-    $results = Search-UnifiedAuditLog @params
+    $results = Search-EXOUnifiedAuditLog @params
 
     if ($Sessions) {
         $results = $results | Where-Object { $_.AuditData.SessionId -in $Sessions }
@@ -153,8 +171,8 @@ function Get-MessageIDs {
     $results
 }
 
-# Download the emails and attachments
-function Download-Emails {
+# Download the email and attachments
+function Download-Email {
     [CmdletBinding()]
     param (
         [Parameter(Mandatory=$true)]
@@ -170,37 +188,54 @@ function Download-Emails {
         New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null
     }
 
-    $message = Get-MgUserMessage -Filter "internetMessageId eq '$MessageID'" -UserId $UserIds -ErrorAction Stop
+    $message = Get-EXOMailboxMessage -Identity $MessageID -UserIds $UserIds -ErrorAction Stop
     $attachment = $message.Attachments
 
     $filePath = Join-Path -Path $OutputDir -ChildPath "$($message.ReceivedDateTime.ToString("yyyyMMdd_HHmmss"))-$($message.Subject).msg"
-    Get-MgUserMessageContent -MessageId $message.Id -UserId $UserIds -OutFile $filePath
+    Get-EXOMailboxMessageContent -MessageId $message.Id -UserIds $UserIds -FilePath $filePath
     Write-Host "Output written to $filePath"
 
-    if ($attachment -eq "True") {
-        Write-Host "Found Attachment file!"
-        $attachment = Get-MgUserMessageAttachment -UserId $UserIds -MessageId $MessageID
-        $filename = $attachment.Name
-
-        Write-Host "Downloading attachment"
-        Write-Host "Name: $filename"
-        Write-Host "Size: $($attachment.Size)"
-
-        $base64B = ($attachment).AdditionalProperties.contentBytes
-        $decoded = [System.Convert]::FromBase64String($base64B)
-
-        $filename = $filename -replace '[\\/:*?"<>|]', '_'
-        $filePath = Join-Path -Path $OutputDir -ChildPath "$($message.ReceivedDateTime.ToString("yyyyMMdd_HHmmss"))-$filename"
-        Set-Content -Path $filePath -Value $decoded -Encoding Byte
-
-        Write-Host "File Attachment Successfully Written to $filePath"
+    if ($attachment) {
+        foreach ($att in $attachment) {
+            Download-Attachment -Attachment $att -OutputDir $OutputDir
+        }
     }
+}
+
+# Download attachment
+function Download-Attachment {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory=$true)]
+        [object]$Attachment,
+
+        [Parameter(Mandatory=$true)]
+        [string]$OutputDir
+    )
+
+    $filename = $Attachment.Name
+
+    $filePath = Join-Path -Path $OutputDir -ChildPath "$($Attachment.ReceivedDateTime.ToString("yyyyMMdd_HHmmss"))-$filename"
+    $base64B = $Attachment.Content
+    $decoded = [System.Convert]::FromBase64String($base64B)
+
+    $filename = $filename -replace '[\\/:*?"<>|]', '_'
+    $filePath = Join-Path -Path $OutputDir -ChildPath "$($Attachment.ReceivedDateTime.ToString("yyyyMMdd_HHmmss"))-$filename"
+    Set-Content -Path $filePath -Value $decoded -Encoding Byte
+
+    Write-Host "File Attachment Successfully Written to $filePath"
 }
 
 # Check if the current user has the required permissions
 if (-not (Test-HasRequiredPermissions)) {
     exit 1
 }
+
+# Connect to Exchange Online
+Connect-EXO
+
+# Get the user's email address
+$userEmail = Get-UserEmail -UserId "user1@example.com"
 
 # Get the sessions
 $sessions = Get-Sessions -StartDate "2023-01-01" -EndDate "2023-02-01" -UserIds "user1@example.com" -IP "192.168.1.1"
@@ -209,4 +244,5 @@ $sessions = Get-Sessions -StartDate "2023-01-01" -EndDate "2023-02-01" -UserIds 
 $messageIDs = Get-MessageIDs -StartDate "2023-01-01" -EndDate "2023-02-01" -Sessions $sessions.SessionId -IP "192.168.1.1"
 
 # Download the emails and attachments
-$messageIDs.MessageID | ForEach-Object { Download-Emails -MessageID $_ -UserIds "user1@example.com" }
+$messageIDs.MessageID | ForEach-Object { Download-Email -MessageID $_ -UserIds $userEmail }
+
