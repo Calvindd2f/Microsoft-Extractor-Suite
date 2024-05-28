@@ -10,16 +10,20 @@ function Get-M365EnvironmentParams {
 
     $params = @{}
 
-    switch ($M365Environment) {
+    switch ($M365Environment.ToLower()) {
         "gcchigh" {
-            $params += @{'ExchangeEnvironmentName' = "O365USGovGCCHigh";
-                          'ConnectionUri' = "https://ps.compliance.protection.office365.us/powershell-liveid";
-                          'AzureADAuthorizationEndpointUri' = "https://login.microsoftonline.us/common";}
+            $params += @{
+                'ExchangeEnvironmentName'      = 'O365USGovGCCHigh'
+                'ConnectionUri'                = 'https://ps.compliance.protection.office365.us/powershell-liveid'
+                'AzureADAuthorizationEndpointUri' = 'https://login.microsoftonline.us/common'
+            }
         }
         "dod" {
-            $params += @{'ExchangeEnvironmentName' = "O365USGovDoD";
-                          'ConnectionUri' = "https://l5.ps.compliance.protection.office365.us/powershell-liveid";
-                          'AzureADAuthorizationEndpointUri' = "https://login.microsoftonline.us/common";}
+            $params += @{
+                'ExchangeEnvironmentName'      = 'O365USGovDoD'
+                'ConnectionUri'                = 'https://l5.ps.compliance.protection.office365.us/powershell-liveid'
+                'AzureADAuthorizationEndpointUri' = 'https://login.microsoftonline.us/common'
+            }
         }
         default {
             $params += @{'ExchangeEnvironmentName' = $M365Environment}
@@ -44,4 +48,8 @@ function Connect-EXOHelper {
         $ServicePrincipalParams
     )
 
-    $EXOParams = Get-M365EnvironmentParams -M365Environment $M36
+    $EXOParams = Get-M365EnvironmentParams -M365Environment $M365Environment
+
+    # Add the rest of the Connect-ExchangeOnline cmdlet here
+    # ...
+}
