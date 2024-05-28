@@ -19,93 +19,66 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # fetch the entire repository history
 
-      - name: Microsoft-Extractor-Suite Version Number
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Set up PowerShell Core
+        uses: microsoft/setup-powershell@v1
+
+      - name: Update Module Version in Manifest
         run: |
-          #
-          # Replace Microsoft-Extractor-Suite module version in the manifest.
-          #
-          $ManifestPath = 'Microsoft-Extractor-Suite.psm1'
-          $VersionRegex = "\'\d+\.\d+\.\d+\'"
-          $PreviousVersion = ''
-          (Get-Content -Path $ManifestPath) | ForEach-Object {
-            $ModuleVersionRegex = $_ -match "ModuleVersion = $($VersionRegex)"
-            if ($ModuleVersionRegex) {
-                $_ -match $VersionRegex | Out-Null
-                $PreviousVersion = $matches[0] -replace "'", ""
-                $_ -replace $VersionRegex, "'${env:NEW_VERSION_NUMBER}'"
-            }
-            else {
-              $_
-            }
-          } | Set-Content -Path $ManifestPath
+          $manifestPath = 'Microsoft-Extractor-Suite.psm1'
+          $versionRegex = '\d+\.\d+\.\d+'
+          (Get-Content -Path $manifestPath) -replace "ModuleVersion = '${{ env.NEW_VERSION_NUMBER }}'", "ModuleVersion = '$(Get-LatestModuleVersion $manifestPath)'", (Get-Content -Path $manifestPath) | Set-Content -Path $manifestPath
 
-          #
-          # Replace Microsoft-Extractor-Suite module version version in the README
-          #
-          $READMEPath = '.\README.md'
-          $BadgeRegex = "Microsoft-Extractor-Suite-v\d+\.\d+\.\d+"
-          $ZipRegex = "Microsoft-Extractor-Suite-v\d+\-\d+\-\d+.zip"
-          $ZipVerReplace = "Microsoft-Extractor-Suite-v${env:NEW_VERSION_NUMBER}" -replace '\.', '-'
-          $ZipVerReplace = $ZipVerReplace + '.zip'
-          (Get-Content -Path $READMEPath) | ForEach-Object {
-            $BadgeVerMatch = $_ -match $BadgeRegex
-            $ZipVerMatch = $_ -match $ZipRegex
-            if ($BadgeVerMatch) {
-              $_ -replace $BadgeRegex, "Microsoft-Extractor-Suite-v${env:NEW_VERSION_NUMBER}"
-            }
-            elseif ($ZipVerMatch) {
-              $_ -replace $ZipRegex, $ZipVerReplace
-            }
-            else {
-              $_
-            }
-          } | Set-Content -Path $READMEPath
+      - name: Update Module Version in README
+        run: |
+          $readmePath = 'README.md'
+          $badgeRegex = "Microsoft-Extractor-Suite-v\d+\.\d+\.\d+"
+          $zipRegex = "Microsoft-Extractor-Suite-v\d+-\d+-\d+\.zip"
+          (Get-Content -Path $readmePath) -replace $badgeRegex, "Microsoft-Extractor-Suite-v${{ env.NEW_VERSION_NUMBER}}", (Get-Content -Path $readmePath) | Set-Content -Path $readmePath
 
-          #
-          # Create the PR body
-          #
-          $PRTemplatePath = '.\.github\pull_request_template.md'
+      - name: Create PR Body
+        run: |
+          $prTemplatePath = '`.github\pull_request_template.md'
+          $description = '<!-- Describe the "what" of your changes in detail. -->'
+          $motivation = '<!-- Why is this change required? -->'
+          $testing = '<!-- see how your change affects other areas of the code, etc. -->'
+          $removeHeader = '# <!-- Use the title to describe PR changes in the imperative mood --> #'
 
-          $Description = '<!-- Describe the "what" of your changes in detail. -->'
-          $Motivation = '<!-- Why is this change required\? -->'
-          $Testing = '<!-- see how your change affects other areas of the code, etc. -->'
-          $RemoveHeader = '# <!-- Use the title to describe PR changes in the imperative mood --> #'
+          $newDescription = "- This PR was created by a GitHub Action to bump Microsoft-Extractor-Suite's module version in the manifest and the README.`n - Please fill out the rest of the template that the Action did not cover. `n"
+          $newMotivation = "- Bump Microsoft-Extractor-Suite's module version to v${{ env.NEW_VERSION_NUMBER }} before the next release`n"
+          $newTesting = "- A human should still check if the version bumping was successful by running Microsoft-Extractor-Suite.`n"
 
-          $NewDescription = "- This PR was create by a GitHub Action to bump Microsoft-Extractor-Suite's module version in the manifest and the README.`n - Please fill out the rest of the template that the Action did not cover. `n"
-          $NewMotivation = "- Bump Microsoft-Extractor-Suite's module version to v${env:NEW_VERSION_NUMBER} before the next release`n"
-          $NewTesting = "- A human should still check if the version bumping was successful by running Microsoft-Extractor-Suite.`n"
-
-          $PRTemplateContent = (Get-Content -Path $PRTemplatePath) | ForEach-Object {
-            $DescriptionRegex = $_ -match $Description
-            $MotivationRegex = $_ -match $Motivation
-            $TestingRegex = $_ -match $Testing
-            $RemoveHeaderRegex = $_ -match $RemoveHeader # removes unneeded new line
-            if ($DescriptionRegex) {
-                  $_ -replace $Description, $NewDescription
-            }
-            elseif ($MotivationRegex) {
-                  $_ -replace $Motivation, $NewMotivation
-            }
-            elseif ($TestingRegex) {
-                $_ -replace $Testing, $NewTesting
-            }
-            elseif ($RemoveHeaderRegex) {
-              $_ -replace $RemoveHeader, ""
-            }
-            else {
-              $_ + "`n"
-            }
+          $prTemplateContent = (Get-Content -Path $prTemplatePath) | ForEach-Object {
+            if ($_ -match $description) { $_ -replace $description, $newDescription }
+            elseif ($_ -match $motivation) { $_ -replace $motivation, $newMotivation }
+            elseif ($_ -match $testing) { $_ -replace $testing, $newTesting }
+            elseif ($_ -match $removeHeader) { "" }
+            else { $_ + "`n" }
           }
 
-          # Create the PR
-          $Microsoft_Extractor_Suite_VersionBumpBranch = "Microsoft-Extractor-Suite-version-bump-${env:NEW_VERSION_NUMBER}"
-          git config --global user.email "action@github.com"
-          git config --global user.name "GitHub Action"
-          git checkout -b $Microsoft_Extractor_Suite_VersionBumpBranch
-          git add .
-          git commit -m "Update Microsoft-Extractor-Suite version to ${env:NEW_VERSION_NUMBER}"
-          git push origin $Microsoft_Extractor_Suite_BumpBranch
-          gh pr create -B main -H $Microsoft_Extractor_Suite__VersionBumpBranch --title "Bump Microsoft-Extractor-Suite module version from v$($PreviousVersion) to v${env:NEW_VERSION_NUMBER}" --body "${PRTemplateContent}" --label "version bump"
+      - name: Create Pull Request
+        uses: repo-sync/pull-request@v2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          base: main
+        env:
+          destination_ref: ${{ env.NEW_VERSION_NUMBER }}
+          title: "Bump Microsoft-Extractor-Suite module version from v$(Get-LatestModuleVersion $manifestPath) to v${{ env.NEW_VERSION_NUMBER }}"
+          body: "${{ steps.create-pr-body.outputs.body }}"
+          branch: "Microsoft-Extractor-Suite-version-bump-${{ env.NEW_VERSION_NUMBER }}"
+          commit_message: "Update Microsoft-Extractor-Suite version to ${{ env.NEW_VERSION_NUMBER }}"
+
+# Function to get the latest module version from the manifest
+function Get-LatestModuleVersion {
+  [CmdletBinding()]
+  param (
+    [Parameter(Mandatory = $true)]
+    [string]$manifestPath
+  )
+
+  $content = Get-Content -Path $manifestPath
+  $version = $content -match 'ModuleVersion = \'(\d+\.\d+\.\d+)\'' | ForEach-Object { $Matches[1] }
+  return $version
+}
