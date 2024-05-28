@@ -1,16 +1,14 @@
 # Configuration file for the Sphinx documentation builder.
 
 # -- Project information
-
-project = 'Microsoft-Extractor-Suite'
-copyright = 'Copyright (c) 2024 Invictus Incident Response'
-author = 'Joey Rentenaar & Korstiaan Stam'
+project = 'Microsoft Extractor Suite'
+copyright = 'Copyright 2024, Invictus Incident Response'
+author = 'Joey Rentenaar, Korstiaan Stam'
 
 release = '1.3.4'
 version = '1.3.4'
 
 # -- General configuration
-
 extensions = [
     'sphinx.ext.duration',
     'sphinx.ext.doctest',
@@ -28,8 +26,14 @@ intersphinx_disabled_domains = ['std']
 templates_path = ['_templates']
 
 # -- Options for HTML output
-
 html_theme = 'sphinx_rtd_theme'
 
 # -- Options for EPUB output
 epub_show_urls = 'footnote'
+
+# -- Options for PDF output
+pdf_documents = [
+    ('Microsoft Extractor Suite Documentation', 'Microsoft_Extractor_Suite.pdf', 'Invictus Incident Response',
+     'Copyright 2024 Invictus Incident Response. All rights reserved.', 'manual'),
+]
+
