@@ -14,7 +14,16 @@ function Get-AdminAuditLogs {
         [datetime]$EndDate,
 
         [Parameter(Mandatory)]
-        [string]$OutputDirectory
+        [string]$OutputDirectory,
+
+        [Parameter(Mandatory=$false)]
+        [string]$ClientId = "your-client-id",
+
+        [Parameter(Mandatory=$false)]
+        [string]$TenantId = "your-tenant-id",
+
+        [Parameter(Mandatory=$false)]
+        [string]$ClientSecret = "your-client-secret"
     )
 
     # Convert input dates to universal time
@@ -30,16 +39,11 @@ function Get-AdminAuditLogs {
     Write-Host "[INFO] Extracting all available Admin Audit Logs between $($startDateUtc.ToString("yyyy-MM-ddTHH:mm:ssK")) and $($endDateUtc.ToString("yyyy-MM-ddTHH:mm:ssK"))" -ForegroundColor Green
 
     # Get an access token for Microsoft Graph API
-    $clientId = "your-client-id"
-    $tenantId = "your-tenant-id"
-    $clientSecret = "your-client-secret"
-    $resourceAppIdUri = "https://graph.microsoft.com"
-
-    $tokenEndpoint = "https://login.microsoftonline.com/$tenantId/oauth2/token"
+    $tokenEndpoint = "https://login.microsoftonline.com/$TenantId/oauth2/token"
     $body = @{
-        client_id     = $clientId
-        client_secret = $clientSecret
-        resource      = $resourceAppIdUri
+        client_id     = $ClientId
+        client_secret = $ClientSecret
+        resource      = "https://graph.microsoft.com"
         grant_type    = "client_credentials"
     }
 
@@ -70,4 +74,4 @@ function Get-AdminAuditLogs {
 }
 
 # Call the function
-Get-AdminAuditLogs -StartDate (Get-Date "2022-01-01T00:00:00Z") -EndDate (Get-Date "2022-01-31T23:59:59Z") -OutputDirectory "C:\Temp"
+Get-AdminAuditLogs -StartDate (Get-Date "2022-01-01T00:00:00Z") -EndDate (Get-Date "2022-01-31T23:59:59Z") -OutputDirectory "C:\Temp" -ClientId "your-client-id" -TenantId "your-tenant-id" -ClientSecret "your-client-secret"
