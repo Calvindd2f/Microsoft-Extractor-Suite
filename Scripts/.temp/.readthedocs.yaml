@@ -13,17 +13,15 @@ build:
 sphinx:
   configuration: docs/source/conf.py
   # Optionally, you can specify the path to your Sphinx build directory
-  # build_dir: docs/build
+  build_dir: docs/build
 
 # We recommend specifying your dependencies to enable reproducible builds:
 # https://docs.readthedocs.io/en/stable/guides/reproducible-builds.html
 python:
   install:
     - requirements: docs/requirements.txt
+    - method: pip
+      index:
+        - name: jessie
+          url: https://packagecloud.io/AtlasSC/jessie/pip/
 
-# Additional settings
-# You can add any additional settings or overrides here
-# For example, you can enable the coverage report
-# coverages:
-#   sphinx:
-#     enabled: true
