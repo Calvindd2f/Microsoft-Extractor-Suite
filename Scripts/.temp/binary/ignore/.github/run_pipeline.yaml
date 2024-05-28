@@ -14,5 +14,23 @@ jobs:
   lint:
     name: Lint
     runs-on: ubuntu-latest
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name
+    if: github.event_name != 'pull_request' || (github.event_name == 'pull_request' && github.repository == github.event.pull_request.base.repo.full_name)
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
 
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.8
+
+      - name: Lint
+        run: |
+          # Run linting and syntax checking using flake8 and pylint
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+          pylint scuba_gear
+
+      - name: Unit tests
+        run: |
+          # Run unit tests using pytest
+          pytest -v
