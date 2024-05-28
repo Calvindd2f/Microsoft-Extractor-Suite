@@ -4,13 +4,32 @@
 
 @{
     RootModule = 'Microsoft-Extractor-Suite.psm1'
-    Author = 'Joey Rentenaar & Korstiaan Stam'
-    CompanyName = 'Invictus-IR'
+    Author       = 'Joey Rentenaar & Korstiaan Stam'
+    CompanyName  = 'Invictus-IR'
     ModuleVersion = '1.3.4'
-    GUID = '4376306b-0078-4b4d-b565-e22804e3be01'
-    Copyright = 'Copyright (c) 2024 Invictus Incident Response'
-    Description = 'Microsoft-Extractor-Suite is a fully-featured, actively-maintained, Powershell tool designed to streamline the process of collecting all necessary data and information from various sources within Microsoft.'
-    NestedModules = @('Scripts\Connect.ps1', 'Scripts\Get-UAL.ps1', 'Scripts\Get-UALStatistics.ps1', 'Scripts\Get-Rules.ps1', 'Scripts\Get-MailboxAuditLog.ps1', 'Scripts\Get-MessageTraceLog.ps1', 'Scripts\Get-AzureADLogs.ps1', 'Scripts\Get-OAuthPermissions.ps1', 'Scripts\Get-AdminAuditLog.ps1', 'Scripts\Get-AzureActivityLogs.ps1', 'Scripts\Get-AzureADGraphLogs.ps1', 'Scripts\Get-UsersInfo.ps1', 'Scripts\Get-MFAStatus.ps1', 'Scripts\Get-RiskyEvents.ps1', 'Scripts\Get-ConditionalAccessPolicy.ps1', 'Scripts\Get-Emails.ps1', 'Scripts\Get-MailItemsAccessed.ps1', 'Scripts\Get-UALGraph.ps1')
+    GUID         = '4376306b-0078-4b4d-b565-e22804e3be01'
+    Copyright    = 'Copyright (c) 2024 Invictus Incident Response'
+    Description  = 'Microsoft-Extractor-Suite is a fully-featured, actively-maintained, PowerShell tool designed to streamline the process of collecting all necessary data and information from various sources within Microsoft.'
+    NestedModules = @(
+        'Scripts\Connect.ps1',
+        'Scripts\Get-UAL.ps1',
+        'Scripts\Get-UALStatistics.ps1',
+        'Scripts\Get-Rules.ps1',
+        'Scripts\Get-MailboxAuditLog.ps1',
+        'Scripts\Get-MessageTraceLog.ps1',
+        'Scripts\Get-AzureADLogs.ps1',
+        'Scripts\Get-OAuthPermissions.ps1',
+        'Scripts\Get-AdminAuditLog.ps1',
+        'Scripts\Get-AzureActivityLogs.ps1',
+        'Scripts\Get-AzureADGraphLogs.ps1',
+        'Scripts\Get-UsersInfo.ps1',
+        'Scripts\Get-MFAStatus.ps1',
+        'Scripts\Get-RiskyEvents.ps1',
+        'Scripts\Get-ConditionalAccessPolicy.ps1',
+        'Scripts\Get-Emails.ps1',
+        'Scripts\Get-MailItemsAccessed.ps1',
+        'Scripts\Get-UALGraph.ps1'
+    )
     FunctionsToExport = @(
         'Public\Connect-M365',
         'Public\Connect-Azure',
@@ -57,3 +76,5 @@
     HelpPath = Join-Path -Path $PSScriptRoot -ChildPath 'Help'
 }
 
+# Add the following line to the end of the file
+Export-ModuleMember -Function $FunctionsToExport -Variable $VariablesToExport
