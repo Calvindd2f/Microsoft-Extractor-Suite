@@ -1,5 +1,33 @@
-# These are the supported funding model platforms
+# A dictionary of supported funding platform names and their corresponding identifiers
 SUPPORTED_PLATFORMS = {
-    'github': 'invictus-ir',
+    'GitHub': 'invictus-ir',
 }
 
+
+def is_supported_platform(platform):
+    """
+    Check if the given platform is supported.
+
+    Args:
+        platform (str): The name of the platform to check.
+
+    Returns:
+        bool: True if the platform is supported, False otherwise.
+    """
+    return platform.lower() in SUPPORTED_PLATFORMS
+
+
+def get_identifier(platform):
+    """
+    Get the identifier for the given platform.
+
+    Args:
+        platform (str): The name of the platform.
+
+    Returns:
+        str: The identifier for the platform, or None if the platform is not supported.
+    """
+    if is_supported_platform(platform):
+        return SUPPORTED_PLATFORMS[platform.lower()]
+    else:
+        return None
