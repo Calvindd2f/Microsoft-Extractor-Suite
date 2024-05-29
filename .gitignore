@@ -8,7 +8,7 @@
 # Jupyter Notebooks (https://jupyter.org/)
 ## Changelogs
 .changelog/*
-Scripts/.test/*
+Scripts/.temp/*
 ## Checkpoints
 .ipynb_checkpoints/
 */.ipynb_checkpoints/
