@@ -1,5 +1,0 @@
-# These are the supported funding model platforms
-SUPPORTED_PLATFORMS = {
-    'github': 'invictus-ir',
-}
-
