@@ -4,7 +4,7 @@
 # Generated at https://www.toptal.com/developers/gitignore?templates=python,jupyternotebooks
 
 # Get the latest version at https://www.toptal.com/developers/gitignore/api/python,jupyternotebooks
-
+Scripts/.temp/
 # Jupyter Notebooks (https://jupyter.org/)
 ## Changelogs
 .changelog/*
