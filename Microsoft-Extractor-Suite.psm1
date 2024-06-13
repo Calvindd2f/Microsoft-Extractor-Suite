@@ -112,3 +112,60 @@ function versionCheck{
 }
 
 versionCheck
+###########################################################################################
+
+$EXORunspace=[PSCustomObject]@{
+    EXOSession = $null
+    Runspace = $null
+    RunspaceName = $null
+    RunspaceID = $null
+    RunspaceParams = [PSCustomObject]@{
+        #set the default connection limit
+        [System.Net.ServicePointManager]::DefaultConnectionLimit = 1024;
+        [System.Net.ServicePointManager]::MaxServicePoints       = 1000;
+        #Set the maximum memory for the runspace
+        MaxMemoryPerShellMB                                      = 1024;
+        #Set the maximum number of objects for the runspace
+        MaximumReceivedObjects                                   = 10000;
+        #Set the maximum number of commands for the runspace
+        MaximumReceivedCommand                                   = 1000;
+        # Set the timeout for the runspace
+        OpenTimeout = (New-TimeSpan -Minutes 10);
+         # Set the timeout for the runspace
+        CancellationTimeout                                      = (New-TimeSpan -Minutes 10);
+        #Add Expiration time
+        [NoteProperty]$ExpiresOn_ = ([System.DateTimeOffset]::Now.AddMinutes(60))
+        #Add renewable option
+        [NoteProperty]$renewable                                 = $true 
+        #Add function to check for near expiration
+        [ScriptMethod]$IsNearExpiry                              = { return (($this.ExpiresOn_.UtcDateTime.AddMinutes( - 5)) -le ((Get-Date).ToUniversalTime())) }
+        #Add function to disable token renewal
+        [ScriptMethod]$DisableRenew = { $this.renewable = $false }
+}}
+$EXOSession = $null
+
+###########################################################################################
+# This part is for managing importing all the functions during execution / passing functions and variables.
+
+#$internal_modules=@();
+#$internal_modules.ForEach({ Import-Module ("{0}{1}{2}" -f $PSScriptRoot, [System.IO.Path]::DirectorySeparatorChar, $_.ToString()) -Force })
+#$msal_modules=@();
+#$msal_modules.ForEach({ Import-Module ("{0}{1}{2}" -f $PSScriptRoot, [System.IO.Path]::DirectorySeparatorChar, $_.ToString()) -Scope Global -Force })
+New-Variable -Name ScriptPath -Value $PSScriptRoot -Scope Script -Force
+
+$cmds=[System.IO.Directory]::EnumerateFiles(("{0}/scripts/" -f $PSScriptRoot), "*.ps1", "AllDirectories")
+$p=@{
+    ImportModules   = ("{0}/scripts/" -f $PSScriptRoot);
+    ImportCommands  = $cmds;
+    ImportVariables = @{"ScriptPath" = $PSScriptRoot };
+}
+
+$internal_functions = @();
+$all_files=$internal_functions.ForEach({
+        if ([System.IO.Directory]::Exists(("{0}{1}" -f $PSScriptRoot, $_)))
+        {
+            [System.IO.Directory]::EnumerateFiles(("{0}{1}" -f $PSScriptRoot, $_), "*.ps1", [System.IO.SearchOption]::AllDirectories)
+        }
+    })
+$all_files = $all_files.Where({ $_.EndsWith('ps1') })
+$all_files.ForEach({ . $_ })
