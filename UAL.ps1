@@ -5,104 +5,115 @@ function Get-UALAll
         [string]$StartDate,
         [string]$EndDate,
         [string]$UserIds,
-        [string]$Interval
-        [string]$Output="CSV","JSON"
+        [string]$OutputDir = "Output\UnifiedAuditLog",
+        [string]$OutFormat = "CSV",
+        [string]$OutEncoding = "UTF8",
+        [AllowNull()]
+        [int]$Interval,
         [switch]$MergeOutput,
-        [string]$OutputDir="Output\UnifiedAuditLog",
-        [string]$Encoding= "UTF8",
         [switch]$Application
     )
     
-    if(!$Application){#Connect-MgGraph -Scopes AuditLogsQuery.Read.All -NoWelcome}
-    }
-    else{#validate token
-    }
-
-
-    $UALQueryParams=@{
-        StartDateSearch = (Get-Date $StartDate -format s) + "Z"
-        EndDateSearch = (Get-Date $EndDate -format s) + "Z"
-        Operations = $null
-        SearchName = ("Extractor Suite : Audit Search {0}" -f (Get-Date -format 'dd-MMM-yyyy HH:mm'))
-        SearchParameters = @{
-            "displayName"           = $SearchName
-            "filterStartDateTime"   = $StartDateSearch
-            "filterEndDateTime"     = $EndDateSearch
-            "operationFilters"      = $Operations
+    begin 
+    {
+        $script:OutputDir = $OutputDir
+        ###############################################
+        
+        $UALQueryParams = @{
+            StartDateSearch  = (Get-Date $StartDate -format s) + "Z"
+            EndDateSearch    = (Get-Date $EndDate -format s) + "Z"
+            Operations       = $null
+            SearchName       = ("Extractor Suite : Audit Search {0}" -f (Get-Date -format 'dd-MMM-yyyy HH:mm'))
+            SearchParameters = @{
+                "displayName"         = $SearchName
+                "filterStartDateTime" = $StartDateSearch
+                "filterEndDateTime"   = $EndDateSearch
+                "operationFilters"    = $Operations
+            }
         }
-    }
 
-    $AdditionalFilters=@{
-        keywordFilter = $null
-        administrativeUnitIdFilters = $null
-        operationFilters = $Operations
-        objectIdFilters = $null
-        recordTypeFilters = $null
-        ipAddressFilters = $null
-        userPrincipalNameFilters = $null
-        serviceFilters = $null
-    }
-
-
-    #"Creating an audit search query..."
-    $Uri = "https://graph.microsoft.com/beta/security/auditLog/queries"
-    $SearchQuery = Invoke-MgGraphRequest -Method POST -Uri $Uri -Body $SearchParameters
-    $SearchId = $SearchQuery.Id
-    If ($null -eq $SearchId) 
-    {
-        Write-Host "Search not created"
-        Break
-    } 
-    Else 
-    {
-        $SearchId = $SearchQuery.Id
-        Write-Host ("Audit log search created with id: {0} and name {1}" -f $SearchId, $SearchQuery.displayname)
-    }
-
-
-    #"Checking audit query status..."
-    [int]$i = 1
-    [int]$SleepSeconds = 20
-    $SearchFinished = $false; [int]$SecondsElapsed = 20
-    Write-Host "Checking audit query status..."
-    Start-Sleep -Seconds 20
-    $Uri = ("https://graph.microsoft.com/beta/security/auditLog/queries/{0}" -f $SearchId)
-    $SearchStatus = Invoke-MgGraphRequest -Uri $Uri -Method GET
-    While ($SearchFinished -eq $false) 
-    {
-        $i++
-        Write-Host ("Waiting for audit search to complete. Check {0} after {1} seconds. Current state {2}" -f $i, $SecondsElapsed, $SearchStatus.status)
-        If ($SearchStatus.status -eq 'succeeded') 
-        {
-            $SearchFinished = $true
-        } 
-        Else 
-        {
-            Start-Sleep -Seconds $SleepSeconds
-            $SecondsElapsed = $SecondsElapsed + $SleepSeconds
-            $SearchStatus = Invoke-MgGraphRequest -Uri $Uri -Method GET
+        $AdditionalFilters = @{
+            keywordFilter               = $null
+            administrativeUnitIdFilters = $null
+            operationFilters            = $Operations
+            objectIdFilters             = $null
+            recordTypeFilters           = $null
+            ipAddressFilters            = $null
+            userPrincipalNameFilters    = $null
+            serviceFilters              = $null
         }
+
+        $UALQueryParams.SearchParameters.Add("additionalFilters", $AdditionalFilters)
+    }
+    process
+    {
+        Log "Creating an audit search query..."
+        try 
+        {
+            $Uri = "https://graph.microsoft.com/beta/security/auditLog/queries"
+            $SearchQuery = Invoke-MgGraphRequest -Method POST -Uri $Uri -Body $SearchParameters
+            $SearchId = $SearchQuery.Id
+            If ([string]::IsNullOrEmpty($SearchId)) { Log "Search not created"; Break }
+            Else { $SearchId = $SearchQuery.Id; Log ("Audit log search created with id: {0} and name {1}" -f $SearchId, $SearchQuery.displayname)}
+        }
+        catch 
+        {  
+            <#Do this if a terminating exception happens#>
+        }
+
+
+        Log "Checking audit query status..."
+        try 
+        {
+            [int]$i = 1;
+            do 
+            {
+                $Uri = "https://graph.microsoft.com/beta/security/auditLog/queries/$Search"
+                $SearchStatus = Invoke-MgGraphRequest -Method GET -Uri $Uri
+                $Status = $SearchStatus.status
+                Log ("Audit log search status: {0}" -f $Status)
+                Start-Sleep -s 10
+                $i++;
+            } 
+            while ($Status -ne "completed" -and $i -le 30);
+            $SearchFinished = $true;
+        }
+        catch 
+        {
+            <#Do this if a terminating exception happens#>
+        }
+
+
+        Log "Fetching audit records found by the search..."
+        try
+        {
+            $Uri = "https://graph.microsoft.com/beta/security/auditLog/queries/$Search"
+            $AuditRecords = Invoke-MgGraphRequest -Method GET -Uri $Uri
+            $AuditRecords.value | ForEach-Object { $AuditRecordsList.Add($_) }
+
+            # Paginate to fetch all available audit records
+            $NextLink = $AuditRecords.'@odata.nextLink'
+            while ($NextLink -ne $null) {
+                $Uri = $NextLink
+                $AuditRecords = Invoke-MgGraphRequest -Method GET -Uri $Uri
+                $AuditRecords.value | ForEach-Object { $AuditRecordsList.Add($_) }
+                $NextLink = $AuditRecords.'@odata.nextLink'
+                }
+        }
+        catch
+        {
+            <#Do this if a terminating exception happens#>
+        }
+
+
+        #Log ("Total of {0} audit records found" -f $AuditRecords.count)
+        <#
+            Do Processing Here
+        #>
+    }
+    end
+    {
+        Log "Audit log search finished"
     }
 
-
-   #"Fetching audit records found by the search..."
-   $Uri = ("https://graph.microsoft.com/beta/security/auditLog/queries/{0}/records?`$Top=999" -f $SearchId)
-   [array]$SearchRecords = Invoke-MgGraphRequest -Uri $Uri -Method GET
-   [array]$AuditRecords = $SearchRecords.value
-   # Paginate to fetch all available audit records
-   $NextLink = $SearchRecords.'@odata.NextLink'
-   While ($null -ne $NextLink)
-   {
-    $SearchRecords = $null
-    [array]$SearchRecords = Invoke-MgGraphRequest -Uri $NextLink -Method GET 
-    $AuditRecords += $SearchRecords.value
-    Write-Host ("{0} audit records fetched so far..." -f $AuditRecords.count)
-    $NextLink = $SearchRecords.'@odata.NextLink' 
-    }
-
-
-    #("Total of {0} audit records found" -f $AuditRecords.count)
-    <#
-        Do Processing Here
-    #>
 }
