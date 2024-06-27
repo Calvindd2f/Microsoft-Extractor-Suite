@@ -17,11 +17,12 @@ Created by Joey Rentenaar & Korstiaan Stam
 
 [console]::ForegroundColor = 'Yellow'
 [console]::WriteLine("$logo")
-[console]::ForegroundColor = 'White'
+
 
 $outputDir = "$PSScriptRoot\Output"
 $logFile = "$outputDir\LogFile.txt"
 $retryCount = 0 
+
 enum logctx
 { 
     NULL
@@ -215,26 +216,21 @@ function Merge-OutputFiles
     [console]::WriteLine("[INFO] All logs merged into $mergedFilePath")
 }
     
-##########################################
-# This part is for managing importing all the functions during execution / passing functions and variables.
-
 #$internal_modules=@();
 #$internal_modules.ForEach({ Import-Module ("{0}{1}{2}" -f $PSScriptRoot, [System.IO.Path]::DirectorySeparatorChar, $_.ToString()) -Force })
-
 #$msal_modules=@();
 #$msal_modules.ForEach({ Import-Module ("{0}{1}{2}" -f $PSScriptRoot, [System.IO.Path]::DirectorySeparatorChar, $_.ToString()) -Scope Global -Force })
 New-Variable -Name ScriptPath -Value $PSScriptRoot -Scope Script -Force
 
-$cmds = [System.IO.Directory]::EnumerateFiles(("{0}/scripts/" -f $PSScriptRoot), "*.ps1", "AllDirectories")
-
-$p = @{
+$cmds=[System.IO.Directory]::EnumerateFiles(("{0}/scripts/" -f $PSScriptRoot), "*.ps1", "AllDirectories")
+$p=@{
     ImportModules   = ("{0}/scripts/" -f $PSScriptRoot);
     ImportCommands  = $cmds;
     ImportVariables = @{"ScriptPath" = $PSScriptRoot };
 }
 
 $internal_functions = @();
-$all_files = $internal_functions.ForEach({
+$all_files=$internal_functions.ForEach({
         if ([System.IO.Directory]::Exists(("{0}{1}" -f $PSScriptRoot, $_)))
         {
             [System.IO.Directory]::EnumerateFiles(("{0}{1}" -f $PSScriptRoot, $_), "*.ps1", [System.IO.SearchOption]::AllDirectories)

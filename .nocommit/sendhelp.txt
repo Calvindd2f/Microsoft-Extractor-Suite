@@ -1,0 +1,3 @@
+Find-MgGraphCommand
+Find-MgGraphPermission
+Invoke-MgGraphRequest

@@ -1,118 +1,129 @@
 Function Connect-M365
 {
     versionCheck
-    Connect-ExchangeOnline > $null
+    try {
+        Connect-ExchangeOnline > $null
+    } catch {
+        Write-Error $_
+    }
 }
 
 Function Connect-Azure
 {
     versionCheck
-    Connect-AzureAD > $null
+    try {
+        Connect-AzureAD > $null
+    } catch {
+        Write-Error $_
+    }
 }
 
 Function Connect-AzureAZ
 {
     versionCheck
-    Connect-AzAccount > $null
+    try {
+        Connect-AzAccount > $null
+    } catch {
+        Write-Error $_
+    }
 }
-##########################################################################
-# PR 1
 
-function Global:Connect-ExtractorSuite {
+Function Connect-ExtractorSuite
+{
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $false)]
-        [ValidateNotNullOrEmpty()]
         [bool]$Application,
 
         [Parameter(Mandatory = $false)]
-        [ValidateNotNullOrEmpty()]
         [bool]$DeviceCode,
 
         [Parameter(Mandatory = $false)]
-        [ValidateNotNullOrEmpty()]
         [bool]$Delegate
     )
 
-    [OutputType([System.Management.Automation.PSObject])]
-
-    $ErrorActionPreference = 'Stop'
-
     if ($Application) {
-        $appID = $env:AppId
+        $appId = $env:AppId
         $appSecret = $env:AppSecret
-        $appThumbprint = $env:AppThumbprint
-        $tenantID = $env:TenantId
+        $tenantId = $env:TenantId
 
-        Get-Token -scope 'https://graph.microsoft.com/.default'
-        Check-Token -token $token
-    }
-    elseif ($DeviceCode -eq $true)
-    {
+        Get-Token -Scope 'https://graph.microsoft.com/.default'
+        Check-Token -Token $token
+    } elseif ($DeviceCode) {
         Connect-DeviceCode
-    }
-    elseif ($Delegate -eq $true)
-    {
-        $delegate_scopes = @('AuditLogsQuery.Read.All', 'UserAuthenticationMethod.Read.All', 'User.Read.All', 'Mail.ReadBasic.All', 'Mail.ReadWrite', 'Mail.Read', 'Mail.ReadBasic', 'Policy.Read.All', 'Directory.Read.All')
+    } elseif ($Delegate) {
+        $delegateScopes = @(
+            'AuditLogsQuery.Read.All',
+            'UserAuthenticationMethod.Read.All',
+            'User.Read.All',
+            'Mail.ReadBasic.All',
+            'Mail.ReadWrite',
+            'Mail.Read',
+            'Mail.ReadBasic',
+            'Policy.Read.All',
+            'Directory.Read.All'
+        )
 
-        Connect-MgGraph -Scopes $delegate_scopes
-    }
-    else
-    {
+        Connect-MgGraph -Scopes $delegateScopes
+    } else {
         Connect-DeviceCode
     }
 }
 
-function Global:Get-Token {
+function Get-Token {
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory = $true)]
-        [ValidateNotNullOrEmpty()]
-        [string]$scope,
+        [Parameter(Mandatory = $false)]
+        [switch]$UseExchangeOnline,
 
         [Parameter(Mandatory = $true)]
-        [ValidateNotNullOrEmpty()]
-        [string]$appID,
+        [string]$ClientId,
 
         [Parameter(Mandatory = $true)]
-        [ValidateNotNullOrEmpty()]
-        [string]$appSecret,
+        [string]$ClientSecret,
 
         [Parameter(Mandatory = $true)]
-        [ValidateNotNullOrEmpty()]
-        [string]$tenantID
+        [string]$TenantId
     )
-
-    [OutputType([string])]
-
-    $ErrorActionPreference = 'Stop'
-
-    $body = @{
-        'grant_type'    = 'client_credentials'
-        'client_id'     = $appID
-        'client_secret' = $appSecret
-        'scope'         = $scope
+    
+    $scope = if ($UseExchangeOnline) {
+        'https://outlook.office365.com/.default'
+    } else {
+        'https://graph.microsoft.com/.default'
     }
 
-    $response = Invoke-RestMethod -Uri "https://login.microsoftonline.com/$tenantID/oauth2/v2.0/token" -Method Post -Body $body
+    $body = @{
+        Grant_Type    = 'client_credentials'
+        Client_Id     = $ClientId
+        Client_Secret = $ClientSecret
+        Scope         = $scope
+    }
 
-    $response.access_token
-    Check-Token($token)
+    $response = Invoke-RestMethod -Uri "https://login.microsoftonline.com/$TenantId/oauth2/v2.0/token" -Method Post -Body $body
+
+    if ($UseExchangeOnline) {
+        $exo_token = $response.access_token
+        return $exo_token
+    } else {
+        $msgraph_token = $response.access_token
+        return $msgraph_token
+    }
 }
-Function Check-Token($token)
+
+Function Check-Token($Token)
 {
     try
     {
-        $request = [System.Net.HttpWebRequest]::Create('https://graph.microsoft.com/v1.0/me')
+        $Request = [System.Net.HttpWebRequest]::Create('https://graph.microsoft.com/v1.0/me')
 
-        $request.Method = 'GET'
-        $request.ContentType = 'application/json;odata.metadata=minimal'
-        $request.Headers['Authorization'] = "Bearer $token"
+        $Request.Method = 'GET'
+        $Request.ContentType = 'application/json;odata.metadata=minimal'
+        $Request.Headers['Authorization'] = "Bearer $Token"
 
-        $response = $request.GetResponse()
-        $reader = New-Object System.IO.StreamReader $response.GetResponseStream()
-        $jsonResult = $reader.ReadToEnd()
-        $response.Dispose()
+        $Response = $Request.GetResponse()
+        $Reader = New-Object System.IO.StreamReader $Response.GetResponseStream()
+        $JsonResult = $Reader.ReadToEnd()
+        $Response.Dispose()
 
         Write-Host 'MS Graph Token is valid.'
         return $true
@@ -123,13 +134,14 @@ Function Check-Token($token)
         return $false
     }
 }
-function Connect-DeviceCode
+
+Function Connect-DeviceCode
 {
     [CmdletBinding()]
     param
     (
         [Parameter(Mandatory = $False)]
-        [string]$ClientID = '00000003-0000-0000-c000-000000000000',
+        [string]$ClientId = '00000003-0000-0000-c000-000000000000',
         [Parameter(Mandatory = $False)]
         [String]$Resource = 'https://graph.microsoft.com',
         [Parameter(Mandatory = $False)]
@@ -137,77 +149,69 @@ function Connect-DeviceCode
         [String[]]$Client = 'MSGraph'
     )
 
-
-    $body = @{
-        'client_id' = $ClientID
+    $Body = @{
+        'client_id' = $ClientId
         'resource'  = $Resource
     }
 
-    $authResponse = Invoke-RestMethod `
+    $AuthResponse = Invoke-RestMethod `
         -UseBasicParsing `
         -Method Post `
         -Uri 'https://login.microsoftonline.com/common/oauth2/devicecode?api-version=1.0' `
-        -Body $body
+        -Body $Body
 
-    Write-Host -ForegroundColor yellow $authResponse.Message
+    Write-Host -ForegroundColor Yellow $AuthResponse.Message
 
-    $continue = 'authorization_pending'
+    $Continue = 'authorization_pending'
 
-    while ($continue)
+    while ($Continue)
     {
-
-        $body = @{
-            'client_id'  = $ClientID
+        $Body = @{
+            'client_id'  = $ClientId
             'grant_type' = 'urn:ietf:params:oauth:grant-type:device_code'
-            'code'       = $authResponse.device_code
+            'code'       = $AuthResponse.device_code
             'scope'      = 'openid'
         }
 
         try
         {
-            $tokens = Invoke-RestMethod -UseBasicParsing -Method Post -Uri 'https://login.microsoftonline.com/Common/oauth2/token?api-version=1.0' -Body $body
+            $Tokens = Invoke-RestMethod -UseBasicParsing -Method Post -Uri 'https://login.microsoftonline.com/Common/oauth2/token?api-version=1.0' -Body $Body
 
-            if ($tokens)
+            if ($Tokens)
             {
-                $tokenPayload = $tokens.access_token.Split('.')[1].Replace('-', '+').Replace('_', '/')
-                while ($tokenPayload.Length % 4) { Write-Verbose 'Invalid length for a Base-64 char array or string, adding ='; $tokenPayload += '=' }
-                $tokenByteArray = [System.Convert]::FromBase64String($tokenPayload)
-                $tokenArray = [System.Text.Encoding]::ASCII.GetString($tokenByteArray)
-                $tokobj = $tokenArray | ConvertFrom-Json
-                $global:tenantid = $tokobj.tid
-                Write-Output 'Decoded JWT payload:'
-                $tokobj
-                $baseDate = Get-Date -Date '01-01-1970'
-                $tokenExpire = $baseDate.AddSeconds($tokobj.exp).ToLocalTime()
-                Write-Host -ForegroundColor Green '["*"] Successful authentication. Access and refresh tokens have been written to the global $tokens variable. To use them with other GraphRunner modules use the Tokens flag (Example. Invoke-DumpApps -Tokens $tokens)'
-                Write-Host -ForegroundColor Yellow "[!] Your access token is set to expire on: $tokenExpire"
-                $continue = $null
+                $TenantId = $Tokens.access_token.Split('.')[1].Replace('-', '+').Replace('_', '/')
+                while ($TenantId.Length % 4) { $TenantId += '=' }
+                $TenantByteArray = [System.Convert]::FromBase64String($TenantId)
+                $TenantArray = [System.Text.Encoding]::ASCII.GetString($TenantByteArray)
+                $Tokens.tenant_id = $TenantArray | ConvertFrom-Json | Select-Object -ExpandProperty tid
+                $Continue = $null
             }
         }
         catch
         {
-            $details = $_.ErrorDetails.Message | ConvertFrom-Json
-            $continue = $details.error -eq 'authorization_pending'
-            Write-Output $details.error
+            $Details = $_.ErrorDetails.Message | ConvertFrom-Json
+            $Continue = $Details.error -eq 'authorization_pending'
         }
     }
 
-    if ($continue)
+    if ($Continue)
     {
         Start-Sleep -Seconds 3
     }
     else
     {
-        $global:tokens = $tokens
+        $script:Tokens = $Tokens
     }
 }
 
-##########################################################################
-# PR 2
-
-Function Connect-AquisitonGraph
+Function Connect-ExtractorSuite
 {
-    $GraphScopes = (
+    switch ($x) {
+        delegate {}
+        applicaiton {}
+        Default {}
+    }
+    $GraphScopes = @(
         'User.Read.All',
         'Policy.Read.All',
         'Organization.Read.All',
@@ -226,7 +230,7 @@ Function Connect-AquisitonGraph
         $GraphParams += @{
             CertificateThumbprint = $ServicePrincipalParams.CertThumbprintParams.CertificateThumbprint
             ClientID              = $ServicePrincipalParams.CertThumbprintParams.AppID
-            TenantId              = $ServicePrincipalParams.CertThumbprintParams.Organization; # Organization also works here
+            TenantId              = $ServicePrincipalParams.CertThumbprintParams.Organization
         }
     }
     else
@@ -234,71 +238,5 @@ Function Connect-AquisitonGraph
         $GraphParams += @{Scopes = $GraphScopes; }
     }
     Connect-MgGraph @GraphParams | Out-Null
-    $EntraAuthRequired = $false
 }
 
-Function Connect-AquisitonExo
-{
-    $EXOParams = @{
-        ErrorAction = 'Stop'
-        ShowBanner  = $false
-    }
-
-    if ($ServicePrincipalParams.CertThumbprintParams)
-    {
-        $EXOParams += $ServicePrincipalParams.CertThumbprintParams
-    }
-
-    Connect-ExchangeOnline @EXOParams > Out-Null
-}
-
-
-function Get-AquisitionServicePrincipalParams
-{
-    <#
-    .Description
-    Returns a valid a hastable of parameters for authentication via
-    Service Principal. Throws an error if there are none.
-    .Functionality
-    Internal
-    #>
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory = $true)]
-        [ValidateNotNullOrEmpty()]
-        [hashtable]
-        $BoundParameters
-    )
-
-    $ServicePrincipalParams = @{}
-
-    $CheckThumbprintParams = ($BoundParameters.CertificateThumbprint) `
-        -and ($BoundParameters.AppID) -and ($BoundParameters.Organization)
-
-    if ($CheckThumbprintParams)
-    {
-        $CertThumbprintParams = @{
-            CertificateThumbprint = $BoundParameters.CertificateThumbprint
-            AppID                 = $BoundParameters.AppID
-            Organization          = $BoundParameters.Organization
-        }
-        $ServicePrincipalParams += @{CertThumbprintParams = $CertThumbprintParams }
-    }
-    else
-    {
-        throw 'Missing parameters required for authentication with Service Principal Auth; Run Get-Help Invoke-Scuba for details on correct arguments'
-    }
-    $ServicePrincipalParams
-}
-
-# Authentications parameters use below
-#$SPparams = 'AppID', 'CertificateThumbprint', 'Organization'
-
-##########################################################################
-# PR 3
-
-
-
-
-
-Export-ModuleMember -Function '*' -Cmdlet '*' -Alias '*' -Variable '*'

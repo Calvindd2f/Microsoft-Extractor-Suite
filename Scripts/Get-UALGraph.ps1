@@ -1,87 +1,25 @@
-Function Get-UALGraph {
-<#
-    .SYNOPSIS
-    Gets all the unified audit log entries.
-
-    .DESCRIPTION
-    Makes it possible to extract all unified audit data out of a Microsoft 365 environment.
-	The output will be written to: Output\UnifiedAuditLog\
-
-	.PARAMETER UserIds
-    UserIds is the UserIds parameter filtering the log entries by the account of the user who performed the actions.
-
-	.PARAMETER StartDate
-    startDate is the parameter specifying the start date of the date range.
-	Default: Today -90 days
-
-	.PARAMETER EndDate
-    endDate is the parameter specifying the end date of the date range.
-	Default: Now
-
-	.PARAMETER OutputDir
-	OutputDir is the parameter specifying the output directory.
-	Default: Output\UnifiedAuditLog
-
-	.PARAMETER Encoding
-    Encoding is the parameter specifying the encoding of the CSV/JSON output file.
-	Default: UTF8
-
-    .PARAMETER Application
-    Application is the parameter specifying App-only access (access without a user) for authentication and authorization.
-    Default: Delegated access (access on behalf a user)
-
-    .PARAMETER RecordType
-    The RecordType parameter filters the log entries by record type.
-	Options are: ExchangeItem, ExchangeAdmin, etc. A total of 236 RecordTypes are supported.
-
-    .PARAMETER Keyword
-    The Keyword parameter allows you to filter the Unified Audit Log for specific keywords.
-
-    .PARAMETER Service
-    The Service parameter filters the Unified Audit Log based on the specific services.
-    Options are: Exchange,Skype,Sharepoint etc.
-
-    .PARAMETER Operations
-    The Operations parameter filters the log entries by operation or activity type. Usage: -Operations UserLoggedIn,MailItemsAccessed
-	Options are: New-MailboxRule, MailItemsAccessed, etc.
-
-    .PARAMETER IPAddress
-    The IP address parameter is used to filter the logs by specifying the desired IP address.
-
-	.PARAMETER SearchName
-    Specifies the name of the search query. This parameter is required.
-
-    .EXAMPLE
-    Get-UALGraph -SearchName Test
-	Gets all the unified audit log entries.
-
-	.EXAMPLE
-	Get-UALGraph -SearchName Test -UserIds Test@invictus-ir.com
-	Gets all the unified audit log entries for the user Test@invictus-ir.com.
-
-	.EXAMPLE
-	Get-UALGraph -SearchName Scan1GraphAPI -startDate "2024-03-10T09:28:56Z" -endDate "2024-03-20T09:28:56Z" -Service Exchange
-    Retrieves audit log data for the specified time range March 10, 2024 to March 20, 2024 and filters the results to include only events related to the Exchange service.
-
-	.EXAMPLE
-	Get-UALGraph -searchName scan1 -startDate "2024-03-01" -endDate "2024-03-10" -IPAddress 182.74.242.26
-	Retrieve audit log data for the specified time range March 1, 2024 to March 10, 2024 and filter the results to include only entries associated with the IP address 182.74.242.26.
-
-#>
+Function Get-UnifiedAuditLogGraph {
     [CmdletBinding()]
     param(
-		[Parameter(Mandatory=$true)]$searchName,
+        [Parameter(Mandatory=$true)]$SearchName,
         [switch]$Application,
-        [string]$OutputDir,
-        [string]$Encoding,
-        [string]$startDate,
-		[string]$endDate,
-        [string[]]$RecordType = @(),
+        [string]$OutputDir = "Output\UnifiedAuditLog",
+        [string]$Encoding = "UTF8",
+        [string]$StartDate,
+        [string]$EndDate,
+        [string[]]$RecordTypes = @(),
         [string]$Keyword = "",
         [string]$Service = "",
         [string[]]$Operations = @(),
         [string[]]$UserIds = @(),
-        [string[]]$IPAddress = @()
+        [string[]]$IPAddresses = @(),
+        [string]$OutputDir = "Output\UnifiedAuditLog",
+        [string]$OutFormat = "CSV",
+        [string]$OutEncoding = "UTF8",
+        [AllowNull()]
+        [int]$Interval,
+        [switch]$MergeOutput,
+        [switch]$Application
     )
 
     if (!($Application.IsPresent)) {
@@ -89,107 +27,65 @@ Function Get-UALGraph {
     }
 
     try {
-        $areYouConnected = Get-MgBetaSecurityAuditLogQuery -ErrorAction stop
+        $null = Get-MgBetaSecurityAuditLogQuery -ErrorAction stop
     }
     catch {
-        Write-logFile -Message "[WARNING] You must call Connect-MgGraph -Scopes 'AuditLogsQuery.Read.All' before running this script" -Color "Red"
+        Write-Error "You must call Connect-MgGraph -Scopes 'AuditLogsQuery.Read.All' before running this script"
         break
     }
 
-    #Assert-OutputDir
-    #Assert-Encoding
+    $StartDate = [DateTime]::Today.AddDays(-90) if (!$StartDate)
+    $EndDate = [DateTime]::Now if (!$EndDate)
 
-    $script:startTime = Get-Date
-
-    StartDate
-	EndDate
-
-    write-logFile -Message "[INFO] Running Get-UALGraph" -Color "Green"
-
-	$params =
-	@{
+    $params = @{
         "@odata.type" = "#microsoft.graph.security.auditLogQuery"
-        displayName = $searchName
-        filterStartDateTime = $script:StartDate
-        filterEndDateTime = $script:endDate
-        recordTypeFilters = $RecordType
-        keywordFilter = $Keyword
-        serviceFilter = $Service
-        operationFilters = $Operations
-        userPrincipalNameFilters = $UserIds
-        ipAddressFilters = $IPAddress
-        objectIdFilters = @()
-        administrativeUnitIdFilters = @()
-        status = ""
-	}
+        DisplayName = $SearchName
+        FilterStartDateTime = $StartDate
+        FilterEndDateTime = $EndDate
+        RecordTypeFilters = $RecordTypes
+        KeywordFilter = $Keyword
+        ServiceFilter = $Service
+        OperationFilters = $Operations
+        UserPrincipalNameFilters = $UserIds
+        IPAddressFilters = $IPAddresses
+        ObjectIdFilters = @()
+        AdministrativeUnitIdFilters = @()
+        Status = ""
+    }
 
-    $queryString = @{
-        "auditLogQueryId" = $startScan.Id
-    } | ConvertTo-Json -Compress
+    $queryString = $params | ConvertTo-Json -Compress
 
     do {
-        try {
-            $auditLogQuery = Invoke-MgGraphRequest -Method GET -Uri "beta/security/auditLogs/queries/$($startScan.Id)" -ErrorAction Stop
-            $scanId = $startScan.Id
-        }
-        catch {
-            write-logFile -Message "[ERROR] Failed to get Unified Audit Log search status. $_" -Color "Red"
-            break
-        }
+        $auditLogQuery = Invoke-MgGraphRequest -Method GET -Uri "beta/security/auditLogs/queries/$($startScan.Id)"
 
         if ($auditLogQuery.Status -eq "running") {
-            write-logFile -Message "[INFO] Unified Audit Log search is still running. Waiting..."
             Start-Sleep -Seconds 10
         }
         elseif ($auditLogQuery.Status -eq "failed") {
-            write-logFile -Message "[INFO] Unified Audit Log search failed." -Color "Red"
+            Write-Error "Unified Audit Log search failed."
             break
         }
         elseif ($auditLogQuery.Status -eq "succeeded") {
-            write-logFile -Message "[INFO] Unified Audit Log search succeeded." -Color "Green"
-
-            $continueQuery = $true
-            $pageNumber = 1
-            $nextLink = "beta/security/auditLogs/queries/$($startScan.Id)/results?`$top=1000"
-
-            while ($continueQuery) {
-                try {
-                    $response = Invoke-MgGraphRequest -Method GET -Uri $nextLink -ErrorAction Stop
-                }
-                catch {
-                    write-logFile -Message "[ERROR] Failed to get Unified Audit Log results. $_" -Color "Red"
-                    break
-                }
-
-                $response.Value | ForEach-Object {
-                    $_ | ConvertTo-Json -Depth 100 -Compress | Add-Content -Path "$OutputDir\$($date)-$searchName-UnifiedAuditLog.json" -Encoding $Encoding
-                }
-
-                if (-not [string]::IsNullOrEmpty($response.'@odata.nextLink')) {
-                    $pageNumber++
-                    $nextLink = $response.'@odata.nextLink' -replace '\$skip=\d+', "`$skip=$($pageNumber * 1000)"
-                }
-                else {
-                    $continueQuery = $false
-                }
-            }
-
-            Clear-Variable -Name response, nextLink, pageNumber, continueQuery
+            $customObjects = Fetch-AuditLogRecords -ScanId $startScan.Id -Encoding $Encoding -OutputDir $OutputDir
+            ConvertTo-Json -InputObject $customObjects -Depth 100 | Out-File -FilePath "$OutputDir\$($date)-$SearchName-UnifiedAuditLog.json" -Encoding $Encoding
+            break
         }
         else {
-            write-logFile -Message "[INFO] Unified Audit Log search is still running. Waiting..."
             Start-Sleep -Seconds 10
         }
-    } until ($auditLogQuery.Status -eq "succeeded")
+    } while ($true)
 }
 
-Function DownloadUAL($scanId, $searchName, $Encoding, $OutputDir) {
-    $date = Get-Date -Format "yyyyMMddHHmm"
-    $outputFilePath = "$($date)-$searchName-UnifiedAuditLog.json"
+Function Fetch-AuditLogRecordsGraph {
+    param(
+        [string]$ScanId,
+        [string]$Encoding,
+        [string]$OutputDir
+    )
 
-    $pageSize = 1000
-    $nextLink = "beta/security/auditLogs/queries/$scanId/results?`$top=$pageSize"
     $customObjects = @()
+    $pageSize = 1000
+    $nextLink = "beta/security/auditLogs/queries/$ScanId/results?`$top=$pageSize"
 
     do {
         $response = Invoke-MgGraphRequest -Method GET -Uri $nextLink
@@ -212,7 +108,7 @@ Function DownloadUAL($scanId, $searchName, $Encoding, $OutputDir) {
             }
         }
 
-        if (-not [string]::IsNullOrEmpty($response.'@odata.nextLink')) {
+        if ($response.'@odata.nextLink') {
             $nextLink = $response.'@odata.nextLink'
         }
         else {
@@ -220,10 +116,5 @@ Function DownloadUAL($scanId, $searchName, $Encoding, $OutputDir) {
         }
     } while ($nextLink)
 
-    $customObjects | ConvertTo-Json -Depth 100 | Out-File -Append "$OutputDir/$($date)-$searchName-UnifiedAuditLog.json" -Encoding $Encoding
-
-    write-logFile -Message "[INFO] Audit log records have been saved to $outputFilePath" -Color "Green"
-    $endTime = Get-Date
-    $runtime = $endTime - $script:startTime
-    write-logFile -Message "[INFO] Total runtime (HH:MM:SS): $($runtime.Hours):$($runtime.Minutes):$($runtime.Seconds)" -Color "Green"
+    $customObjects
 }
