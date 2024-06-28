@@ -53,9 +53,10 @@ function Get-Test
 
     if ($Headers)
     {
-        # Construct the body for the request
+        # Construct the body for the request api where the headers contain authorization token stuff.
         Invoke-MgGraphRequest -Uri "https://graph.microsoft.com/beta/me" -Method "GET" -ContentType "application/json" -Headers $Headers
     } else {
-        Invoke-MgGraphRequest -Uri "https://graph.microsoft.com/beta/me" -Method "GET" -ContentType "application/json"
+        # Delegated API call using powershell SDK, headers is null as it works and using $headers without $headers throws term err.
+        Invoke-MgGraphRequest -Uri "https://graph.microsoft.com/beta/me" -Method "GET" -ContentType "application/json" -Headers $null
     }  
 }
