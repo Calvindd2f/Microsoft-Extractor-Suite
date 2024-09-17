@@ -79,10 +79,8 @@ Function Get-UALGraph {
         [string[]]$IPAddress = @()
     )
 
-    $authType = Get-GraphAuthType
-    if ($authType -eq "Delegated") {
-        Connect-MgGraph -Scopes AuditLogsQuery.Read.All > $null
-    }
+    $requiredScopes = @("AuditLogsQuery.Read.All")
+    $graphAuth = Get-GraphAuthType -RequiredScopes $RequiredScopes
 
 	if (!(test-path $OutputDir)) {
 		write-logFile -Message "[INFO] Creating the following directory: $OutputDir"
@@ -150,15 +148,16 @@ Function Get-UALGraph {
                 }
                 Start-Sleep -Seconds 5
             } while ($status -ne "succeeded")
-        }   
+        }
+       write-logFile -Message "[INFO] Unified Audit Log search complete."
     }
     catch {
-        write-logFile -Message "[INFO] Ensure you are connected to Microsoft Graph by running the Connect-MgGraph -Scopes 'AuditLogsQuery.Read.All' command before executing this script" -Color "Yellow"
         Write-logFile -Message "[ERROR] An error occurred: $($_.Exception.Message)" -Color "Red"
-        break
+        throw
     }
 
     try {
+    	write-logFile -Message "[INFO] Collecting scan results from api (this may take a while)"
         $date = [datetime]::Now.ToString('yyyyMMddHHmmss') 
         $outputFilePath = "$($date)-$searchName-UnifiedAuditLog.json"
         $apiUrl = "https://graph.microsoft.com/beta/security/auditLog/queries/$scanId/records"
@@ -182,7 +181,7 @@ Function Get-UALGraph {
     }
     catch {
         Write-logFile -Message "[ERROR] An error occurred: $($_.Exception.Message)" -Color "Red"
-        break
+        throw
     }
 }
 

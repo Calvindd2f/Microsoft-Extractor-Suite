@@ -35,7 +35,7 @@ function Get-UALAll
 	Default: Output\UnifiedAuditLog
 
  	.PARAMETER MergeOutput
-    MergeOutput is the parameter specifying if you wish to merge CSV outputs to a single file
+    MergeOutput is the parameter specifying if you wish to merge CSV outputs to a single file.
 
 	.PARAMETER Encoding
     Encoding is the parameter specifying the encoding of the CSV/JSON output file.
@@ -88,7 +88,7 @@ function Get-UALAll
 	catch {
 		write-logFile -Message "[INFO] Ensure you are connected to M365 by running the Connect-M365 command before executing this script" -Color "Yellow"
 		Write-logFile -Message "[ERROR] An error occurred: $($_.Exception.Message)" -Color "Red"
-		break
+		throw
 	}
 
 	write-logFile -Message "[INFO] Running Get-UALAll" -Color "Green"
@@ -302,7 +302,7 @@ function Get-UALGroup
 	catch {
 		write-logFile -Message "[INFO] Ensure you are connected to M365 by running the Connect-M365 command before executing this script" -Color "Yellow"
 		Write-logFile -Message "[ERROR] An error occurred: $($_.Exception.Message)" -Color "Red"
-		break
+		throw
 	}
 	
 	if ($Group -eq "Exchange") {
@@ -556,7 +556,7 @@ function Get-UALSpecific
 	catch {
 		write-logFile -Message "[INFO] Ensure you are connected to M365 by running the Connect-M365 command before executing this script" -Color "Yellow"
 		Write-logFile -Message "[ERROR] An error occurred: $($_.Exception.Message)" -Color "Red"
-		break
+		throw
 	}
 	
 	write-logFile -Message "[INFO] Running Get-UALSpecific" -Color "Green"
@@ -783,7 +783,7 @@ function Get-UALSpecificActivity
 	catch {
 		write-logFile -Message "[INFO] Ensure you are connected to M365 by running the Connect-M365 command before executing this script" -Color "Yellow"
 		Write-logFile -Message "[ERROR] An error occurred: $($_.Exception.Message)" -Color "Red"
-		break
+		throw
 	}
 	
 	write-logFile -Message "[INFO] Running Get-UALSpecificActivity" -Color "Green"

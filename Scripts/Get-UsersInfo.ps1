@@ -33,10 +33,8 @@ function Get-Users {
         [string]$Encoding = "UTF8"
     )
 
-    $authType = Get-GraphAuthType
-    if ($authType -eq "Delegated") {
-        Connect-MgGraph -Scopes User.Read.All, Directory.AccessAsUser.All, User.ReadBasic.All, Directory.Read.All > $null
-    }
+    $requiredScopes = @("User.Read.All")
+    $graphAuth = Get-GraphAuthType -RequiredScopes $RequiredScopes
 
     if (!(test-path $OutputDir)) {
         New-Item -ItemType Directory -Force -Name $OutputDir > $null
@@ -97,9 +95,8 @@ function Get-Users {
         $mgUsers | select-object $selectobjects | Export-Csv -Path $filePath -NoTypeInformation -Encoding $Encoding
     }
     catch {
-        write-logFile -Message "[INFO] Ensure you are connected to Microsoft Graph by running the Connect-MgGraph -Scopes 'User.Read.All, Directory.AccessAsUser.All, User.ReadBasic.All, Directory.Read.All' command before executing this script" -Color "Yellow"
         Write-logFile -Message "[ERROR] An error occurred: $($_.Exception.Message)" -Color "Red"
-        break
+        throw
     }
     
     Write-logFile -Message "[INFO] Output written to $filePath" -Color "Green"
@@ -140,10 +137,8 @@ Function Get-AdminUsers {
         [string]$Encoding = "UTF8"
     )
 
-    $authType = Get-GraphAuthType
-    if ($authType -eq "Delegated") {
-        Connect-MgGraph -Scopes User.Read.All, Directory.AccessAsUser.All, User.ReadBasic.All, Directory.Read.All > $null
-    }
+    $requiredScopes = @("User.Read.All", "Directory.Read.All")
+    $graphAuth = Get-GraphAuthType -RequiredScopes $RequiredScopes
     
     if (!(test-path $OutputDir)) {
         New-Item -ItemType Directory -Force -Name $OutputDir > $null
@@ -218,9 +213,8 @@ Function Get-AdminUsers {
         }
     }
     catch {
-        write-logFile -Message "[INFO] Ensure you are connected to Microsoft Graph by running the Connect-MgGraph -Scopes 'User.Read.All, Directory.AccessAsUser.All, User.ReadBasic.All, Directory.Read.All' command before executing this script" -Color "Yellow"
         Write-logFile -Message "[ERROR] An error occurred: $($_.Exception.Message)" -Color "Red"
-        break
+        throw
     }
 
     $outputDirMerged = "$OutputDir\Merged\"

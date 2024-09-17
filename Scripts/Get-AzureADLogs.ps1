@@ -16,7 +16,7 @@ function Get-ADSignInLogs {
 
 	.PARAMETER OutputDir
 	OutputDir is the parameter specifying the output directory.
-	Default: The output will be written to: Output\AzureAD\{date_SignInLogs}\SignInLogs.json
+	Default: The output will be written to: Output\AzureAD\{date-SignInLogs}\SignInLogs.json
 
 	.PARAMETER Encoding
 	Encoding is the parameter specifying the encoding of the JSON output file.
@@ -67,7 +67,7 @@ function Get-ADSignInLogs {
 
 	$date = [datetime]::Now.ToString('yyyyMMddHHmmss') 
 	if ($OutputDir -eq "" ){
-		$OutputDir = "Output\AzureAD\$($date)_SignInLogs"
+		$OutputDir = "Output\AzureAD\$($date)-SignInLogs"
 		if (!(test-path $OutputDir)) {
 			write-logFile -Message "[INFO] Creating the following directory: $OutputDir"
 			New-Item -ItemType Directory -Force -Name $OutputDir > $null
@@ -161,7 +161,7 @@ function Get-ADAuditLogs {
 
 	.PARAMETER OutputDir
 	outputDir is the parameter specifying the output directory.
-	Default: The output will be written to: "Output\AzureAD\{date_AuditLogs}\Auditlogs.json
+	Default: The output will be written to: "Output\AzureAD\{date-AuditLogs}\Auditlogs.json
 
 	.PARAMETER Encoding
 	Encoding is the parameter specifying the encoding of the JSON output file.
@@ -216,7 +216,7 @@ function Get-ADAuditLogs {
 
 	$date = [datetime]::Now.ToString('yyyyMMddHHmmss') 
 	if ($OutputDir -eq "" ){
-		$OutputDir = "Output\AzureAD\$($date)_AuditLogs"
+		$OutputDir = "Output\AzureAD\$($date)-AuditLogs"
 		if (!(test-path $OutputDir)) {
 			write-logFile -Message "[INFO] Creating the following directory: $OutputDir"
 			New-Item -ItemType Directory -Force -Name $OutputDir > $null
@@ -269,7 +269,8 @@ function Get-ADAuditLogs {
 			catch {
 				$retryCount++
 				if ($retryCount -lt $maxRetries) {
-					Start-Sleep -Seconds 10
+    					#Minimum of 15 seconds required, or microsoft will return too many requests
+					Start-Sleep -Seconds 15
 					Write-LogFile -Message "[WARNING] Failed to acquire logs. Retrying... Attempt $retryCount of $maxRetries" -Color "Yellow"
 				} else {
 					Write-LogFile -Message "[ERROR] Failed to acquire logs after $maxRetries attempts. Moving on." -Color "Red"
