@@ -1,5 +1,6 @@
-Function Get-UALGraph {
-<#
+Function Get-UALGraph
+{
+    <#
     .SYNOPSIS
     Gets all the unified audit log entries.
 
@@ -72,11 +73,11 @@ Function Get-UALGraph {
 #>
     [CmdletBinding()]
     param(
-		[Parameter(Mandatory=$true)]$searchName,
+        [Parameter(Mandatory = $true)]$searchName,
         [string]$OutputDir = "Output\UnifiedAuditLog\",
         [string]$Encoding = "UTF8",
         [string]$startDate,
-		[string]$endDate,
+        [string]$endDate,
         [string[]]$RecordType = @(),
         [string]$Keyword = "",
         [string]$Service = "",
@@ -92,15 +93,19 @@ Function Get-UALGraph {
         $requiredScopes = @("AuditLogsQuery.Read.All")
         $graphAuth = Get-GraphAuthType -RequiredScopes $RequiredScopes
 
-        if (!(test-path $OutputDir)) {
+        if (!(test-path $OutputDir))
+        {
             write-logFile -Message "[INFO] Creating the following directory: $OutputDir"
             New-Item -ItemType Directory -Force -Name $OutputDir > $null
         }
-        else {
-            if (Test-Path -Path $OutputDir) {
+        else
+        {
+            if (Test-Path -Path $OutputDir)
+            {
                 write-LogFile -Message "[INFO] Custom directory set to: $OutputDir"
             }
-            else {
+            else
+            {
                 write-Error "[Error] Custom directory invalid: $OutputDir exiting script" -ErrorAction Stop
                 write-LogFile -Message "[Error] Custom directory invalid: $OutputDir exiting script"
             }
@@ -113,27 +118,28 @@ Function Get-UALGraph {
 
         write-logFile -Message "[INFO] Running Get-UALGraph" -Color "Green"
 
-	    $body = @{
-            "@odata.type" = "#microsoft.graph.security.auditLogQuery"
-            displayName = $searchName
-            filterStartDateTime = $script:startDate
-            filterEndDateTime = $script:endDate
-            recordTypeFilters = $RecordType
-            keywordFilter = $Keyword
-            serviceFilter = $Service
-            operationFilters = $Operations
-            userPrincipalNameFilters = $UserIds
-            ipAddressFilters = $IPAddress
-            objectIdFilters = $ObjecIDs
+        $body = @{
+            "@odata.type"               = "#microsoft.graph.security.auditLogQuery"
+            displayName                 = $searchName
+            filterStartDateTime         = $script:startDate
+            filterEndDateTime           = $script:endDate
+            recordTypeFilters           = $RecordType
+            keywordFilter               = $Keyword
+            serviceFilter               = $Service
+            operationFilters            = $Operations
+            userPrincipalNameFilters    = $UserIds
+            ipAddressFilters            = $IPAddress
+            objectIdFilters             = $ObjecIDs
             administrativeUnitIdFilters = @()
-            status = ""
+            status                      = ""
         } | ConvertTo-Json
 
     }
     process
     {
 
-        try {
+        try
+        {
             $response = Invoke-MgGraphRequest -Method POST -Uri "https://graph.microsoft.com/beta/security/auditLog/queries" -Body $body -ContentType "application/json"
             $scanId = $response.id
             write-logFile -Message "[INFO] A new Unified Audit Log search has started with the name: $searchName and ID: $scanId." -Color "Green"
@@ -143,29 +149,35 @@ Function Get-UALGraph {
 
             write-logFile -Message "[INFO] Waiting for the scan to start..."
             $lastStatus = ""
-            do {
+            do
+            {
                 $response = Invoke-MgGraphRequest -Method Get -Uri $apiUrl -ContentType 'application/json'
                 $status = $response.status
-                if ($status -ne $lastStatus) {
+                if ($status -ne $lastStatus)
+                {
                     $lastStatus = $status
                 }
                 Start-Sleep -Seconds 5
             } while ($status -ne "succeeded" -and $status -ne "running")
-            if ($status -eq "running") {
+            if ($status -eq "running")
+            {
                 write-logFile -Message "[INFO] Unified Audit Log search has started... This can take a while..."
-                do {
+                do
+                {
                     $response = Invoke-MgGraphRequest -Method Get -Uri $apiUrl -ContentType 'application/json'
                     $status = $response.status
-                    if ($status -ne $lastStatus) {
+                    if ($status -ne $lastStatus)
+                    {
                         write-logFile -Message "[INFO] Unified Audit Log search is still running. Waiting..."
                         $lastStatus = $status
                     }
                     Start-Sleep -Seconds 5
                 } while ($status -ne "succeeded")
             }
-        write-logFile -Message "[INFO] Unified Audit Log search complete."
+            write-logFile -Message "[INFO] Unified Audit Log search complete."
         }
-        catch {
+        catch
+        {
             Write-logFile -Message "[ERROR] An error occurred: $($_.Exception.Message)" -Color "Red"
             throw
         }
@@ -175,21 +187,26 @@ Function Get-UALGraph {
     end
     {
 
-        try {
+        try
+        {
             write-logFile -Message "[INFO] Collecting scan results from api (this may take a while)"
             $date = [datetime]::Now.ToString('yyyyMMddHHmmss')
             $outputFilePath = "$($date)-$searchName-UnifiedAuditLog.json"
             $apiUrl = "https://graph.microsoft.com/beta/security/auditLog/queries/$scanId/records"
 
-            Do {
+            Do
+            {
                 $response = Invoke-MgGraphRequest -Method Get -Uri $apiUrl  -ContentType "application/json; odata.metadata=minimal; odata.streaming=true;" -OutputType Json
                 $responseJson = $response | ConvertFrom-Json
 
-                if ($responseJson.value) {
+                if ($responseJson.value)
+                {
                     $filePath = Join-Path -Path $OutputDir -ChildPath $outputFilePath
                     $responseJson.value | ConvertTo-Json -Depth 100 | Out-File -FilePath $filePath -Append -Encoding $Encoding
 
-                } else {
+                }
+                else
+                {
                     Write-logFile -Message "[INFO] No results matched your search." -color Yellow
                 }
                 $apiUrl = $responseJson.'@odata.nextLink'
@@ -200,7 +217,8 @@ Function Get-UALGraph {
             $runtime = $endTime - $script:startTime
             write-logFile -Message "[INFO] Total runtime (HH:MM:SS): $($runtime.Hours):$($runtime.Minutes):$($runtime.Seconds)" -Color "Green"
         }
-        catch {
+        catch
+        {
             Write-logFile -Message "[ERROR] An error occurred: $($_.Exception.Message)" -Color "Red"
             throw
         }

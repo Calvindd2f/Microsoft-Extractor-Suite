@@ -1,5 +1,6 @@
-function Get-Users {
-<#
+function Get-Users
+{
+    <#
     .SYNOPSIS
     Retrieves the creation time and date of the last password change for all users.
     Script inspired by: https://github.com/tomwechsler/Microsoft_Graph/blob/main/Entra_ID/Create_time_last_password.ps1
@@ -38,27 +39,32 @@ function Get-Users {
         $requiredScopes = @("User.Read.All")
         $graphAuth = Get-GraphAuthType -RequiredScopes $RequiredScopes
 
-        if (!(test-path $OutputDir)) {
+        if (!(test-path $OutputDir))
+        {
             New-Item -ItemType Directory -Force -Name $OutputDir > $null
             write-logFile -Message "[INFO] Creating the following directory: $OutputDir"
         }
-        else {
-	    	if (Test-Path -Path $OutputDir) {
-	    		write-LogFile -Message "[INFO] Custom directory set to: $OutputDir"
-	    	}
-	    	else {
-	    		write-Error "[Error] Custom directory invalid: $OutputDir exiting script" -ErrorAction Stop
-	    		write-LogFile -Message "[Error] Custom directory invalid: $OutputDir exiting script"
-	    	}
-	    }
+        else
+        {
+            if (Test-Path -Path $OutputDir)
+            {
+                write-LogFile -Message "[INFO] Custom directory set to: $OutputDir"
+            }
+            else
+            {
+                write-Error "[Error] Custom directory invalid: $OutputDir exiting script" -ErrorAction Stop
+                write-LogFile -Message "[Error] Custom directory invalid: $OutputDir exiting script"
+            }
+        }
 
         Write-logFile -Message "[INFO] Running Get-Users" -Color "Green"
     }
 
     process
     {
-        try {
-            $selectobjects = "Id","AccountEnabled","DisplayName","UserPrincipalName","Mail","CreatedDateTime","LastPasswordChangeDateTime","DeletedDateTime","JobTitle","Department","OfficeLocation","City","State","Country"
+        try
+        {
+            $selectobjects = "Id", "AccountEnabled", "DisplayName", "UserPrincipalName", "Mail", "CreatedDateTime", "LastPasswordChangeDateTime", "DeletedDateTime", "JobTitle", "Department", "OfficeLocation", "City", "State", "Country"
             $mgUsers = Get-MgUser -All -Select $selectobjects
             write-host "A total of $($mgUsers.count) users found:"
 
@@ -99,7 +105,8 @@ function Get-Users {
 
             $mgUsers | select-object $selectobjects | Export-Csv -Path $filePath -NoTypeInformation -Encoding $Encoding
         }
-        catch {
+        catch
+        {
             Write-logFile -Message "[ERROR] An error occurred: $($_.Exception.Message)" -Color "Red"
             throw
         }
@@ -108,8 +115,9 @@ function Get-Users {
     }
 }
 
-Function Get-AdminUsers {
-<#
+Function Get-AdminUsers
+{
+    <#
     .SYNOPSIS
     Retrieves all Administrator directory roles.
 
@@ -148,15 +156,19 @@ Function Get-AdminUsers {
         $requiredScopes = @("User.Read.All", "Directory.Read.All")
         $graphAuth = Get-GraphAuthType -RequiredScopes $RequiredScopes
 
-        if (!(test-path $OutputDir)) {
+        if (!(test-path $OutputDir))
+        {
             New-Item -ItemType Directory -Force -Name $OutputDir > $null
             write-logFile -Message "[INFO] Creating the following directory: $OutputDir"
         }
-        else {
-            if (Test-Path -Path $OutputDir) {
+        else
+        {
+            if (Test-Path -Path $OutputDir)
+            {
                 write-LogFile -Message "[INFO] Custom directory set to: $OutputDir"
             }
-            else {
+            else
+            {
                 write-Error "[Error] Custom directory invalid: $OutputDir exiting script" -ErrorAction Stop
                 write-LogFile -Message "[Error] Custom directory invalid: $OutputDir exiting script"
             }
@@ -167,46 +179,56 @@ Function Get-AdminUsers {
     {
 
         Write-logFile -Message "[INFO] Running Get-AdminUsers" -Color "Green"
-        try {
+        try
+        {
             $getRoles = Get-MgDirectoryRole -all
-            foreach ($role in $getRoles) {
+            foreach ($role in $getRoles)
+            {
                 $roleId = $role.Id
                 $roleName = $role.DisplayName
 
-                if ($roleName -like "*Admin*") {
+                if ($roleName -like "*Admin*")
+                {
                     $areThereUsers = Get-MgDirectoryRoleMember -DirectoryRoleId $roleId
 
-                    if ($null -eq $areThereUsers) {
+                    if ($null -eq $areThereUsers)
+                    {
                         write-host "[INFO] $roleName - No users found"
                     }
 
-                    else {
-                        $results=@();
+                    else
+                    {
+                        $results = @();
 
                         $count = 0
-                        foreach ($user in $areThereUsers) {
+                        foreach ($user in $areThereUsers)
+                        {
                             $userid = $user.Id
 
-                            if ($userid -eq ".") {
+                            if ($userid -eq ".")
+                            {
                                 write-host "."
                             }
 
-                            else {
-                                $count = $count +1
-                                try{
+                            else
+                            {
+                                $count = $count + 1
+                                try
+                                {
                                     $getUserName = Get-MgUser -Filter ("Id eq '$userid'") -ErrorAction Stop
                                     $userName = $getUserName.UserPrincipalName
                                     $userid = $getUserName.Id
 
                                     $myObject = [PSCustomObject]@{
                                         UserName = $userName
-                                        UserId = $userid
-                                        Role = $roleName
+                                        UserId   = $userid
+                                        Role     = $roleName
                                     }
 
-                                    $results+= $myObject;
+                                    $results += $myObject;
                                 }
-                                catch{
+                                catch
+                                {
                                     Write-logFile -Message "[INFO] Resource $userid does not exist or one of its queried reference-property objects are not present." -Color "Yellow"
                                 }
                             }
@@ -220,7 +242,8 @@ Function Get-AdminUsers {
                 }
             }
         }
-        catch {
+        catch
+        {
             Write-logFile -Message "[ERROR] An error occurred: $($_.Exception.Message)" -Color "Red"
             throw
         }
@@ -229,7 +252,8 @@ Function Get-AdminUsers {
     end
     {
         $outputDirMerged = "$OutputDir\Merged\"
-        If (!(test-path $outputDirMerged)) {
+        If (!(test-path $outputDirMerged))
+        {
             Write-LogFile -Message "[INFO] Creating the following directory: $outputDirMerged"
             New-Item -ItemType Directory -Force -Path $outputDirMerged > $null
         }
