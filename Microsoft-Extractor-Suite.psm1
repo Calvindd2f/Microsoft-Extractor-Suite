@@ -8,7 +8,7 @@ $host.ui.RawUI.WindowTitle = "Microsoft-Extractor-Suite $version"
 $logo=@"
  +-+-+-+-+-+-+-+-+-+ +-+-+-+-+-+-+-+-+-+ +-+-+-+-+-+
  |M|i|c|r|o|s|o|f|t| |E|x|t|r|a|c|t|o|r| |S|u|i|t|e|
- +-+-+-+-+-+-+-+-+-+ +-+-+-+-+-+-+-+-+-+ +-+-+-+-+-+                                                                                                                                                                     
+ +-+-+-+-+-+-+-+-+-+ +-+-+-+-+-+-+-+-+-+ +-+-+-+-+-+
 Copyright 2024 Invictus Incident Response
 Created by Joey Rentenaar & Korstiaan Stam
 "@
@@ -20,50 +20,50 @@ if (!(test-path $outputDir)) {
 	New-Item -ItemType Directory -Force -Name $Outputdir > $null
 }
 
-$retryCount = 0 
-	
+$retryCount = 0
+
 Function StartDate
 {
-	if (($startDate -eq "") -Or ($null -eq $startDate)) {
+	if ([string]::IsNullOrEmpty($startDate)) {
 		$script:StartDate = [datetime]::Now.ToUniversalTime().AddDays(-90)
 		write-LogFile -Message "[INFO] No start date provived by user setting the start date to: $($script:StartDate.ToString("yyyy-MM-ddTHH:mm:ssK"))" -Color "Yellow"
 	}
 	else
 	{
 		$script:startDate = $startDate -as [datetime]
-		if (!$script:startDate ) { 
+		if (!$script:startDate ) {
 			write-LogFile -Message "[WARNING] Not A valid start date and time, make sure to use YYYY-MM-DD" -Color "Red"
-		} 
+		}
 	}
 }
 
 Function StartDateAz
 {
-	if (($startDate -eq "") -Or ($null -eq $startDate)) {
+    if ([string]::IsNullOrEmpty($startDate)) {
 		$script:StartDate = [datetime]::Now.ToUniversalTime().AddDays(-30)
 		write-LogFile -Message "[INFO] No start date provived by user setting the start date to: $($script:StartDate.ToString("yyyy-MM-ddTHH:mm:ssK"))" -Color "Yellow"
 	}
 	else
 	{
 		$script:startDate = $startDate -as [datetime]
-		if (!$script:startDate ) { 
+		if (!$script:startDate ) {
 			write-LogFile -Message "[WARNING] Not A valid start date and time, make sure to use YYYY-MM-DD" -Color "Red"
-		} 
+		}
 	}
 }
 
 function EndDate
 {
-	if (($endDate -eq "") -Or ($null -eq $endDate)) {
+    if ([string]::IsNullOrEmpty($endDate)) {
 		$script:EndDate = [datetime]::Now.ToUniversalTime()
 		write-LogFile -Message "[INFO] No end date provived by user setting the end date to: $($script:EndDate.ToString("yyyy-MM-ddTHH:mm:ssK"))" -Color "Yellow"
 	}
 
 	else {
 		$script:endDate = $endDate -as [datetime]
-		if (!$endDate) { 
+		if (!$endDate) {
 			write-LogFile -Message "[WARNING] Not A valid end date and time, make sure to use YYYY-MM-DD" -Color "Red"
-		} 
+		}
 	}
 }
 
@@ -135,7 +135,7 @@ function Get-GraphAuthType {
                 foreach ($missingScope in $missingScopes) {
                     Write-LogFile -Message "[INFO] Missing Graph scope detected: $missingScope" -Color "Yellow"
                 }
-                
+
                 Write-LogFile -Message "[INFO] Attempting to re-authenticate with the appropriate scope(s): $joinedScopes" -Color "Green"
                 Connect-MgGraph -NoWelcome -Scopes $joinedScopes > $null
             }
@@ -165,44 +165,167 @@ function Get-GraphAuthType {
     }
 }
 
-function Merge-OutputFiles {
-    param (
-        [Parameter(Mandatory)][string]$OutputDir,
-        [Parameter(Mandatory)][string]$OutputType,
-        [string]$MergedFileName
-    )
+function Set-FileEncoding
+{
+    <#
+    .Description
+    This function returns encoding type for setting content.
+    #>
+    $PSVersion = $PSVersionTable.PSVersion
 
-    $outputDirMerged = Join-Path -Path $OutputDir -ChildPath "Merged"
-    If (!(Test-Path $outputDirMerged)) {
-        Write-LogFile -Message "[INFO] Creating the following directory: $outputDirMerged"
-        New-Item -ItemType Directory -Force -Path $outputDirMerged > $null
+    $Encoding = 'utf8'
+
+    if ($PSVersion -ge '6.0')
+    {
+        $Encoding = 'utf8NoBom'
     }
 
-	$mergedPath = Join-Path -Path $outputDirMerged -ChildPath $MergedFileName
-	
-    switch ($OutputType) {
-        'CSV' {
-			Get-ChildItem $OutputDir -Filter *.csv | Select-Object -ExpandProperty FullName | Import-Csv | Export-Csv $mergedPath -NoTypeInformation -Append -Encoding UTF8
-            Write-LogFile -Message "[INFO] CSV files merged into $mergedPath"
-        }
-        'JSON' {
-            $allJsonObjects = @()
+    return $Encoding
+}
 
-			Get-ChildItem $OutputDir -Filter *.json | ForEach-Object {
-                $jsonContent = Get-Content -Path $_.FullName -Raw | ConvertFrom-Json
-                if ($jsonContent -is [System.Collections.ArrayList] -or $jsonContent -is [System.Collections.Generic.List[object]]) {
-                    $allJsonObjects += $jsonContent
+
+function Merge-OutputFiles
+{
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
+        [string]$OutputDir,
+
+        [Parameter(Mandatory)]
+        [ValidateSet('CSV', 'JSON')]
+        [string]$OutputType,
+
+        [string]$MergedFileName,
+
+        [int]$BatchSize = 1000,
+
+        [switch]$UseParallel
+    )
+
+    begin
+    {
+        $outputDirMerged = Join-Path -Path $OutputDir -ChildPath "Merged"
+        if (!(Test-Path $outputDirMerged))
+        {
+            Write-LogFile "Creating directory: $outputDirMerged"
+            $null = New-Item -ItemType Directory -Force -Path $outputDirMerged
+        }
+
+        if (-not $MergedFileName)
+        {
+            $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
+            $MergedFileName = "merged_$timestamp.$($OutputType.ToLower())"
+        }
+
+        $mergedPath = Join-Path -Path $outputDirMerged -ChildPath $MergedFileName
+    }
+
+    process
+    {
+        try
+        {
+            switch ($OutputType)
+            {
+                'CSV'
+                {
+                    $writer = [System.IO.StreamWriter]::new($mergedPath, $false, [System.Text.Encoding]::UTF8)
+                    $isHeaderWritten = $false
+
+                    $csvFiles = Get-ChildItem $OutputDir -Filter "*.csv"
+
+                    if ($UseParallel)
+                    {
+                        $csvData = $csvFiles | ForEach-Object -ThrottleLimit 5 -Parallel {
+                            Import-Csv -Path $_.FullName
+                        }
+                    }
+                    else
+                    {
+                        $csvData = $csvFiles | ForEach-Object { Import-Csv -Path $_.FullName }
+                    }
+
+                    $batch = @()
+                    foreach ($record in $csvData)
+                    {
+                        if (-not $isHeaderWritten)
+                        {
+                            $header = $record.PSObject.Properties.Name -join ','
+                            $writer.WriteLine($header)
+                            $isHeaderWritten = $true
+                        }
+
+                        $batch += $record
+                        if ($batch.Count -ge $BatchSize)
+                        {
+                            $batch | ForEach-Object {
+                                $line = $_.PSObject.Properties.Value -join ','
+                                $writer.WriteLine($line)
+                            }
+                            $batch = @()
+                        }
+                    }
+
+                    if ($batch.Count -gt 0)
+                    {
+                        $batch | ForEach-Object {
+                            $line = $_.PSObject.Properties.Value -join ','
+                            $writer.WriteLine($line)
+                        }
+                    }
+
+                    Write-LogFile "CSV files merged into $mergedPath"
                 }
-                else {
-                    $allJsonObjects += @($jsonContent)
+
+                'JSON'
+                {
+                    $jsonFiles = Get-ChildItem $OutputDir -Filter "*.json"
+                    $allJsonObjects = [System.Collections.Generic.List[object]]::new()
+
+                    if ($UseParallel)
+                    {
+                        $jsonData = $jsonFiles | ForEach-Object -ThrottleLimit 5 -Parallel {
+                            $content = Get-Content -Path $_.FullName -Raw | ConvertFrom-Json
+                            if ($content -is [array]) { return $content }
+                            return @($content)
+                        }
+                        $allJsonObjects.AddRange($jsonData)
+                    }
+                    else
+                    {
+                        foreach ($file in $jsonFiles)
+                        {
+                            $jsonContent = Get-Content -Path $file.FullName -Raw | ConvertFrom-Json
+                            if ($jsonContent -is [array])
+                            {
+                                $allJsonObjects.AddRange($jsonContent)
+                            }
+                            else
+                            {
+                                $allJsonObjects.Add($jsonContent)
+                            }
+                        }
+                    }
+
+                    $writer = [System.IO.StreamWriter]::new($mergedPath, $false, [System.Text.Encoding]::UTF8)
+                    $jsonString = $allJsonObjects | ConvertTo-Json -Depth 100 -Compress
+                    $writer.Write($jsonString)
+
+                    Write-LogFile "JSON files merged into $mergedPath"
                 }
             }
-
-            $allJsonObjects | ConvertTo-Json -Depth 100 | Set-Content $mergedPath
-            Write-Host "[INFO] JSON files merged into $mergedPath"
         }
-        default {
-            Write-LogFile -Message "[ERROR] Unsupported file type specified: $OutputType" -Color Red
+        catch
+        {
+            Write-LogFile "Error processing files: $_" -Level 'ERROR'
+            throw
+        }
+        finally
+        {
+            if ($writer)
+            {
+                $writer.Dispose()
+            }
         }
     }
 }
