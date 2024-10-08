@@ -317,7 +317,7 @@ function Merge-OutputFiles
         }
         catch
         {
-            Write-LogFile "Error processing files: $_" -Level 'ERROR'
+            Write-LogFile "[ERROR] Error processing files: $_"
             throw
         }
         finally
