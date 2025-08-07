@@ -13,7 +13,7 @@ if (-not $NoWelcome) {
     $logo=@"
  +-+-+-+-+-+-+-+-+-+ +-+-+-+-+-+-+-+-+-+ +-+-+-+-+-+
  |M|i|c|r|o|s|o|f|t| |E|x|t|r|a|c|t|o|r| |S|u|i|t|e|
- +-+-+-+-+-+-+-+-+-+ +-+-+-+-+-+-+-+-+-+ +-+-+-+-+-+                                                                                                                                                                     
+ +-+-+-+-+-+-+-+-+-+ +-+-+-+-+-+-+-+-+-+ +-+-+-+-+-+
 Copyright 2025 Invictus Incident Response
 Created by Joey Rentenaar & Korstiaan Stam
 "@
@@ -26,11 +26,11 @@ if (!(test-path $outputDir)) {
 	New-Item -ItemType Directory -Force -Name $Outputdir > $null
 }
 
-$retryCount = 0 
-	
+$retryCount = 0
+
 Function StartDate {
     param([switch]$Quiet)
-    
+
     if (($startDate -eq "") -Or ($null -eq $startDate)) {
         $script:StartDate = [datetime]::Now.ToUniversalTime().AddDays(-90)
         if (-not $Quiet) {
@@ -39,15 +39,15 @@ Function StartDate {
     }
     else {
         $script:startDate = $startDate -as [datetime]
-        if (!$script:startDate -and -not $Quiet) { 
+        if (!$script:startDate -and -not $Quiet) {
             Write-LogFile -Message "[WARNING] Not A valid start date and time, make sure to use YYYY-MM-DD" -Color "Red"
-        } 
+        }
     }
 }
 
 Function StartDateUAL {
     param([switch]$Quiet)
-    
+
     if (($startDate -eq "") -Or ($null -eq $startDate)) {
         $script:StartDate = [datetime]::Now.ToUniversalTime().AddDays(-180)
         if (-not $Quiet) {
@@ -56,15 +56,15 @@ Function StartDateUAL {
     }
     else {
         $script:startDate = $startDate -as [datetime]
-        if (!$script:startDate -and -not $Quiet) { 
+        if (!$script:startDate -and -not $Quiet) {
             Write-LogFile -Message "[WARNING] Not A valid start date and time, make sure to use YYYY-MM-DD" -Color "Red"
-        } 
+        }
     }
 }
 
 Function StartDateAz {
     param([switch]$Quiet)
-    
+
     if (($startDate -eq "") -Or ($null -eq $startDate)) {
         $script:StartDate = [datetime]::Now.ToUniversalTime().AddDays(-30)
         if (-not $Quiet) {
@@ -73,15 +73,15 @@ Function StartDateAz {
     }
     else {
         $script:startDate = $startDate -as [datetime]
-        if (!$script:startDate -and -not $Quiet) { 
+        if (!$script:startDate -and -not $Quiet) {
             Write-LogFile -Message "[WARNING] Not A valid start date and time, make sure to use YYYY-MM-DD" -Color "Red"
-        } 
+        }
     }
 }
 
 function EndDate {
     param([switch]$Quiet)
-    
+
     if (($endDate -eq "") -Or ($null -eq $endDate)) {
         $script:EndDate = [datetime]::Now.ToUniversalTime()
         if (-not $Quiet) {
@@ -90,9 +90,9 @@ function EndDate {
     }
     else {
         $script:endDate = $endDate -as [datetime]
-        if (!$endDate -and -not $Quiet) { 
+        if (!$endDate -and -not $Quiet) {
             Write-LogFile -Message "[WARNING] Not A valid end date and time, make sure to use YYYY-MM-DD" -Color "Red"
-        } 
+        }
     }
 }
 
@@ -214,7 +214,7 @@ function Get-GraphAuthType {
                 foreach ($missingScope in $missingScopes) {
                     Write-LogFile -Message "[INFO] Missing Graph scope detected: $missingScope" -Color "Yellow"
                 }
-                
+
                 Write-LogFile -Message "[INFO] Attempting to re-authenticate with the appropriate scope(s): $joinedScopes" -Color "Green"
                 Connect-MgGraph -NoWelcome -Scopes $joinedScopes > $null
             }
@@ -259,23 +259,23 @@ function Merge-OutputFiles {
     }
 
 	$mergedPath = Join-Path -Path $outputDirMerged -ChildPath $MergedFileName
-	
+
     switch ($OutputType) {
         'CSV' {
 			Get-ChildItem $OutputDir -Filter *.csv | Select-Object -ExpandProperty FullName | Import-Csv | Export-Csv $mergedPath -NoTypeInformation -Append -Encoding UTF8
             Write-LogFile -Message "[INFO] CSV files merged into $mergedPath"
         }
         'SOF-ELK' {
-			Get-ChildItem $OutputDir -Filter *.json | Select-Object -ExpandProperty FullName | ForEach-Object { Get-Content -Path $_ | Where-Object { $_.Trim() -ne "" } } | Out-File -Append $mergedPath -Encoding UTF8 
+			Get-ChildItem $OutputDir -Filter *.json | Select-Object -ExpandProperty FullName | ForEach-Object { Get-Content -Path $_ | Where-Object { $_.Trim() -ne "" } } | Out-File -Append $mergedPath -Encoding UTF8
             Write-LogFile -Message "[INFO] SOF-ELK files merged into $mergedPath"
         }
-        'JSON' {           
+        'JSON' {
             "[" | Set-Content $mergedPath -Encoding UTF8
 
             $firstFile = $true
             Get-ChildItem $OutputDir -Filter *.json | ForEach-Object {
                 $content = Get-Content -Path $_.FullName -Raw
-                
+
                 $content = $content.Trim()
                 if ($content.StartsWith('[')) {
                     $content = $content.Substring(1)
@@ -296,7 +296,7 @@ function Merge-OutputFiles {
             }
             "]" | Add-Content $mergedPath -Encoding UTF8
             Write-LogFile -Message "[INFO] JSON files merged into $mergedPath"
-            
+
         }
         'JSONL' {
             $jsonlFiles = Get-ChildItem -Path $OutputDir -Filter *.jsonl

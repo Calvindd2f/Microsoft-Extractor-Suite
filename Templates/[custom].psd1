@@ -1,11 +1,11 @@
 @{
-    Name = "Custom Template" 
+    Name = "Custom Template"
     Description = "Custom Template"
 
     # Enable/Disable tasks by commenting/uncommenting lines with #
     # To enable a task: Remove the # at the beginning of the line
     # To disable a task: Add # at the beginning of the line
-    
+
     Tasks = @(
         # ===== Sign-In & Audit Logging (UNCOMMENT TO ENABLE) =====
         # "Get-GraphEntraSignInLogs"         # Collect sign-in logs
@@ -28,7 +28,7 @@
         # "Get-Users"                        # Collect user information
         # "Get-AdminUsers"                   # Collect users with administrative privileges
         # "Get-RiskyUsers"                   # Get risky users from Entra ID
-        # "Get-RiskyDetections"              # Get risk detection events  
+        # "Get-RiskyDetections"              # Get risk detection events
         # "Get-MFA"                          # Collect MFA status for users
         # "Get-OAuthPermissionsGraph"        # Collect OAuth application permissions via Graph API
 
@@ -53,7 +53,7 @@
         # "Get-DirectoryActivityLogs"        # Collect directory activity logs
         # "Get-PIMAssignments"               # Generate report of all Entra ID PIM role assignments
         # "Get-AllRoleActivity"              # Export all directory role memberships with last login info
-                
+
         # ===== UNIFIED AUDIT LOG (ENABLED BY DEFAULT) =====
         @{
             Task = "UALOperations"
@@ -68,7 +68,7 @@
                 #'Set-TransportRule'
                 #'Enable-TransportRule'
                 #'Disable-TransportRule'
-                 
+
                 # ===== EMAIL ACTIVITIES =====
                 #'MailboxLogin'
                 #'MailItemsAccessed'
@@ -81,21 +81,21 @@
                 #'Update'
                 #'Move'
                 #'Copy'
-                
+
                 # ===== PERMISSIONS & ACCESS =====
                 #'Add-MailboxPermission'
                 #'Remove-MailboxPermission'
                 #'Add-RecipientPermission'
                 #'Add-MailboxFolderPermission'
                 #'Set-MailboxFolderPermission'
-                
+
                 # ===== AUTHENTICATION & IDENTITY =====
                 #'UserLoggedIn'
                 #'UserLoginFailed'
                 #'UserStrongAuthClientAuthNRequired'
                 #'UserStrongAuthClientAuthNRequiredInterrupt'
                 #'UserPasswordChanged'
-                
+
                 # ===== APPLICATIONS & CONSENT =====
                 #'ApplicationConsent'
                 #'Consent to application'
@@ -105,7 +105,7 @@
                 #'Add application'
                 #'Add service principal'
                 #'Add owner to application'
-                
+
                 # ===== FILE & SHAREPOINT ACTIVITIES =====
                 #'FileAccessed'
                 #'FileDownloaded'
@@ -116,14 +116,14 @@
                 #'SharingRevoked'
                 #'AddedToSecureLink'
                 #'RemovedFromSecureLink'
-                
+
                 # ===== SEARCH & EDISCOVERY =====
                 #'SearchQueryInitiated'
                 #'SearchQueryPerformed'
                 #'New-ComplianceSearch'
                 #'SearchExportDownloaded'
                 #'ViewedSearchExported'
-                
+
                 # ===== ADMINISTRATIVE ACTIVITIES =====
                 #'Add user'
                 #'Delete user'
@@ -133,13 +133,13 @@
                 #'Added member to role'
                 #'Remove member from role'
                 #'Set-AdminAuditLogConfig'
-                
+
                 # ===== SECURITY & COMPLIANCE =====
                 #'AlertTriggered'
                 #'AlertEntityGenerated'
                 #'CaseAdded'
                 #'ThreatIntelligenceAtpFile'
-                
+
                 # ===== POWER AUTOMATE =====
                 #'CreateFlow'
                 #'PutConnection'
