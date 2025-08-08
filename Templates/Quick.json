@@ -1,0 +1,484 @@
+{
+  "metadata": {
+    "name": "Quick Security Triage",
+    "description": "Important data sources for a rapid assessment. Note: Execution time varies significantly, fast with specific users, longer when analyzing all users.",
+    "version": "1.0.0",
+    "category": "Quick",
+    "executionTimeEstimate": {
+      "specificUsers": "Fast",
+      "allUsers": "Longer"
+    }
+  },
+  "taskCategories": [
+    {
+      "name": "Core Security Analysis",
+      "description": "Essential security tasks for rapid triage",
+      "enabled": true,
+      "tasks": [
+        {
+          "id": "risky-users",
+          "name": "Risky Users",
+          "command": "Get-RiskyUsers",
+          "description": "Get risky users from Entra ID",
+          "enabled": true,
+          "required": true,
+          "riskLevel": "Low"
+        },
+        {
+          "id": "risky-detections",
+          "name": "Risk Detections",
+          "command": "Get-RiskyDetections",
+          "description": "Get risk detection events",
+          "enabled": true,
+          "required": true,
+          "riskLevel": "Low"
+        },
+        {
+          "id": "mfa-status",
+          "name": "MFA Status",
+          "command": "Get-MFA",
+          "description": "Collect MFA status for users",
+          "enabled": true,
+          "riskLevel": "Low"
+        },
+        {
+          "id": "mailbox-rules",
+          "name": "Mailbox Rules",
+          "command": "Get-MailboxRules",
+          "description": "Export mailbox rules",
+          "enabled": true,
+          "riskLevel": "Medium"
+        },
+        {
+          "id": "oauth-permissions",
+          "name": "OAuth Permissions",
+          "command": "Get-OAuthPermissionsGraph",
+          "description": "Collect OAuth application permissions via Graph API",
+          "enabled": true,
+          "riskLevel": "Medium"
+        }
+      ]
+    },
+    {
+      "name": "Authentication & Logging",
+      "description": "Critical authentication and audit logging",
+      "enabled": true,
+      "tasks": [
+        {
+          "id": "signin-logs",
+          "name": "Sign-In Logs",
+          "command": "Get-GraphEntraSignInLogs",
+          "description": "Collect sign-in logs",
+          "enabled": true,
+          "riskLevel": "Medium"
+        },
+        {
+          "id": "audit-logs",
+          "name": "Audit Logs",
+          "command": "Get-GraphEntraAuditLogs",
+          "description": "Collect audit logs",
+          "enabled": true,
+          "riskLevel": "Medium"
+        }
+      ]
+    },
+    {
+      "name": "User Management",
+      "description": "Basic user information collection",
+      "enabled": true,
+      "tasks": [
+        {
+          "id": "users",
+          "name": "User Information",
+          "command": "Get-Users",
+          "description": "Collect user information",
+          "enabled": true,
+          "riskLevel": "Low"
+        }
+      ]
+    },
+    {
+      "name": "Device Management",
+      "description": "Device registration information",
+      "enabled": true,
+      "tasks": [
+        {
+          "id": "devices",
+          "name": "Device Registration",
+          "command": "Get-Devices",
+          "description": "Collect device registration information",
+          "enabled": true,
+          "riskLevel": "Low"
+        }
+      ]
+    },
+    {
+      "name": "Tenant-Wide Configuration",
+      "description": "Essential tenant-wide security settings",
+      "enabled": true,
+      "tenantWideOnly": true,
+      "tasks": [
+        {
+          "id": "transport-rules",
+          "name": "Transport Rules",
+          "command": "Get-TransportRules",
+          "description": "Export transport rules",
+          "enabled": true,
+          "riskLevel": "Low"
+        },
+        {
+          "id": "security-alerts",
+          "name": "Security Alerts",
+          "command": "Get-SecurityAlerts",
+          "description": "Retrieve security alerts",
+          "enabled": true,
+          "riskLevel": "Medium"
+        }
+      ]
+    }
+  ],
+  "unifiedAuditLogOperations": {
+    "enabled": true,
+    "categories": [
+      {
+        "name": "Email Rules & Configuration",
+        "description": "Critical email rule changes",
+        "enabled": true,
+        "operations": [
+          {
+            "name": "New-InboxRule",
+            "description": "New inbox rule creation",
+            "enabled": true,
+            "riskLevel": "High"
+          },
+          {
+            "name": "Set-InboxRule",
+            "description": "Inbox rule modification",
+            "enabled": true,
+            "riskLevel": "High"
+          },
+          {
+            "name": "Enable-InboxRule",
+            "description": "Inbox rule enablement",
+            "enabled": true,
+            "riskLevel": "Medium"
+          },
+          {
+            "name": "Disable-InboxRule",
+            "description": "Inbox rule disablement",
+            "enabled": true,
+            "riskLevel": "Medium"
+          },
+          {
+            "name": "Remove-InboxRule",
+            "description": "Inbox rule removal",
+            "enabled": true,
+            "riskLevel": "Medium"
+          },
+          {
+            "name": "New-TransportRule",
+            "description": "New transport rule creation",
+            "enabled": true,
+            "riskLevel": "High"
+          },
+          {
+            "name": "Set-TransportRule",
+            "description": "Transport rule modification",
+            "enabled": true,
+            "riskLevel": "High"
+          },
+          {
+            "name": "Enable-TransportRule",
+            "description": "Transport rule enablement",
+            "enabled": true,
+            "riskLevel": "Medium"
+          },
+          {
+            "name": "Disable-TransportRule",
+            "description": "Transport rule disablement",
+            "enabled": true,
+            "riskLevel": "Medium"
+          }
+        ]
+      },
+      {
+        "name": "Email Activities",
+        "description": "High-priority email activities",
+        "enabled": true,
+        "operations": [
+          {
+            "name": "MailboxLogin",
+            "description": "Mailbox login events",
+            "enabled": true,
+            "riskLevel": "Medium"
+          },
+          {
+            "name": "Send",
+            "description": "Email sending events",
+            "enabled": true,
+            "riskLevel": "Medium"
+          },
+          {
+            "name": "SendAs",
+            "description": "Send as another user events",
+            "enabled": true,
+            "riskLevel": "High"
+          },
+          {
+            "name": "SendOnBehalf",
+            "description": "Send on behalf events",
+            "enabled": true,
+            "riskLevel": "High"
+          },
+          {
+            "name": "HardDelete",
+            "description": "Permanent email deletion",
+            "enabled": true,
+            "riskLevel": "High"
+          },
+          {
+            "name": "SoftDelete",
+            "description": "Email moved to deleted items",
+            "enabled": true,
+            "riskLevel": "Medium"
+          },
+          {
+            "name": "MoveToDeletedItems",
+            "description": "Items moved to deleted items folder",
+            "enabled": true,
+            "riskLevel": "Medium"
+          },
+          {
+            "name": "Update",
+            "description": "Email item updates",
+            "enabled": true,
+            "riskLevel": "Medium"
+          },
+          {
+            "name": "Move",
+            "description": "Email item moves",
+            "enabled": true,
+            "riskLevel": "Low"
+          },
+          {
+            "name": "Copy",
+            "description": "Email item copies",
+            "enabled": true,
+            "riskLevel": "Low"
+          }
+        ]
+      },
+      {
+        "name": "Permissions & Access",
+        "description": "Permission changes",
+        "enabled": true,
+        "operations": [
+          {
+            "name": "Add-MailboxPermission",
+            "description": "Mailbox permission additions",
+            "enabled": true,
+            "riskLevel": "High"
+          },
+          {
+            "name": "Remove-MailboxPermission",
+            "description": "Mailbox permission removals",
+            "enabled": true,
+            "riskLevel": "Medium"
+          },
+          {
+            "name": "Add-RecipientPermission",
+            "description": "Recipient permission additions",
+            "enabled": true,
+            "riskLevel": "High"
+          },
+          {
+            "name": "Add-MailboxFolderPermission",
+            "description": "Mailbox folder permission additions",
+            "enabled": true,
+            "riskLevel": "Medium"
+          },
+          {
+            "name": "Set-MailboxFolderPermission",
+            "description": "Mailbox folder permission modifications",
+            "enabled": true,
+            "riskLevel": "Medium"
+          }
+        ]
+      },
+      {
+        "name": "Authentication & Identity",
+        "description": "Key authentication events",
+        "enabled": true,
+        "operations": [
+          {
+            "name": "UserLoggedIn",
+            "description": "User login events",
+            "enabled": true,
+            "riskLevel": "Low"
+          },
+          {
+            "name": "UserLoginFailed",
+            "description": "Failed login attempts",
+            "enabled": true,
+            "riskLevel": "Medium"
+          },
+          {
+            "name": "UserPasswordChanged",
+            "description": "Password change events",
+            "enabled": true,
+            "riskLevel": "Medium"
+          }
+        ]
+      },
+      {
+        "name": "Applications & Consent",
+        "description": "Application permission events",
+        "enabled": true,
+        "operations": [
+          {
+            "name": "ApplicationConsent",
+            "description": "Application consent events",
+            "enabled": true,
+            "riskLevel": "High"
+          },
+          {
+            "name": "Consent to application",
+            "description": "User consent to applications",
+            "enabled": true,
+            "riskLevel": "High"
+          },
+          {
+            "name": "Add OAuth2PermissionGrant",
+            "description": "OAuth2 permission grants",
+            "enabled": true,
+            "riskLevel": "High"
+          },
+          {
+            "name": "Add app role assignment grant to user",
+            "description": "App role assignments to users",
+            "enabled": true,
+            "riskLevel": "High"
+          },
+          {
+            "name": "Add delegated permission grant",
+            "description": "Delegated permission grants",
+            "enabled": true,
+            "riskLevel": "High"
+          },
+          {
+            "name": "Add application",
+            "description": "New application registrations",
+            "enabled": true,
+            "riskLevel": "Medium"
+          },
+          {
+            "name": "Add service principal",
+            "description": "Service principal additions",
+            "enabled": true,
+            "riskLevel": "Medium"
+          },
+          {
+            "name": "Add owner to application",
+            "description": "Application ownership changes",
+            "enabled": true,
+            "riskLevel": "Medium"
+          }
+        ]
+      },
+      {
+        "name": "File & SharePoint Activities",
+        "description": "Critical file activities",
+        "enabled": true,
+        "operations": [
+          {
+            "name": "FileDownloaded",
+            "description": "File download events",
+            "enabled": true,
+            "riskLevel": "Medium"
+          },
+          {
+            "name": "FileUploaded",
+            "description": "File upload events",
+            "enabled": true,
+            "riskLevel": "Low"
+          },
+          {
+            "name": "AddedToSecureLink",
+            "description": "Users added to secure links",
+            "enabled": true,
+            "riskLevel": "Medium"
+          }
+        ]
+      },
+      {
+        "name": "Search & eDiscovery",
+        "description": "Search operations",
+        "enabled": true,
+        "operations": [
+          {
+            "name": "SearchQueryInitiated",
+            "description": "Search queries initiated",
+            "enabled": true,
+            "riskLevel": "Medium"
+          },
+          {
+            "name": "New-ComplianceSearch",
+            "description": "Compliance search creation",
+            "enabled": true,
+            "riskLevel": "High"
+          }
+        ]
+      },
+      {
+        "name": "Administrative Activities",
+        "description": "Key administrative changes",
+        "enabled": true,
+        "operations": [
+          {
+            "name": "Add user",
+            "description": "User creation events",
+            "enabled": true,
+            "riskLevel": "Medium"
+          },
+          {
+            "name": "Update user",
+            "description": "User modification events",
+            "enabled": true,
+            "riskLevel": "Medium"
+          },
+          {
+            "name": "Add member to group",
+            "description": "Group membership additions",
+            "enabled": true,
+            "riskLevel": "Medium"
+          },
+          {
+            "name": "Added member to role",
+            "description": "Role membership additions",
+            "enabled": true,
+            "riskLevel": "High"
+          },
+          {
+            "name": "Set-AdminAuditLogConfig",
+            "description": "Admin audit log configuration changes",
+            "enabled": true,
+            "riskLevel": "High"
+          }
+        ]
+      },
+      {
+        "name": "Security & Compliance",
+        "description": "Security alerts",
+        "enabled": true,
+        "operations": [
+          {
+            "name": "AlertTriggered",
+            "description": "Security alert triggers",
+            "enabled": true,
+            "riskLevel": "High"
+          }
+        ]
+      }
+    ]
+  }
+}

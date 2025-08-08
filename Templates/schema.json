@@ -1,0 +1,183 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Microsoft Extractor Suite Template Schema",
+  "description": "Schema for Microsoft Extractor Suite investigation templates",
+  "type": "object",
+  "properties": {
+    "metadata": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Display name of the template"
+        },
+        "description": {
+          "type": "string",
+          "description": "Description of what this template does"
+        },
+        "version": {
+          "type": "string",
+          "default": "1.0.0",
+          "description": "Template version"
+        },
+        "category": {
+          "type": "string",
+          "enum": ["Quick", "Standard", "Comprehensive", "Custom"],
+          "description": "Template category for UI grouping"
+        },
+        "executionTimeEstimate": {
+          "type": "object",
+          "properties": {
+            "specificUsers": {
+              "type": "string",
+              "description": "Time estimate when targeting specific users"
+            },
+            "allUsers": {
+              "type": "string",
+              "description": "Time estimate when analyzing all users"
+            }
+          }
+        }
+      },
+      "required": ["name", "description", "category"]
+    },
+    "taskCategories": {
+      "type": "array",
+      "description": "Organized task categories for better UI presentation",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Category name (e.g., 'Security Analysis', 'User Management')"
+          },
+          "description": {
+            "type": "string",
+            "description": "Category description"
+          },
+          "enabled": {
+            "type": "boolean",
+            "default": true,
+            "description": "Whether this category is enabled by default"
+          },
+          "tenantWideOnly": {
+            "type": "boolean",
+            "default": false,
+            "description": "Whether tasks in this category only work in tenant-wide mode"
+          },
+          "tasks": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "description": "Unique task identifier"
+                },
+                "name": {
+                  "type": "string",
+                  "description": "Display name of the task"
+                },
+                "command": {
+                  "type": "string",
+                  "description": "PowerShell command to execute"
+                },
+                "description": {
+                  "type": "string",
+                  "description": "What this task does"
+                },
+                "enabled": {
+                  "type": "boolean",
+                  "default": true,
+                  "description": "Whether this task is enabled"
+                },
+                "required": {
+                  "type": "boolean",
+                  "default": false,
+                  "description": "Whether this task is required and cannot be disabled"
+                },
+                "riskLevel": {
+                  "type": "string",
+                  "enum": ["Low", "Medium", "High"],
+                  "default": "Medium",
+                  "description": "Performance/time impact level"
+                },
+                "dependencies": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "Task IDs that must be enabled for this task to work"
+                }
+              },
+              "required": ["id", "name", "command", "description"]
+            }
+          }
+        },
+        "required": ["name", "tasks"]
+      }
+    },
+    "unifiedAuditLogOperations": {
+      "type": "object",
+      "description": "Unified Audit Log operations organized by category",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether UAL operations are enabled"
+        },
+        "categories": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Category name"
+              },
+              "description": {
+                "type": "string",
+                "description": "Category description"
+              },
+              "enabled": {
+                "type": "boolean",
+                "default": true,
+                "description": "Whether this category is enabled"
+              },
+              "operations": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "description": "Operation name"
+                    },
+                    "description": {
+                      "type": "string",
+                      "description": "What this operation tracks"
+                    },
+                    "enabled": {
+                      "type": "boolean",
+                      "default": true,
+                      "description": "Whether this operation is enabled"
+                    },
+                    "riskLevel": {
+                      "type": "string",
+                      "enum": ["Low", "Medium", "High"],
+                      "default": "Medium",
+                      "description": "Security relevance level"
+                    }
+                  },
+                  "required": ["name", "enabled"]
+                }
+              }
+            },
+            "required": ["name", "operations"]
+          }
+        }
+      }
+    }
+  },
+  "required": ["metadata", "taskCategories"]
+}
