@@ -18,35 +18,35 @@ namespace Microsoft.ExtractorSuite.Core
         private CancellationTokenSource? _cancellationTokenSource;
         private AsyncTaskManager? _taskManager;
         private bool _disposed;
-        
+
         protected ILogger? Logger { get; private set; }
-        
+
         [Parameter]
         public LogLevel LogLevel { get; set; } = LogLevel.Standard;
-        
+
         [Parameter]
         public string? OutputDirectory { get; set; }
-        
+
         [Parameter]
         public SwitchParameter NoProgress { get; set; }
-        
+
         [Parameter]
         public SwitchParameter Async { get; set; }
-        
+
         protected AuthenticationManager AuthManager => AuthenticationManager.Instance;
         protected CancellationToken CancellationToken => _cancellationTokenSource?.Token ?? CancellationToken.None;
         protected AsyncTaskManager TaskManager => _taskManager ??= new AsyncTaskManager();
-        
+
         protected override void BeginProcessing()
         {
             base.BeginProcessing();
             _cancellationTokenSource = new CancellationTokenSource();
-            
+
             // Initialize logger
             Logger = new FileLogger(LogLevel, OutputDirectory ?? Environment.CurrentDirectory);
             Logger.LogInfo($"Starting cmdlet: {this.MyInvocation.MyCommand.Name}");
         }
-        
+
         protected override void StopProcessing()
         {
             base.StopProcessing();
@@ -54,14 +54,38 @@ namespace Microsoft.ExtractorSuite.Core
             _taskManager?.CancelAllTasks();
             Logger?.LogInfo($"Stopping cmdlet: {this.MyInvocation.MyCommand.Name}");
         }
-        
+
+        protected override void ProcessRecord()
+        {
+            base.ProcessRecord();
+
+            try
+            {
+                var task = ProcessRecordAsync();
+                task.GetAwaiter().GetResult();
+            }
+            catch (Exception ex)
+            {
+                Logger?.WriteErrorWithTimestamp($"Error in ProcessRecord: {ex.Message}", ex);
+                WriteError(new ErrorRecord(ex, "ProcessRecordError", ErrorCategory.InvalidOperation, null));
+            }
+        }
+
+        /// <summary>
+        /// Override this method in derived classes to implement async processing logic
+        /// </summary>
+        protected virtual Task ProcessRecordAsync()
+        {
+            return Task.CompletedTask;
+        }
+
         protected override void EndProcessing()
         {
             base.EndProcessing();
             Logger?.LogInfo($"Completed cmdlet: {this.MyInvocation.MyCommand.Name}");
             Dispose();
         }
-        
+
         /// <summary>
         /// Runs an async operation with proper PowerShell integration
         /// Returns immediately if -Async is specified, otherwise waits for completion
@@ -74,15 +98,15 @@ namespace Microsoft.ExtractorSuite.Core
             {
                 // Start async and return task ID for later retrieval
                 var taskId = TaskManager.StartLongRunningTask(operation, this, operationName);
-                
+
                 var asyncResult = new PSObject();
                 asyncResult.Properties.Add(new PSNoteProperty("TaskId", taskId));
                 asyncResult.Properties.Add(new PSNoteProperty("OperationName", operationName));
                 asyncResult.Properties.Add(new PSNoteProperty("Status", "Running"));
                 asyncResult.Properties.Add(new PSNoteProperty("StartTime", DateTime.UtcNow));
-                
+
                 WriteObject(asyncResult);
-                
+
                 // Return default value since we're running async
                 return default(T)!;
             }
@@ -92,7 +116,7 @@ namespace Microsoft.ExtractorSuite.Core
                 return RunAsyncWithProgress(operation, operationName);
             }
         }
-        
+
         /// <summary>
         /// Runs async operation synchronously with progress reporting
         /// Uses proper async patterns without blocking the thread pool
@@ -104,14 +128,14 @@ namespace Microsoft.ExtractorSuite.Core
             // Create a dedicated thread for the async operation to avoid deadlocks
             T result = default(T)!;
             Exception? exception = null;
-            
+
             var thread = new System.Threading.Thread(() =>
             {
                 try
                 {
                     // Create a new SynchronizationContext for this thread
                     SynchronizationContext.SetSynchronizationContext(new SynchronizationContext());
-                    
+
                     var progress = new Progress<TaskProgress>(p =>
                     {
                         if (!NoProgress.IsPresent)
@@ -119,7 +143,7 @@ namespace Microsoft.ExtractorSuite.Core
                             WriteProgressSafe(operationName, p.CurrentOperation ?? "Processing...", p.PercentComplete);
                         }
                     });
-                    
+
                     var task = operation(progress, CancellationToken);
                     result = task.GetAwaiter().GetResult();
                 }
@@ -132,18 +156,18 @@ namespace Microsoft.ExtractorSuite.Core
                 IsBackground = false,
                 Name = $"AsyncOperation_{operationName}"
             };
-            
+
             thread.Start();
             thread.Join();
-            
+
             if (exception != null)
             {
                 throw exception;
             }
-            
+
             return result;
         }
-        
+
         /// <summary>
         /// Executes multiple async operations in parallel with controlled concurrency
         /// </summary>
@@ -154,7 +178,7 @@ namespace Microsoft.ExtractorSuite.Core
         {
             return await TaskManager.ExecuteParallelAsync(operations, this, maxConcurrency, operationName);
         }
-        
+
         /// <summary>
         /// Streams results from an async enumerable directly to the PowerShell pipeline
         /// </summary>
@@ -165,17 +189,17 @@ namespace Microsoft.ExtractorSuite.Core
         {
             var count = 0;
             var lastProgressUpdate = DateTime.UtcNow;
-            
+
             await foreach (var item in source.WithCancellation(CancellationToken))
             {
                 // Process item if handler provided
                 processItem?.Invoke(item);
-                
+
                 // Write to pipeline
                 WriteObject(item);
-                
+
                 count++;
-                
+
                 // Update progress periodically (every 100ms)
                 if ((DateTime.UtcNow - lastProgressUpdate).TotalMilliseconds > 100)
                 {
@@ -186,17 +210,17 @@ namespace Microsoft.ExtractorSuite.Core
                     lastProgressUpdate = DateTime.UtcNow;
                 }
             }
-            
+
             WriteVerboseWithTimestamp($"{operationName}: Completed. Total items: {count}");
         }
-        
+
         /// <summary>
         /// Safe progress writing that handles hosts that don't support progress
         /// </summary>
         protected void WriteProgressSafe(string activity, string statusDescription, int percentComplete)
         {
             if (NoProgress.IsPresent) return;
-            
+
             try
             {
                 var progressRecord = new ProgressRecord(0, activity, statusDescription)
@@ -210,19 +234,19 @@ namespace Microsoft.ExtractorSuite.Core
                 // Some hosts don't support progress - ignore
             }
         }
-        
+
         protected void WriteVerboseWithTimestamp(string message)
         {
             WriteVerbose($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] {message}");
             Logger?.LogDebug(message);
         }
-        
+
         protected void WriteWarningWithTimestamp(string message)
         {
             WriteWarning($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] {message}");
-            Logger?.LogWarning(message);
+            Logger?.WriteWarningWithTimestamp(message);
         }
-        
+
         protected void WriteErrorWithTimestamp(string message, Exception? exception = null)
         {
             var errorRecord = new ErrorRecord(
@@ -230,11 +254,11 @@ namespace Microsoft.ExtractorSuite.Core
                 "ExtractorSuiteError",
                 ErrorCategory.InvalidOperation,
                 null);
-            
+
             WriteError(errorRecord);
-            Logger?.LogError(message, exception);
+            Logger?.WriteErrorWithTimestamp(message, exception);
         }
-        
+
         protected bool RequireGraphConnection()
         {
             if (!AuthManager.IsGraphConnected)
@@ -244,7 +268,7 @@ namespace Microsoft.ExtractorSuite.Core
             }
             return true;
         }
-        
+
         protected bool RequireAzureConnection()
         {
             if (!AuthManager.IsAzureConnected)
@@ -254,13 +278,13 @@ namespace Microsoft.ExtractorSuite.Core
             }
             return true;
         }
-        
+
         public void Dispose()
         {
             Dispose(true);
             GC.SuppressFinalize(this);
         }
-        
+
         protected virtual void Dispose(bool disposing)
         {
             if (!_disposed)

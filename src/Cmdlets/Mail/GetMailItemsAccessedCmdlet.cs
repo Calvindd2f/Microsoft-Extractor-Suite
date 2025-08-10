@@ -70,19 +70,19 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
 
         protected override async Task ProcessRecordAsync()
         {
-            LogInformation("=== Starting Mail Items Accessed Collection ===");
-            
+            WriteVerbose("=== Starting Mail Items Accessed Collection ===");
+
             // Validate date range
             if (StartDate >= EndDate)
             {
-                LogError("StartDate must be before EndDate");
+                WriteErrorWithTimestamp("StartDate must be before EndDate");
                 return;
             }
 
             // Check for authentication
             if (!await _exchangeClient.IsConnectedAsync())
             {
-                LogError("Not connected to Exchange Online. Please run Connect-M365 first.");
+                WriteErrorWithTimestamp("Not connected to Exchange Online. Please run Connect-M365 first.");
                 return;
             }
 
@@ -98,9 +98,9 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
                 OperationCount = 0
             };
 
-            LogInformation($"Query Information:");
-            LogInformation($"  Filter: {summary.QueryType}");
-            LogInformation($"  Time Range: {StartDate:yyyy-MM-dd} to {EndDate:yyyy-MM-dd}");
+            WriteVerbose($"Query Information:");
+            WriteVerbose($"  Filter: {summary.QueryType}");
+            WriteVerbose($"  Time Range: {StartDate:yyyy-MM-dd} to {EndDate:yyyy-MM-dd}");
 
             try
             {
@@ -118,15 +118,15 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
             }
             catch (Exception ex)
             {
-                LogError($"An error occurred during collection: {ex.Message}");
+                WriteErrorWithTimestamp($"An error occurred during collection: {ex.Message}");
                 throw;
             }
         }
 
         private async Task ProcessSessionsAsync(string outputDirectory, CollectionSummary summary)
         {
-            LogInformation("Processing MailItemsAccessed sessions...");
-            
+            WriteVerbose("Processing MailItemsAccessed sessions...");
+
             var searchParams = new Dictionary<string, object>
             {
                 ["StartDate"] = StartDate,
@@ -138,35 +138,35 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
             // Add filters based on parameters
             if (!string.IsNullOrEmpty(UserIds))
                 searchParams["UserIds"] = UserIds;
-            
+
             if (!string.IsNullOrEmpty(IPAddress))
                 searchParams["FreeText"] = IPAddress;
 
             // Check total result count first
             var resultCount = await GetResultCountAsync(searchParams);
-            
+
             if (resultCount > 4999)
             {
-                LogWarning($"A total of {resultCount} events have been identified, surpassing the maximum limit of 5000 results. Please refine your search.");
+                WriteWarningWithTimestamp($"A total of {resultCount} events have been identified, surpassing the maximum limit of 5000 results. Please refine your search.");
                 return;
             }
 
             if (resultCount == 0)
             {
-                LogInformation("No MailItemsAccessed events found for the specified criteria.");
+                WriteVerbose("No MailItemsAccessed events found for the specified criteria.");
                 return;
             }
 
             // Retrieve the actual records
             searchParams["ResultSize"] = 5000;
             var records = await _exchangeClient.SearchUnifiedAuditLogAsync(searchParams);
-            
+
             var results = new List<MailItemsAccessedSession>();
 
             foreach (var record in records)
             {
                 var auditData = JsonDocument.Parse(record.AuditData);
-                
+
                 var session = new MailItemsAccessedSession
                 {
                     Timestamp = auditData.RootElement.GetProperty("CreationTime").GetDateTime(),
@@ -178,12 +178,12 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
                 };
 
                 summary.TotalEvents++;
-                
+
                 if (!string.IsNullOrEmpty(session.SessionId))
                 {
                     summary.UniqueSessions.Add(session.SessionId);
                 }
-                
+
                 summary.OperationCount += session.OperationCount;
                 results.Add(session);
             }
@@ -199,18 +199,18 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
             {
                 var fileName = GenerateSessionsFileName();
                 var filePath = Path.Combine(outputDirectory, fileName);
-                
+
                 await WriteResultsToFileAsync(results, filePath);
-                LogInformation($"Output written to {filePath}");
-                
+                WriteVerbose($"Output written to {filePath}");
+
                 WriteObject(results);
             }
         }
 
         private async Task ProcessMessageIDsAsync(string outputDirectory, CollectionSummary summary)
         {
-            LogInformation("Processing MailItemsAccessed message IDs...");
-            
+            WriteVerbose("Processing MailItemsAccessed message IDs...");
+
             var searchParams = new Dictionary<string, object>
             {
                 ["StartDate"] = StartDate,
@@ -227,29 +227,40 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
 
             // Check total result count first
             var resultCount = await GetResultCountAsync(searchParams);
-            
+
             if (resultCount > 4999)
             {
-                LogWarning($"A total of {resultCount} events have been identified, surpassing the maximum limit of 5000 results. Please refine your search.");
+                WriteWarningWithTimestamp($"A total of {resultCount} events have been identified, surpassing the maximum limit of 5000 results. Please refine your search.");
                 return;
             }
 
             if (resultCount == 0)
             {
-                LogInformation("No MailItemsAccessed events found for the specified criteria.");
+                WriteVerbose("No MailItemsAccessed events found for the specified criteria.");
                 return;
             }
 
             // Retrieve the actual records
-            searchParams["ResultSize"] = 5000;
-            var records = await _exchangeClient.SearchUnifiedAuditLogAsync(searchParams);
+            var userIds = !string.IsNullOrEmpty(Sessions) ? new[] { Sessions } : null;
             
+            var records = await _exchangeClient.SearchUnifiedAuditLogAsync(
+                StartDate,
+                EndDate,
+                null, // sessionId
+                new[] { "MailItemsAccessed" }, // operations
+                null, // recordTypes
+                userIds,
+                5000, // resultSize
+                CancellationToken);
+
             var results = new List<MailItemsAccessedMessage>();
 
-            foreach (var record in records)
+            if (records?.Value != null)
+            {
+                foreach (var record in records.Value)
             {
                 var auditData = JsonDocument.Parse(record.AuditData);
-                
+
                 var timestamp = auditData.RootElement.GetProperty("CreationTime").GetDateTime();
                 var sessionId = GetJsonPropertyString(auditData.RootElement, "SessionId");
                 var clientIP = GetJsonPropertyString(auditData.RootElement, "ClientIPAddress");
@@ -258,12 +269,12 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
 
                 // Apply session/IP filtering
                 bool includeRecord = true;
-                
+
                 if (!string.IsNullOrEmpty(Sessions) && !string.IsNullOrEmpty(sessionId))
                 {
                     includeRecord = Sessions.Contains(sessionId);
                 }
-                
+
                 if (!string.IsNullOrEmpty(IPAddress) && includeRecord)
                 {
                     includeRecord = clientIP == IPAddress;
@@ -303,7 +314,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
                                     if (Download && !string.IsNullOrEmpty(messageId))
                                     {
                                         // TODO: Implement email download functionality
-                                        LogWarning("Email download functionality not yet implemented in C# version");
+                                        WriteWarningWithTimestamp("Email download functionality not yet implemented in C# version");
                                     }
                                 }
                             }
@@ -332,29 +343,39 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
                     }
                 }
             }
+            }
 
             // Output results
             if (Output && results.Count > 0)
             {
                 var fileName = GenerateMessageIDsFileName();
                 var filePath = Path.Combine(outputDirectory, fileName);
-                
+
                 await WriteResultsToFileAsync(results, filePath);
-                LogInformation($"Output written to {filePath}");
-                
+                WriteVerbose($"Output written to {filePath}");
+
                 WriteObject(results);
             }
         }
-
+        
         private async Task<int> GetResultCountAsync(Dictionary<string, object> searchParams)
         {
-            var countParams = new Dictionary<string, object>(searchParams)
-            {
-                ["ResultSize"] = 1
-            };
+            var startDate = (DateTime)searchParams["StartDate"];
+            var endDate = (DateTime)searchParams["EndDate"];
+            var operations = searchParams.ContainsKey("Operations") ? new[] { (string)searchParams["Operations"] } : null;
+            var userIds = !string.IsNullOrEmpty(Sessions) ? new[] { Sessions } : null;
 
-            var records = await _exchangeClient.SearchUnifiedAuditLogAsync(countParams);
-            return records?.FirstOrDefault()?.ResultCount ?? 0;
+            var records = await _exchangeClient.SearchUnifiedAuditLogAsync(
+                startDate,
+                endDate,
+                null, // sessionId
+                operations,
+                null, // recordTypes
+                userIds,
+                1, // resultSize
+                CancellationToken);
+                
+            return records?.ResultCount ?? 0;
         }
 
         private string DetermineQueryType()
@@ -374,11 +395,11 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
         private string GetOutputDirectory()
         {
             var directory = string.IsNullOrEmpty(OutputDir) ? "Output\\MailItemsAccessed" : OutputDir;
-            
+
             if (!Directory.Exists(directory))
             {
                 Directory.CreateDirectory(directory);
-                LogInformation($"Creating output directory: {directory}");
+                WriteVerbose($"Creating output directory: {directory}");
             }
 
             return directory;
@@ -399,7 +420,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
         private string GenerateMessageIDsFileName()
         {
             var timestamp = DateTime.Now.ToString("yyyyMMddHHmmss");
-            
+
             if (!string.IsNullOrEmpty(Sessions))
                 return $"MessageIDs-{Sessions}.csv";
             else
@@ -408,39 +429,39 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
 
         private void LogCollectionSummary(CollectionSummary summary, string outputDirectory)
         {
-            LogInformation("");
-            LogInformation("=== Mail Items Accessed Analysis Summary ===");
-            LogInformation($"Query Information:");
-            LogInformation($"  Filter: {summary.QueryType}");
-            LogInformation($"  Time Range: {StartDate:yyyy-MM-dd} to {EndDate:yyyy-MM-dd}");
-            LogInformation("");
-            LogInformation("Event Statistics:");
-            LogInformation($"  Total Events: {summary.TotalEvents:N0}");
-            LogInformation($"  Unique Sessions: {summary.UniqueSessions.Count:N0}");
-            LogInformation($"  Total Operations: {summary.OperationCount:N0}");
-            LogInformation("");
-            LogInformation($"Processing Time: {summary.ProcessingTime?.ToString(@"mm\:ss")}");
-            LogInformation("===============================================");
+            WriteVerbose("");
+            WriteVerbose("=== Mail Items Accessed Analysis Summary ===");
+            WriteVerbose($"Query Information:");
+            WriteVerbose($"  Filter: {summary.QueryType}");
+            WriteVerbose($"  Time Range: {StartDate:yyyy-MM-dd} to {EndDate:yyyy-MM-dd}");
+            WriteVerbose("");
+            WriteVerbose("Event Statistics:");
+            WriteVerbose($"  Total Events: {summary.TotalEvents:N0}");
+            WriteVerbose($"  Unique Sessions: {summary.UniqueSessions.Count:N0}");
+            WriteVerbose($"  Total Operations: {summary.OperationCount:N0}");
+            WriteVerbose("");
+            WriteVerbose($"Processing Time: {summary.ProcessingTime?.ToString(@"mm\:ss")}");
+            WriteVerbose("===============================================");
         }
 
         private static string GetJsonPropertyString(JsonElement element, string propertyName)
         {
-            return element.TryGetProperty(propertyName, out var property) 
-                ? property.GetString() 
+            return element.TryGetProperty(propertyName, out var property)
+                ? property.GetString()
                 : null;
         }
 
         private static int GetJsonPropertyInt32(JsonElement element, string propertyName)
         {
-            return element.TryGetProperty(propertyName, out var property) 
-                ? property.GetInt32() 
+            return element.TryGetProperty(propertyName, out var property)
+                ? property.GetInt32()
                 : 0;
         }
 
         private static long GetJsonPropertyInt64(JsonElement element, string propertyName)
         {
-            return element.TryGetProperty(propertyName, out var property) 
-                ? property.GetInt64() 
+            return element.TryGetProperty(propertyName, out var property)
+                ? property.GetInt64()
                 : 0;
         }
 
@@ -448,16 +469,19 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
         {
             try
             {
-                var json = JsonSerializer.Serialize(results, new JsonSerializerOptions 
-                { 
-                    WriteIndented = true 
+                var json = JsonSerializer.Serialize(results, new JsonSerializerOptions
+                {
+                    WriteIndented = true
                 });
-                
-                await File.WriteAllTextAsync(filePath, json);
+
+                using (var writer = new StreamWriter(filePath))
+                {
+                    await writer.WriteAsync(json);
+                }
             }
             catch (Exception ex)
             {
-                LogError($"Failed to write results to file: {ex.Message}");
+                WriteErrorWithTimestamp($"Failed to write results to file: {ex.Message}");
             }
         }
     }

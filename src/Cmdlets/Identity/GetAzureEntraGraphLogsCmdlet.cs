@@ -340,7 +340,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
             return filter;
         }
 
-        private EntraLogEntry MapSignInToLogEntry(SignIn signIn, string eventType)
+        private EntraLogEntry MapSignInToLogEntry(Microsoft.Graph.SignIn signIn, string eventType)
         {
             return new EntraLogEntry
             {
@@ -417,7 +417,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
             {
                 WriteIndented = true
             });
-            await File.WriteAllTextAsync(summaryPath, summaryJson, cancellationToken);
+            using (var writer = new StreamWriter(summaryPath)) { await writer.WriteAsync(summaryJson); }
         }
 
         private async Task ExportLogFile(

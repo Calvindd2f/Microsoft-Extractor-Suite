@@ -182,7 +182,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
             }
             catch (ServiceException ex)
             {
-                WriteErrorWithTimestamp($"Microsoft Graph API error: {ex.Error?.Code} - {ex.Error?.Message}", ex);
+                WriteErrorWithTimestamp($"Microsoft Graph API error: {ex.ResponseStatusCode} - {ex.Message}", ex);
                 throw;
             }
             catch (Exception ex)
@@ -200,7 +200,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
             CancellationToken cancellationToken)
         {
             var filteredDevices = new List<Device>();
-            var userIdList = UserIds!.ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var userIdList = new HashSet<string>(UserIds!, StringComparer.OrdinalIgnoreCase);
 
             foreach (var device in devices)
             {
@@ -263,7 +263,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                 }
                 catch (ServiceException ex)
                 {
-                    WriteWarningWithTimestamp($"Failed to retrieve owners/users for device {device.DisplayName}: {ex.Error?.Message}");
+                    WriteWarningWithTimestamp($"Failed to retrieve owners/users for device {device.DisplayName}: {ex.Message}");
                 }
                 catch (Exception ex)
                 {
@@ -339,7 +339,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
             }
             catch (ServiceException ex)
             {
-                WriteVerboseWithTimestamp($"Could not retrieve owners/users for device {device.DisplayName}: {ex.Error?.Message}");
+                WriteVerboseWithTimestamp($"Could not retrieve owners/users for device {device.DisplayName}: {ex.Message}");
             }
             catch (Exception ex)
             {

@@ -47,12 +47,12 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
 
         protected override async Task ProcessRecordAsync()
         {
-            LogInformation("=== Starting Rules Collection ===");
-            
+            WriteVerbose("=== Starting Rules Collection ===");
+
             // Check for authentication
             if (!await _exchangeClient.IsConnectedAsync())
             {
-                LogError("Not connected to Exchange Online. Please run Connect-M365 first.");
+                WriteErrorWithTimestamp("Not connected to Exchange Online. Please run Connect-M365 first.");
                 return;
             }
 
@@ -104,24 +104,24 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
             }
             catch (Exception ex)
             {
-                LogError($"An error occurred during rules collection: {ex.Message}");
+                WriteErrorWithTimestamp($"An error occurred during rules collection: {ex.Message}");
                 throw;
             }
         }
 
         private async Task ProcessTransportRulesAsync(string outputDirectory, string timestamp, RulesSummary summary)
         {
-            LogInformation("=== Starting Transport Rules Collection ===");
+            WriteVerbose("=== Starting Transport Rules Collection ===");
 
             var transportRules = new List<TransportRule>();
 
             try
             {
                 var rules = await _exchangeClient.GetTransportRulesAsync();
-                
+
                 if (rules == null || rules.Count == 0)
                 {
-                    LogInformation("No transport rules found");
+                    WriteVerbose("No transport rules found");
                     return;
                 }
 
@@ -148,12 +148,12 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
 
                     if (ShowRules)
                     {
-                        LogInformation($"Found a TransportRule:");
-                        LogInformation($"  Rule Name: {rule.Name}");
-                        LogInformation($"  Rule CreatedBy: {rule.CreatedBy}");
-                        LogInformation($"  When Changed: {rule.WhenChanged}");
-                        LogInformation($"  Rule State: {rule.State}");
-                        LogInformation($"  Description: {rule.Description}");
+                        WriteVerbose($"Found a TransportRule:");
+                        WriteVerbose($"  Rule Name: {rule.Name}");
+                        WriteVerbose($"  Rule CreatedBy: {rule.CreatedBy}");
+                        WriteVerbose($"  When Changed: {rule.WhenChanged}");
+                        WriteVerbose($"  Rule State: {rule.State}");
+                        WriteVerbose($"  Description: {rule.Description}");
                     }
                 }
 
@@ -162,20 +162,20 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
                     var fileName = Path.Combine(outputDirectory, $"{timestamp}-TransportRules.csv");
                     await WriteTransportRulesAsync(transportRules, fileName);
                     summary.OutputFiles.Add(fileName);
-                    
-                    LogInformation($"Transport rules written to: {fileName}");
+
+                    WriteVerbose($"Transport rules written to: {fileName}");
                 }
             }
             catch (Exception ex)
             {
-                LogError($"An error occurred during transport rules collection: {ex.Message}");
+                WriteErrorWithTimestamp($"An error occurred during transport rules collection: {ex.Message}");
                 throw;
             }
         }
 
         private async Task ProcessMailboxRulesAsync(string outputDirectory, string timestamp, RulesSummary summary)
         {
-            LogInformation("=== Starting Mailbox Rules Collection ===");
+            WriteVerbose("=== Starting Mailbox Rules Collection ===");
 
             var mailboxRules = new List<MailboxRule>();
             var processedUsers = new HashSet<string>();
@@ -183,15 +183,15 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
             try
             {
                 var usersToProcess = await GetUsersToProcessAsync();
-                
+
                 foreach (var user in usersToProcess)
                 {
                     try
                     {
-                        LogInformation($"Checking rules for: {user}");
-                        
+                        WriteVerbose($"Checking rules for: {user}");
+
                         var rules = await _exchangeClient.GetInboxRulesAsync(user);
-                        
+
                         if (rules != null && rules.Count > 0)
                         {
                             if (!processedUsers.Contains(user))
@@ -247,24 +247,24 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
 
                                 if (ShowRules)
                                 {
-                                    LogInformation($"Found InboxRule for: {user}");
-                                    LogInformation($"  Username: {user}");
-                                    LogInformation($"  RuleName: {rule.Name}");
-                                    LogInformation($"  RuleEnabled: {rule.Enabled}");
-                                    LogInformation($"  CopytoFolder: {rule.CopyToFolder}");
-                                    LogInformation($"  MovetoFolder: {rule.MoveToFolder}");
-                                    LogInformation($"  RedirectTo: {rule.RedirectTo}");
-                                    LogInformation($"  ForwardTo: {rule.ForwardTo}");
-                                    LogInformation($"  ForwardAsAttachmentTo: {rule.ForwardAsAttachmentTo}");
-                                    LogInformation($"  SoftDeleteMessage: {rule.SoftDeleteMessage}");
-                                    LogInformation($"  TextDescription: {rule.Description}");
+                                    WriteVerbose($"Found InboxRule for: {user}");
+                                    WriteVerbose($"  Username: {user}");
+                                    WriteVerbose($"  RuleName: {rule.Name}");
+                                    WriteVerbose($"  RuleEnabled: {rule.Enabled}");
+                                    WriteVerbose($"  CopytoFolder: {rule.CopyToFolder}");
+                                    WriteVerbose($"  MovetoFolder: {rule.MoveToFolder}");
+                                    WriteVerbose($"  RedirectTo: {rule.RedirectTo}");
+                                    WriteVerbose($"  ForwardTo: {rule.ForwardTo}");
+                                    WriteVerbose($"  ForwardAsAttachmentTo: {rule.ForwardAsAttachmentTo}");
+                                    WriteVerbose($"  SoftDeleteMessage: {rule.SoftDeleteMessage}");
+                                    WriteVerbose($"  TextDescription: {rule.Description}");
                                 }
                             }
                         }
                     }
                     catch (Exception ex)
                     {
-                        LogWarning($"Failed to process rules for user {user}: {ex.Message}");
+                        WriteWarningWithTimestamp($"Failed to process rules for user {user}: {ex.Message}");
                     }
                 }
 
@@ -273,22 +273,22 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
                     var fileName = Path.Combine(outputDirectory, $"{timestamp}-MailboxRules.csv");
                     await WriteMailboxRulesAsync(mailboxRules, fileName);
                     summary.OutputFiles.Add(fileName);
-                    
-                    LogInformation($"Mailbox rules written to: {fileName}");
+
+                    WriteVerbose($"Mailbox rules written to: {fileName}");
                 }
 
                 if (summary.TotalMailboxRules > 0)
                 {
-                    LogInformation($"A total of {summary.TotalMailboxRules} Inbox Rules found");
+                    WriteVerbose($"A total of {summary.TotalMailboxRules} Inbox Rules found");
                 }
                 else
                 {
-                    LogInformation("No Inbox Rules found!");
+                    WriteVerbose("No Inbox Rules found!");
                 }
             }
             catch (Exception ex)
             {
-                LogError($"An error occurred during mailbox rules collection: {ex.Message}");
+                WriteErrorWithTimestamp($"An error occurred during mailbox rules collection: {ex.Message}");
                 throw;
             }
         }
@@ -315,11 +315,11 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
         private string GetOutputDirectory()
         {
             var directory = OutputDir;
-            
+
             if (!Directory.Exists(directory))
             {
                 Directory.CreateDirectory(directory);
-                LogInformation($"Created output directory: {directory}");
+                WriteVerbose($"Created output directory: {directory}");
             }
 
             return directory;
@@ -327,50 +327,50 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
 
         private void LogSummary(RulesSummary summary)
         {
-            LogInformation("");
-            LogInformation("=== Rules Collection Summary ===");
-            LogInformation($"Processing Time: {summary.ProcessingTime?.ToString(@"mm\:ss")}");
-            
+            WriteVerbose("");
+            WriteVerbose("=== Rules Collection Summary ===");
+            WriteVerbose($"Processing Time: {summary.ProcessingTime?.ToString(@"mm\:ss")}");
+
             if (RuleType == "TransportRules" || RuleType == "Both")
             {
-                LogInformation("");
-                LogInformation("Transport Rules:");
-                LogInformation($"  Total Rules: {summary.TotalTransportRules}");
-                LogInformation($"  - Enabled: {summary.EnabledTransportRules}");
-                LogInformation($"  - Disabled: {summary.DisabledTransportRules}");
+                WriteVerbose("");
+                WriteVerbose("Transport Rules:");
+                WriteVerbose($"  Total Rules: {summary.TotalTransportRules}");
+                WriteVerbose($"  - Enabled: {summary.EnabledTransportRules}");
+                WriteVerbose($"  - Disabled: {summary.DisabledTransportRules}");
             }
 
             if (RuleType == "MailboxRules" || RuleType == "Both")
             {
-                LogInformation("");
-                LogInformation("Mailbox Rules:");
-                LogInformation($"  Users Processed: {summary.UsersWithRules}");
-                LogInformation($"  Total Rules Found: {summary.TotalMailboxRules}");
-                LogInformation($"  - Enabled Rules: {summary.EnabledMailboxRules}");
-                
+                WriteVerbose("");
+                WriteVerbose("Mailbox Rules:");
+                WriteVerbose($"  Users Processed: {summary.UsersWithRules}");
+                WriteVerbose($"  Total Rules Found: {summary.TotalMailboxRules}");
+                WriteVerbose($"  - Enabled Rules: {summary.EnabledMailboxRules}");
+
                 if (summary.ForwardingRules > 0)
-                    LogInformation($"  - Forwarding Rules: {summary.ForwardingRules}");
-                
+                    WriteVerbose($"  - Forwarding Rules: {summary.ForwardingRules}");
+
                 if (summary.RedirectRules > 0)
-                    LogInformation($"  - Redirect Rules: {summary.RedirectRules}");
-                
+                    WriteVerbose($"  - Redirect Rules: {summary.RedirectRules}");
+
                 if (summary.SoftDeleteRules > 0)
-                    LogInformation($"  - Soft Delete Rules: {summary.SoftDeleteRules}");
+                    WriteVerbose($"  - Soft Delete Rules: {summary.SoftDeleteRules}");
             }
-            
-            LogInformation("");
-            LogInformation("Output Files:");
+
+            WriteVerbose("");
+            WriteVerbose("Output Files:");
             foreach (var file in summary.OutputFiles)
             {
-                LogInformation($"  - {file}");
+                WriteVerbose($"  - {file}");
             }
-            LogInformation("================================");
+            WriteVerbose("================================");
         }
 
         private async Task WriteTransportRulesAsync(IEnumerable<TransportRule> rules, string filePath)
         {
             var csv = "Name,Description,CreatedBy,WhenChanged,State,Priority,Mode" + Environment.NewLine;
-            
+
             foreach (var rule in rules)
             {
                 var values = new[]
@@ -383,17 +383,17 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
                     rule.Priority?.ToString() ?? "",
                     EscapeCsvValue(rule.Mode)
                 };
-                
+
                 csv += string.Join(",", values) + Environment.NewLine;
             }
-            
-            await File.WriteAllTextAsync(filePath, csv);
+
+            using (var writer = new StreamWriter(filePath)) { await writer.WriteAsync(csv); }
         }
 
         private async Task WriteMailboxRulesAsync(IEnumerable<MailboxRule> rules, string filePath)
         {
             var csv = "UserName,RuleName,Enabled,Priority,RuleIdentity,StopProcessingRules,CopyToFolder,MoveToFolder,RedirectTo,ForwardTo,ForwardAsAttachmentTo,ApplyCategory,MarkImportance,MarkAsRead,DeleteMessage,SoftDeleteMessage,From,SubjectContainsWords,SubjectOrBodyContainsWords,BodyContainsWords,HasAttachment,Description,InError,ErrorType" + Environment.NewLine;
-            
+
             foreach (var rule in rules)
             {
                 var values = new[]
@@ -423,23 +423,23 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
                     rule.InError.ToString(),
                     EscapeCsvValue(rule.ErrorType)
                 };
-                
+
                 csv += string.Join(",", values) + Environment.NewLine;
             }
-            
-            await File.WriteAllTextAsync(filePath, csv);
+
+            using (var writer = new StreamWriter(filePath)) { await writer.WriteAsync(csv); }
         }
 
         private string EscapeCsvValue(string value)
         {
             if (string.IsNullOrEmpty(value))
                 return "";
-            
+
             if (value.Contains(",") || value.Contains("\"") || value.Contains("\n"))
             {
                 return "\"" + value.Replace("\"", "\"\"") + "\"";
             }
-            
+
             return value;
         }
     }

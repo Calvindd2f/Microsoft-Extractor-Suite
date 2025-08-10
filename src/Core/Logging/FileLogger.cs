@@ -9,14 +9,16 @@ namespace Microsoft.ExtractorSuite.Core.Logging
     {
         private readonly LogLevel _logLevel;
         private readonly Logger _serilogLogger;
-        
+
+        public LogLevel CurrentLevel => _logLevel;
+
         public FileLogger(LogLevel logLevel, string outputDirectory)
         {
             _logLevel = logLevel;
-            
+
             var logPath = Path.Combine(outputDirectory, "Logs", $"MES_{DateTime.Now:yyyyMMdd_HHmmss}.log");
             Directory.CreateDirectory(Path.GetDirectoryName(logPath)!);
-            
+
             var loggerConfig = new LoggerConfiguration()
                 .WriteTo.File(
                     logPath,
@@ -24,7 +26,7 @@ namespace Microsoft.ExtractorSuite.Core.Logging
                     fileSizeLimitBytes: 100 * 1024 * 1024, // 100MB
                     rollOnFileSizeLimit: true,
                     retainedFileCountLimit: 10);
-            
+
             switch (_logLevel)
             {
                 case LogLevel.None:
@@ -40,29 +42,29 @@ namespace Microsoft.ExtractorSuite.Core.Logging
                     loggerConfig.MinimumLevel.Debug();
                     break;
             }
-            
+
             _serilogLogger = loggerConfig.CreateLogger();
         }
-        
+
         public void LogDebug(string message)
         {
             if (_logLevel >= LogLevel.Debug)
                 _serilogLogger.Debug(message);
         }
-        
+
         public void LogInfo(string message)
         {
             if (_logLevel >= LogLevel.Standard)
                 _serilogLogger.Information(message);
         }
-        
-        public void LogWarning(string message)
+
+        public void WriteWarningWithTimestamp(string message)
         {
             if (_logLevel >= LogLevel.Minimal)
                 _serilogLogger.Warning(message);
         }
-        
-        public void LogError(string message, Exception? exception = null)
+
+        public void WriteErrorWithTimestamp(string message, Exception? exception = null)
         {
             if (_logLevel >= LogLevel.Minimal)
             {
@@ -72,7 +74,7 @@ namespace Microsoft.ExtractorSuite.Core.Logging
                     _serilogLogger.Error(message);
             }
         }
-        
+
         public void LogProgress(string operation, int current, int total)
         {
             if (_logLevel >= LogLevel.Standard)
@@ -81,7 +83,7 @@ namespace Microsoft.ExtractorSuite.Core.Logging
                 _serilogLogger.Information($"{operation}: {current}/{total} ({percentage:F1}%)");
             }
         }
-        
+
         public void Dispose()
         {
             _serilogLogger?.Dispose();

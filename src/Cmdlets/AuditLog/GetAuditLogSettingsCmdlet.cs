@@ -15,7 +15,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.AuditLog
 {
     /// <summary>
     /// Retrieves audit status and settings for all mailboxes in Microsoft 365.
-    /// Collects detailed information about mailbox audit settings, including audit status, 
+    /// Collects detailed information about mailbox audit settings, including audit status,
     /// bypass settings, and configured audit actions for owners, delegates, and administrators.
     /// </summary>
     [Cmdlet(VerbsCommon.Get, "AuditLogSettings")]
@@ -57,7 +57,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.AuditLog
             };
 
             // Check Exchange connection - this would need to be implemented in AuthManager
-            if (!AuthManager.IsExchangeConnected)
+            if (!AuthManager.IsGraphConnected)
             {
                 throw new InvalidOperationException("Not connected to Exchange Online. Please run Connect-M365 first.");
             }
@@ -111,7 +111,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.AuditLog
                     break;
 
                 processedCount++;
-                var bypassStatus = bypassLookup.GetValueOrDefault(mailbox.UserPrincipalName, false);
+                var bypassStatus = bypassLookup.TryGetValue(mailbox.UserPrincipalName, out var bypass) ? bypass : false;
 
                 // Update summary statistics
                 if (mailbox.AuditEnabled) summary.AuditEnabled++;
@@ -128,12 +128,12 @@ namespace Microsoft.ExtractorSuite.Cmdlets.AuditLog
                     RecipientTypeDetails = mailbox.RecipientTypeDetails,
                     AuditEnabled = mailbox.AuditEnabled,
                     AuditBypassEnabled = bypassStatus,
-                    DefaultAuditSet = string.Join(", ", mailbox.DefaultAuditSet?.OrderBy(x => x) ?? Array.Empty<string>()),
-                    OwnerAuditActions = string.Join(", ", mailbox.AuditOwner?.OrderBy(x => x) ?? Array.Empty<string>()),
+                    DefaultAuditSet = mailbox.DefaultAuditSet != null ? string.Join(", ", mailbox.DefaultAuditSet.OrderBy(x => x)) : string.Empty,
+                    OwnerAuditActions = mailbox.AuditOwner != null ? string.Join(", ", mailbox.AuditOwner.OrderBy(x => x)) : string.Empty,
                     OwnerAuditActionsCount = mailbox.AuditOwner?.Count ?? 0,
-                    DelegateAuditActions = string.Join(", ", mailbox.AuditDelegate?.OrderBy(x => x) ?? Array.Empty<string>()),
+                    DelegateAuditActions = mailbox.AuditDelegate != null ? string.Join(", ", mailbox.AuditDelegate.OrderBy(x => x)) : string.Empty,
                     DelegateAuditActionsCount = mailbox.AuditDelegate?.Count ?? 0,
-                    AdminAuditActions = string.Join(", ", mailbox.AuditAdmin?.OrderBy(x => x) ?? Array.Empty<string>()),
+                    AdminAuditActions = mailbox.AuditAdmin != null ? string.Join(", ", mailbox.AuditAdmin.OrderBy(x => x)) : string.Empty,
                     AdminAuditActionsCount = mailbox.AuditAdmin?.Count ?? 0,
                     EffectiveAuditState = GetEffectiveAuditState(summary.OrgWideAuditingEnabled, bypassStatus, mailbox.AuditEnabled)
                 };
@@ -184,7 +184,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.AuditLog
             // This would call Exchange Online PowerShell cmdlets through the ExchangeRestClient
             // For now, we'll simulate the call
             await Task.Delay(100, cancellationToken);
-            
+
             return new OrganizationConfig
             {
                 AuditDisabled = false // Simulate that org-wide auditing is enabled
@@ -196,12 +196,12 @@ namespace Microsoft.ExtractorSuite.Cmdlets.AuditLog
             // This would call Get-EXOMailbox through the ExchangeRestClient
             // For now, we'll simulate with empty list
             await Task.Delay(500, cancellationToken);
-            
+
             return new List<MailboxInfo>();
         }
 
         private async Task<Dictionary<string, bool>> GetAuditBypassLookupAsync(
-            List<MailboxInfo> mailboxes, 
+            List<MailboxInfo> mailboxes,
             CancellationToken cancellationToken)
         {
             var lookup = new Dictionary<string, bool>();
@@ -210,11 +210,11 @@ namespace Microsoft.ExtractorSuite.Cmdlets.AuditLog
             {
                 // Try bulk retrieval first
                 WriteVerboseWithTimestamp("Attempting bulk retrieval of audit bypass associations...");
-                
+
                 // This would call Get-MailboxAuditBypassAssociation
                 // For simulation, we'll just mark all as not bypassed
                 await Task.Delay(1000, cancellationToken);
-                
+
                 foreach (var mailbox in mailboxes)
                 {
                     lookup[mailbox.UserPrincipalName] = false;
@@ -223,13 +223,13 @@ namespace Microsoft.ExtractorSuite.Cmdlets.AuditLog
             catch (Exception ex)
             {
                 WriteWarningWithTimestamp($"Bulk retrieval failed: {ex.Message}. Processing individually...");
-                
+
                 // Process in batches if bulk fails
                 const int batchSize = 10;
                 for (int i = 0; i < mailboxes.Count; i += batchSize)
                 {
                     var batch = mailboxes.Skip(i).Take(batchSize);
-                    
+
                     foreach (var mailbox in batch)
                     {
                         try
@@ -242,7 +242,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.AuditLog
                             lookup[mailbox.UserPrincipalName] = false;
                         }
                     }
-                    
+
                     // Small delay between batches to avoid throttling
                     await Task.Delay(100, cancellationToken);
                 }

@@ -67,7 +67,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
             }
 
             Logger?.LogInfo("=== Starting Transport Rules Collection ===");
-            
+
             if (Logger?.CurrentLevel == LogLevel.Debug)
             {
                 Logger.LogDebug($"PowerShell Version: {PSVersionTable.PSVersion}");
@@ -98,7 +98,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
 
                 if (rules == null || rules.Length == 0)
                 {
-                    Logger?.LogWarning("No transport rules found");
+                    Logger?.WriteWarningWithTimestamp("No transport rules found");
                     WriteWarning("No transport rules found in the organization");
                     return;
                 }
@@ -106,10 +106,10 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
                 // Apply state filter
                 if (StateFilter != "All")
                 {
-                    rules = rules.Where(r => 
+                    rules = rules.Where(r =>
                         string.Equals(r.State, StateFilter, StringComparison.OrdinalIgnoreCase))
                         .ToArray();
-                    
+
                     if (rules.Length == 0)
                     {
                         Logger?.LogInfo($"No rules found with state: {StateFilter}");
@@ -149,7 +149,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
             }
             catch (Exception ex)
             {
-                Logger?.LogError($"Error retrieving transport rules: {ex.Message}", ex);
+                Logger?.WriteErrorWithTimestamp($"Error retrieving transport rules: {ex.Message}", ex);
                 WriteErrorWithTimestamp($"Failed to retrieve transport rules: {ex.Message}", ex);
             }
         }
@@ -164,11 +164,11 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
             try
             {
                 WriteProgressSafe("Retrieving Transport Rules", "Connecting to Exchange Online...", 0);
-                
+
                 var rules = await _exchangeClient.GetTransportRulesAsync(CancellationToken);
-                
+
                 WriteProgressSafe("Retrieving Transport Rules", "Processing rules...", 50);
-                
+
                 // Convert WhenChanged to UTC if needed
                 foreach (var rule in rules)
                 {
@@ -177,14 +177,14 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
                         rule.WhenChanged = rule.WhenChanged.Value.ToUniversalTime();
                     }
                 }
-                
+
                 WriteProgressSafe("Retrieving Transport Rules", "Complete", 100);
-                
+
                 return rules;
             }
             catch (Exception ex)
             {
-                Logger?.LogError($"Failed to retrieve transport rules: {ex.Message}", ex);
+                Logger?.WriteErrorWithTimestamp($"Failed to retrieve transport rules: {ex.Message}", ex);
                 throw new PSInvalidOperationException($"Failed to retrieve transport rules: {ex.Message}", ex);
             }
         }
@@ -192,29 +192,29 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
         private void ProcessStatistics(TransportRule[] rules)
         {
             _stats.TotalRules = rules.Length;
-            _stats.EnabledRules = rules.Count(r => 
+            _stats.EnabledRules = rules.Count(r =>
                 string.Equals(r.State, "Enabled", StringComparison.OrdinalIgnoreCase));
-            _stats.DisabledRules = rules.Count(r => 
+            _stats.DisabledRules = rules.Count(r =>
                 string.Equals(r.State, "Disabled", StringComparison.OrdinalIgnoreCase));
-            
+
             // Mode statistics
-            _stats.EnforceMode = rules.Count(r => 
+            _stats.EnforceMode = rules.Count(r =>
                 string.Equals(r.Mode, "Enforce", StringComparison.OrdinalIgnoreCase));
-            _stats.AuditMode = rules.Count(r => 
+            _stats.AuditMode = rules.Count(r =>
                 string.Equals(r.Mode, "Audit", StringComparison.OrdinalIgnoreCase));
-            
+
             // Priority analysis
             if (rules.Any())
             {
                 _stats.HighestPriority = rules.Min(r => r.Priority);
                 _stats.LowestPriority = rules.Max(r => r.Priority);
             }
-            
+
             // Recent changes (last 30 days)
             var thirtyDaysAgo = DateTime.UtcNow.AddDays(-30);
-            _stats.RecentlyModified = rules.Count(r => 
+            _stats.RecentlyModified = rules.Count(r =>
                 r.WhenChanged.HasValue && r.WhenChanged.Value > thirtyDaysAgo);
-            
+
             if (Logger?.CurrentLevel == LogLevel.Debug)
             {
                 foreach (var rule in rules)
@@ -231,28 +231,28 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
         private void DisplayRules(TransportRule[] rules)
         {
             WriteHost("\n=== Transport Rules ===\n", ConsoleColor.Cyan);
-            
+
             foreach (var rule in rules.OrderBy(r => r.Priority))
             {
-                WriteHost($"[{rule.State?.ToUpper()}] ", 
-                    rule.State?.Equals("Enabled", StringComparison.OrdinalIgnoreCase) == true 
+                WriteHost($"[{rule.State?.ToUpper()}] ",
+                    rule.State?.Equals("Enabled", StringComparison.OrdinalIgnoreCase) == true
                         ? ConsoleColor.Green : ConsoleColor.Yellow);
                 WriteHost($"{rule.Name}\n");
-                
+
                 WriteHost($"  Priority: {rule.Priority}\n", ConsoleColor.Gray);
                 WriteHost($"  Mode: {rule.Mode}\n", ConsoleColor.Gray);
-                
+
                 if (!string.IsNullOrWhiteSpace(rule.Description))
                 {
                     WriteHost($"  Description: {rule.Description}\n", ConsoleColor.Gray);
                 }
-                
+
                 if (rule.WhenChanged.HasValue)
                 {
-                    WriteHost($"  Last Modified: {rule.WhenChanged.Value:yyyy-MM-dd HH:mm:ss} UTC\n", 
+                    WriteHost($"  Last Modified: {rule.WhenChanged.Value:yyyy-MM-dd HH:mm:ss} UTC\n",
                         ConsoleColor.Gray);
                 }
-                
+
                 WriteHost("\n");
             }
         }
@@ -261,14 +261,14 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
         {
             var timestamp = DateTime.Now.ToString("yyyyMMddHHmmss");
             var filename = Path.Combine(OutputDir, $"{timestamp}-TransportRules.csv");
-            
+
             var encoding = GetEncoding();
-            
+
             using var writer = new StreamWriter(filename, false, encoding);
-            
+
             // Write CSV header
             writer.WriteLine("Name,State,Priority,Mode,Description,WhenChanged,Identity");
-            
+
             // Write data
             foreach (var rule in rules.OrderBy(r => r.Priority))
             {
@@ -280,7 +280,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
                                $"\"{rule.WhenChanged?.ToString("yyyy-MM-dd HH:mm:ss")}\"," +
                                $"\"{EscapeCsvField(rule.Identity)}\"");
             }
-            
+
             Logger?.LogInfo($"Exported {rules.Length} transport rules to: {filename}");
             WriteHost($"\nExported to: {filename}\n", ConsoleColor.Green);
         }
@@ -289,15 +289,15 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
         {
             var timestamp = DateTime.Now.ToString("yyyyMMddHHmmss");
             var filename = Path.Combine(OutputDir, $"{timestamp}-TransportRules.json");
-            
+
             var json = System.Text.Json.JsonSerializer.Serialize(rules, new System.Text.Json.JsonSerializerOptions
             {
                 WriteIndented = true,
                 PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase
             });
-            
+
             File.WriteAllText(filename, json, GetEncoding());
-            
+
             Logger?.LogInfo($"Exported {rules.Length} transport rules to: {filename}");
             WriteHost($"\nExported to: {filename}\n", ConsoleColor.Green);
         }
@@ -308,22 +308,22 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
             WriteHost($"Total Rules: {_stats.TotalRules}\n");
             WriteHost($"  - Enabled: {_stats.EnabledRules}\n", ConsoleColor.Green);
             WriteHost($"  - Disabled: {_stats.DisabledRules}\n", ConsoleColor.Yellow);
-            
+
             if (_stats.TotalRules > 0)
             {
                 WriteHost($"\nMode Distribution:\n");
                 WriteHost($"  - Enforce: {_stats.EnforceMode}\n");
                 WriteHost($"  - Audit: {_stats.AuditMode}\n");
-                
+
                 WriteHost($"\nPriority Range: {_stats.HighestPriority} - {_stats.LowestPriority}\n");
-                
+
                 if (_stats.RecentlyModified > 0)
                 {
-                    WriteHost($"Recently Modified (30 days): {_stats.RecentlyModified}\n", 
+                    WriteHost($"Recently Modified (30 days): {_stats.RecentlyModified}\n",
                         ConsoleColor.Cyan);
                 }
             }
-            
+
             Logger?.LogInfo("Transport Rules Summary:");
             Logger?.LogInfo($"Total Rules: {_stats.TotalRules}");
             Logger?.LogInfo($"  - Enabled: {_stats.EnabledRules}");
@@ -346,7 +346,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
         {
             if (string.IsNullOrEmpty(field))
                 return string.Empty;
-            
+
             // Escape quotes by doubling them
             return field.Replace("\"", "\"\"");
         }

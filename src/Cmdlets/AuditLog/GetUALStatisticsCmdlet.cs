@@ -136,18 +136,18 @@ namespace Microsoft.ExtractorSuite.Cmdlets.AuditLog
 
         public GetUALStatisticsCmdlet()
         {
-            _exchangeClient = new ExchangeRestClient();
+            _exchangeClient = new ExchangeRestClient(AuthManager);
         }
 
         protected override async Task ProcessRecordAsync()
         {
-            LogInformation("=== Analyzing audit log distribution across record types ===");
-            LogInformation($"Started: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+            WriteVerbose("=== Analyzing audit log distribution across record types ===");
+            WriteVerbose($"Started: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
 
             // Check for authentication
             if (!await _exchangeClient.IsConnectedAsync())
             {
-                LogError("Not connected to Exchange Online. Please run Connect-M365 first.");
+                WriteErrorWithTimestamp("Not connected to Exchange Online. Please run Connect-M365 first.");
                 return;
             }
 
@@ -168,10 +168,10 @@ namespace Microsoft.ExtractorSuite.Cmdlets.AuditLog
             };
 
             var dateRange = $"{startDate:yyyy-MM-dd HH:mm:ss} to {endDate:yyyy-MM-dd HH:mm:ss}";
-            LogInformation($"Analysis Period: {dateRange}");
-            LogInformation($"Record Types to Process: {_recordTypes.Length}");
-            LogInformation($"Output Directory: {OutputDir}");
-            LogInformation("----------------------------------------");
+            WriteVerbose($"Analysis Period: {dateRange}");
+            WriteVerbose($"Record Types to Process: {_recordTypes.Length}");
+            WriteVerbose($"Output Directory: {OutputDir}");
+            WriteVerbose("----------------------------------------");
 
             var outputDirectory = GetOutputDirectory();
             var timestamp = DateTime.Now.ToString("yyyyMMddHHmmss");
@@ -181,16 +181,16 @@ namespace Microsoft.ExtractorSuite.Cmdlets.AuditLog
             {
                 // Get total count first with retries
                 var totalCount = await GetTotalCountWithRetriesAsync(UserIds, startDate, endDate);
-                
+
                 if (totalCount == 0)
                 {
-                    LogWarning("No Unified Audit Log entries found after multiple attempts");
-                    LogInformation("Aborting script since there are no audit logs to analyze");
+                    WriteWarningWithTimestamp("No Unified Audit Log entries found after multiple attempts");
+                    WriteVerbose("Aborting script since there are no audit logs to analyze");
                     return;
                 }
 
                 summary.TotalCount = totalCount;
-                LogInformation($"Found a total of {totalCount:N0} Unified Audit Log entries");
+                WriteVerbose($"Found a total of {totalCount:N0} Unified Audit Log entries");
 
                 // Process each record type
                 await ProcessRecordTypesAsync(UserIds, startDate, endDate, summary);
@@ -215,8 +215,8 @@ namespace Microsoft.ExtractorSuite.Cmdlets.AuditLog
             }
             catch (Exception ex)
             {
-                LogError($"An error occurred during UAL statistics analysis: {ex.Message}");
-                LogInformation("Ensure you are connected to M365 by running the Connect-M365 command before executing this script");
+                WriteErrorWithTimestamp($"An error occurred during UAL statistics analysis: {ex.Message}");
+                WriteVerbose("Ensure you are connected to M365 by running the Connect-M365 command before executing this script");
                 throw;
             }
         }
@@ -231,26 +231,29 @@ namespace Microsoft.ExtractorSuite.Cmdlets.AuditLog
             {
                 if (retryCount > 0)
                 {
-                    LogInformation($"No events found... retrying, attempt {retryCount + 1}/{maxRetries} after 15 second delay...");
+                    WriteVerbose($"No events found... retrying, attempt {retryCount + 1}/{maxRetries} after 15 second delay...");
                     await Task.Delay(15000);
                 }
 
                 try
                 {
-                    var searchParams = new Dictionary<string, object>
-                    {
-                        ["UserIds"] = userIds,
-                        ["StartDate"] = startDate,
-                        ["EndDate"] = endDate,
-                        ["ResultSize"] = 1
-                    };
+                    var userIdsArray = userIds == "*" ? null : new[] { userIds };
 
-                    var results = await _exchangeClient.SearchUnifiedAuditLogAsync(searchParams);
-                    totalCount = results?.FirstOrDefault()?.ResultCount ?? 0;
+                    var results = await _exchangeClient.SearchUnifiedAuditLogAsync(
+                        startDate,
+                        endDate,
+                        null, // sessionId
+                        null, // operations
+                        null, // recordTypes
+                        userIdsArray,
+                        1, // resultSize
+                        CancellationToken);
+                    
+                    totalCount = results?.ResultCount ?? 0;
                 }
                 catch (Exception ex)
                 {
-                    LogWarning($"Error during attempt to get the total count {retryCount + 1}: {ex.Message}");
+                    WriteWarningWithTimestamp($"Error during attempt to get the total count {retryCount + 1}: {ex.Message}");
                     totalCount = 0;
                 }
 
@@ -262,7 +265,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.AuditLog
 
         private async Task ProcessRecordTypesAsync(string userIds, DateTime startDate, DateTime endDate, UALStatisticsSummary summary)
         {
-            LogInformation("Processing record types...");
+            WriteVerbose("Processing record types...");
             var processedCount = 0;
 
             foreach (var recordType in _recordTypes)
@@ -271,22 +274,25 @@ namespace Microsoft.ExtractorSuite.Cmdlets.AuditLog
 
                 if (processedCount % 25 == 0)
                 {
-                    LogInformation($"Processed {processedCount} of {_recordTypes.Length} record types");
+                    WriteVerbose($"Processed {processedCount} of {_recordTypes.Length} record types");
                 }
 
                 try
                 {
-                    var searchParams = new Dictionary<string, object>
-                    {
-                        ["UserIds"] = userIds,
-                        ["StartDate"] = startDate,
-                        ["EndDate"] = endDate,
-                        ["RecordType"] = recordType,
-                        ["ResultSize"] = 1
-                    };
+                    var userIdsArray = userIds == "*" ? null : new[] { userIds };
+                    var recordTypesArray = new[] { recordType };
 
-                    var results = await _exchangeClient.SearchUnifiedAuditLogAsync(searchParams);
-                    var specificResult = results?.FirstOrDefault()?.ResultCount ?? 0;
+                    var results = await _exchangeClient.SearchUnifiedAuditLogAsync(
+                        startDate,
+                        endDate,
+                        null, // sessionId
+                        null, // operations
+                        recordTypesArray,
+                        userIdsArray,
+                        1, // resultSize
+                        CancellationToken);
+                        
+                    var specificResult = results?.ResultCount ?? 0;
 
                     if (specificResult > 0)
                     {
@@ -309,22 +315,22 @@ namespace Microsoft.ExtractorSuite.Cmdlets.AuditLog
                 }
                 catch (Exception ex)
                 {
-                    LogWarning($"Error processing record type {recordType}: {ex.Message}");
+                    WriteWarningWithTimestamp($"Error processing record type {recordType}: {ex.Message}");
                     summary.RecordsWithoutData++;
                 }
             }
 
-            LogInformation($"Processed {processedCount} of {_recordTypes.Length} record types");
+            WriteVerbose($"Processed {processedCount} of {_recordTypes.Length} record types");
         }
 
         private string GetOutputDirectory()
         {
             var directory = OutputDir;
-            
+
             if (!Directory.Exists(directory))
             {
                 Directory.CreateDirectory(directory);
-                LogInformation($"Created output directory: {directory}");
+                WriteVerbose($"Created output directory: {directory}");
             }
 
             return directory;
@@ -334,40 +340,40 @@ namespace Microsoft.ExtractorSuite.Cmdlets.AuditLog
         {
             if (summary.TotalCount > 0)
             {
-                LogInformation("");
-                LogInformation("=== Record Type Analysis ===");
-                LogInformation("----------------------------------------");
+                WriteVerbose("");
+                WriteVerbose("=== Record Type Analysis ===");
+                WriteVerbose("----------------------------------------");
 
                 // Sort by count descending and display results
                 var sortedResults = summary.RecordTypeResults.OrderByDescending(r => r.Count).ToList();
-                
+
                 foreach (var result in sortedResults)
                 {
                     var formattedCount = $"{result.Count:N0}";
                     var formattedPercentage = $"{result.Percentage:F1}";
-                    LogInformation($"{result.RecordType,-40} {formattedCount,15} ({formattedPercentage,4}%)");
+                    WriteVerbose($"{result.RecordType,-40} {formattedCount,15} ({formattedPercentage,4}%)");
                 }
 
-                LogInformation("----------------------------------------");
-                LogInformation("");
-                LogInformation("=== Analysis Summary ===");
-                LogInformation($"Time Period: {summary.SearchStartDate:yyyy-MM-dd} to {summary.SearchEndDate:yyyy-MM-dd}");
-                LogInformation($"Total Log Entries: {summary.TotalCount:N0}");
-                LogInformation("Record Types:");
-                LogInformation($"  With Data: {summary.RecordsWithData}");
-                LogInformation($"  Without Data: {summary.RecordsWithoutData}");
+                WriteVerbose("----------------------------------------");
+                WriteVerbose("");
+                WriteVerbose("=== Analysis Summary ===");
+                WriteVerbose($"Time Period: {summary.SearchStartDate:yyyy-MM-dd} to {summary.SearchEndDate:yyyy-MM-dd}");
+                WriteVerbose($"Total Log Entries: {summary.TotalCount:N0}");
+                WriteVerbose("Record Types:");
+                WriteVerbose($"  With Data: {summary.RecordsWithData}");
+                WriteVerbose($"  Without Data: {summary.RecordsWithoutData}");
 
                 if (!string.IsNullOrEmpty(summary.OutputFile))
                 {
-                    LogInformation($"Output File: {summary.OutputFile}");
+                    WriteVerbose($"Output File: {summary.OutputFile}");
                 }
 
-                LogInformation($"Processing Time: {summary.ProcessingTime?.ToString(@"mm\:ss")}");
-                LogInformation("===================================");
+                WriteVerbose($"Processing Time: {summary.ProcessingTime?.ToString(@"mm\:ss")}");
+                WriteVerbose("===================================");
             }
             else
             {
-                LogInformation("No records found in the Unified Audit Log.");
+                WriteVerbose("No records found in the Unified Audit Log.");
             }
         }
 
@@ -377,19 +383,19 @@ namespace Microsoft.ExtractorSuite.Cmdlets.AuditLog
             {
                 // Sort results by count descending
                 var sortedResults = results.OrderByDescending(r => r.Count).ToList();
-                
+
                 var csv = "RecordType,Amount,Percentage" + Environment.NewLine;
-                
+
                 foreach (var result in sortedResults)
                 {
                     csv += $"{result.RecordType},{result.Count},{result.Percentage:F2}" + Environment.NewLine;
                 }
-                
-                await File.WriteAllTextAsync(filePath, csv);
+
+                using (var writer = new StreamWriter(filePath)) { await writer.WriteAsync(csv); }
             }
             catch (Exception ex)
             {
-                LogError($"Failed to write results to file {filePath}: {ex.Message}");
+                WriteErrorWithTimestamp($"Failed to write results to file {filePath}: {ex.Message}");
                 throw;
             }
         }
@@ -399,12 +405,12 @@ namespace Microsoft.ExtractorSuite.Cmdlets.AuditLog
     public class UALStatisticsResult
     {
         public List<RecordTypeStatistic> RecordTypeStatistics { get; set; } = new List<RecordTypeStatistic>();
-        public UALStatisticsSummary Summary { get; set; }
+        public UALStatisticsSummary Summary { get; set; } = new UALStatisticsSummary();
     }
 
     public class RecordTypeStatistic
     {
-        public string RecordType { get; set; }
+        public string RecordType { get; set; } = string.Empty;
         public int Count { get; set; }
         public double Percentage { get; set; }
     }
@@ -419,6 +425,6 @@ namespace Microsoft.ExtractorSuite.Cmdlets.AuditLog
         public int RecordsWithData { get; set; }
         public int RecordsWithoutData { get; set; }
         public List<RecordTypeStatistic> RecordTypeResults { get; set; } = new List<RecordTypeStatistic>();
-        public string OutputFile { get; set; }
+        public string OutputFile { get; set; } = string.Empty;
     }
 }

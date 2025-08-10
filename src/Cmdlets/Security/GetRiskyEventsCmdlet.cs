@@ -48,12 +48,12 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Security
 
         protected override async Task ProcessRecordAsync()
         {
-            LogInformation("=== Starting Risky Events Collection ===");
-            
+            WriteVerbose("=== Starting Risky Events Collection ===");
+
             // Check for authentication and scopes
             if (!await _graphClient.IsConnectedAsync())
             {
-                LogError("Not connected to Microsoft Graph. Please run Connect-M365 first.");
+                WriteErrorWithTimestamp("Not connected to Microsoft Graph. Please run Connect-M365 first.");
                 return;
             }
 
@@ -61,8 +61,8 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Security
             var missingScopes = RequiredScopes.Except(authInfo.Scopes).ToList();
             if (missingScopes.Count > 0)
             {
-                LogWarning($"Missing required scopes: {string.Join(", ", missingScopes)}");
-                LogInformation("Some data may not be accessible without proper permissions.");
+                WriteWarningWithTimestamp($"Missing required scopes: {string.Join(", ", missingScopes)}");
+                WriteVerbose("Some data may not be accessible without proper permissions.");
             }
 
             var outputDirectory = GetOutputDirectory();
@@ -108,14 +108,14 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Security
             }
             catch (Exception ex)
             {
-                LogError($"An error occurred during risky events collection: {ex.Message}");
+                WriteErrorWithTimestamp($"An error occurred during risky events collection: {ex.Message}");
                 throw;
             }
         }
 
         private async Task ProcessRiskyUsersAsync(string outputDirectory, string timestamp, RiskyEventsSummary summary)
         {
-            LogInformation("=== Starting Risky Users Collection ===");
+            WriteVerbose("=== Starting Risky Users Collection ===");
 
             var riskyUsers = new List<RiskyUser>();
 
@@ -124,8 +124,8 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Security
                 if (UserIds != null && UserIds.Length > 0)
                 {
                     // Process specific users
-                    LogInformation($"Processing {UserIds.Length} specific users");
-                    
+                    WriteVerbose($"Processing {UserIds.Length} specific users");
+
                     foreach (var userId in UserIds)
                     {
                         try
@@ -134,7 +134,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Security
                             if (user != null)
                             {
                                 var riskyUser = ProcessRiskyUserData(user);
-                                
+
                                 if (!HighRiskOnly || riskyUser.RiskLevel == "High")
                                 {
                                     riskyUsers.Add(riskyUser);
@@ -143,28 +143,28 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Security
                             }
                             else
                             {
-                                LogInformation($"User ID {userId} not found or not risky.");
+                                WriteVerbose($"User ID {userId} not found or not risky.");
                             }
                         }
                         catch (Exception ex)
                         {
-                            LogError($"Failed to retrieve data for User ID {userId}: {ex.Message}");
+                            WriteErrorWithTimestamp($"Failed to retrieve data for User ID {userId}: {ex.Message}");
                         }
                     }
                 }
                 else
                 {
                     // Get all risky users
-                    LogInformation("Processing all risky users");
-                    
+                    WriteVerbose("Processing all risky users");
+
                     var allRiskyUsers = await _graphClient.GetRiskyUsersAsync();
-                    
+
                     foreach (var user in allRiskyUsers)
                     {
                         try
                         {
                             var riskyUser = ProcessRiskyUserData(user);
-                            
+
                             if (!HighRiskOnly || riskyUser.RiskLevel == "High")
                             {
                                 riskyUsers.Add(riskyUser);
@@ -173,7 +173,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Security
                         }
                         catch (Exception ex)
                         {
-                            LogWarning($"Failed to process risky user: {ex.Message}");
+                            WriteWarningWithTimestamp($"Failed to process risky user: {ex.Message}");
                         }
                     }
                 }
@@ -183,25 +183,25 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Security
                     var fileName = Path.Combine(outputDirectory, $"{timestamp}-RiskyUsers.csv");
                     await WriteRiskyUsersAsync(riskyUsers, fileName);
                     summary.OutputFiles.Add(fileName);
-                    
-                    LogInformation($"Risky users data written to: {fileName}");
+
+                    WriteVerbose($"Risky users data written to: {fileName}");
                     summary.TotalRiskyUsers = riskyUsers.Count;
                 }
                 else
                 {
-                    LogInformation("No risky users found");
+                    WriteVerbose("No risky users found");
                 }
             }
             catch (Exception ex)
             {
-                LogError($"An error occurred during risky users collection: {ex.Message}");
+                WriteErrorWithTimestamp($"An error occurred during risky users collection: {ex.Message}");
                 throw;
             }
         }
 
         private async Task ProcessRiskyDetectionsAsync(string outputDirectory, string timestamp, RiskyEventsSummary summary)
         {
-            LogInformation("=== Starting Risky Detections Collection ===");
+            WriteVerbose("=== Starting Risky Detections Collection ===");
 
             var riskDetections = new List<RiskDetection>();
 
@@ -210,18 +210,18 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Security
                 if (UserIds != null && UserIds.Length > 0)
                 {
                     // Process specific users
-                    LogInformation($"Processing risky detections for {UserIds.Length} specific users");
-                    
+                    WriteVerbose($"Processing risky detections for {UserIds.Length} specific users");
+
                     foreach (var userId in UserIds)
                     {
                         try
                         {
                             var detections = await _graphClient.GetRiskDetectionsAsync($"userPrincipalName eq '{userId}'");
-                            
+
                             foreach (var detection in detections)
                             {
                                 var riskDetection = ProcessRiskDetectionData(detection);
-                                
+
                                 if (!HighRiskOnly || riskDetection.RiskLevel == "High")
                                 {
                                     riskDetections.Add(riskDetection);
@@ -231,23 +231,23 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Security
                         }
                         catch (Exception ex)
                         {
-                            LogError($"Failed to retrieve risk detections for User ID {userId}: {ex.Message}");
+                            WriteErrorWithTimestamp($"Failed to retrieve risk detections for User ID {userId}: {ex.Message}");
                         }
                     }
                 }
                 else
                 {
                     // Get all risk detections
-                    LogInformation("Processing all risk detections");
-                    
+                    WriteVerbose("Processing all risk detections");
+
                     var allDetections = await _graphClient.GetRiskDetectionsAsync();
-                    
+
                     foreach (var detection in allDetections)
                     {
                         try
                         {
                             var riskDetection = ProcessRiskDetectionData(detection);
-                            
+
                             if (!HighRiskOnly || riskDetection.RiskLevel == "High")
                             {
                                 riskDetections.Add(riskDetection);
@@ -256,7 +256,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Security
                         }
                         catch (Exception ex)
                         {
-                            LogWarning($"Failed to process risk detection: {ex.Message}");
+                            WriteWarningWithTimestamp($"Failed to process risk detection: {ex.Message}");
                         }
                     }
                 }
@@ -266,24 +266,24 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Security
                     var fileName = Path.Combine(outputDirectory, $"{timestamp}-RiskyDetections.csv");
                     await WriteRiskDetectionsAsync(riskDetections, fileName);
                     summary.OutputFiles.Add(fileName);
-                    
-                    LogInformation($"Risk detections data written to: {fileName}");
+
+                    WriteVerbose($"Risk detections data written to: {fileName}");
                     summary.TotalRiskDetections = riskDetections.Count;
                 }
                 else
                 {
-                    LogInformation("No risk detections found");
+                    WriteVerbose("No risk detections found");
                 }
             }
             catch (Exception ex)
             {
-                LogError($"An error occurred during risk detections collection: {ex.Message}");
-                
+                WriteErrorWithTimestamp($"An error occurred during risk detections collection: {ex.Message}");
+
                 if (ex.Message.Contains("license") || ex.Message.Contains("feature"))
                 {
-                    LogError("Check that the target tenant is licensed for this feature");
+                    WriteErrorWithTimestamp("Check that the target tenant is licensed for this feature");
                 }
-                
+
                 throw;
             }
         }
@@ -400,11 +400,11 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Security
         private string GetOutputDirectory()
         {
             var directory = OutputDir;
-            
+
             if (!Directory.Exists(directory))
             {
                 Directory.CreateDirectory(directory);
-                LogInformation($"Created output directory: {directory}");
+                WriteVerbose($"Created output directory: {directory}");
             }
 
             return directory;
@@ -412,45 +412,45 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Security
 
         private void LogSummary(RiskyEventsSummary summary)
         {
-            LogInformation("");
-            LogInformation("=== Risky Events Collection Summary ===");
-            LogInformation($"Processing Time: {summary.ProcessingTime?.ToString(@"mm\:ss")}");
-            LogInformation($"Total Risky Users: {summary.TotalRiskyUsers:N0}");
-            LogInformation($"Total Risk Detections: {summary.TotalRiskDetections:N0}");
-            
+            WriteVerbose("");
+            WriteVerbose("=== Risky Events Collection Summary ===");
+            WriteVerbose($"Processing Time: {summary.ProcessingTime?.ToString(@"mm\:ss")}");
+            WriteVerbose($"Total Risky Users: {summary.TotalRiskyUsers:N0}");
+            WriteVerbose($"Total Risk Detections: {summary.TotalRiskDetections:N0}");
+
             if (summary.RiskLevelBreakdown.Count > 0)
             {
-                LogInformation("");
-                LogInformation("Risk Level Breakdown:");
+                WriteVerbose("");
+                WriteVerbose("Risk Level Breakdown:");
                 foreach (var kvp in summary.RiskLevelBreakdown.OrderByDescending(x => x.Value))
                 {
-                    LogInformation($"  - {kvp.Key}: {kvp.Value:N0}");
+                    WriteVerbose($"  - {kvp.Key}: {kvp.Value:N0}");
                 }
             }
 
             if (summary.RiskStateBreakdown.Count > 0)
             {
-                LogInformation("");
-                LogInformation("Risk State Breakdown:");
+                WriteVerbose("");
+                WriteVerbose("Risk State Breakdown:");
                 foreach (var kvp in summary.RiskStateBreakdown.OrderByDescending(x => x.Value))
                 {
-                    LogInformation($"  - {kvp.Key}: {kvp.Value:N0}");
+                    WriteVerbose($"  - {kvp.Key}: {kvp.Value:N0}");
                 }
             }
-            
-            LogInformation("");
-            LogInformation("Output Files:");
+
+            WriteVerbose("");
+            WriteVerbose("Output Files:");
             foreach (var file in summary.OutputFiles)
             {
-                LogInformation($"  - {file}");
+                WriteVerbose($"  - {file}");
             }
-            LogInformation("==========================================");
+            WriteVerbose("==========================================");
         }
 
         private async Task WriteRiskyUsersAsync(IEnumerable<RiskyUser> users, string filePath)
         {
             var csv = "Id,IsDeleted,IsProcessing,RiskDetail,RiskLastUpdatedDateTime,RiskLevel,RiskState,UserDisplayName,UserPrincipalName,AdditionalProperties" + Environment.NewLine;
-            
+
             foreach (var user in users)
             {
                 var values = new[]
@@ -466,17 +466,17 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Security
                     EscapeCsvValue(user.UserPrincipalName),
                     EscapeCsvValue(user.AdditionalProperties)
                 };
-                
+
                 csv += string.Join(",", values) + Environment.NewLine;
             }
-            
-            await File.WriteAllTextAsync(filePath, csv);
+
+            using (var writer = new StreamWriter(filePath)) { await writer.WriteAsync(csv); }
         }
 
         private async Task WriteRiskDetectionsAsync(IEnumerable<RiskDetection> detections, string filePath)
         {
             var csv = "Activity,ActivityDateTime,AdditionalInfo,CorrelationId,DetectedDateTime,IpAddress,Id,LastUpdatedDateTime,City,CountryOrRegion,State,RequestId,RiskDetail,RiskEventType,RiskLevel,RiskState,DetectionTimingType,Source,TokenIssuerType,UserDisplayName,UserId,UserPrincipalName,AdditionalProperties" + Environment.NewLine;
-            
+
             foreach (var detection in detections)
             {
                 var values = new[]
@@ -505,23 +505,23 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Security
                     EscapeCsvValue(detection.UserPrincipalName),
                     EscapeCsvValue(detection.AdditionalProperties)
                 };
-                
+
                 csv += string.Join(",", values) + Environment.NewLine;
             }
-            
-            await File.WriteAllTextAsync(filePath, csv);
+
+            using (var writer = new StreamWriter(filePath)) { await writer.WriteAsync(csv); }
         }
 
         private string EscapeCsvValue(string value)
         {
             if (string.IsNullOrEmpty(value))
                 return "";
-            
+
             if (value.Contains(",") || value.Contains("\"") || value.Contains("\n"))
             {
                 return "\"" + value.Replace("\"", "\"\"") + "\"";
             }
-            
+
             return value;
         }
     }

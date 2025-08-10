@@ -9,13 +9,14 @@ namespace Microsoft.ExtractorSuite.Core.Logging
         Standard = 2,
         Debug = 3
     }
-    
+
     public interface ILogger : IDisposable
     {
+        LogLevel CurrentLevel { get; }
         void LogDebug(string message);
         void LogInfo(string message);
-        void LogWarning(string message);
-        void LogError(string message, Exception? exception = null);
+        void WriteWarningWithTimestamp(string message);
+        void WriteErrorWithTimestamp(string message, Exception? exception = null);
         void LogProgress(string operation, int current, int total);
     }
 }

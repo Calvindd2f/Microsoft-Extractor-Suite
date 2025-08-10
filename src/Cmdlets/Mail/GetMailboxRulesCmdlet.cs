@@ -90,7 +90,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
             }
 
             Logger?.LogInfo("=== Starting Mailbox Rules Collection ===");
-            
+
             if (Logger?.CurrentLevel == LogLevel.Debug)
             {
                 Logger.LogDebug($"PowerShell Version: {PSVersionTable.PSVersion}");
@@ -121,7 +121,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
 
                 if (_allRules.Count == 0)
                 {
-                    Logger?.LogWarning("No inbox rules found");
+                    Logger?.WriteWarningWithTimestamp("No inbox rules found");
                     WriteWarning("No inbox rules found matching the criteria");
                     return;
                 }
@@ -131,7 +131,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
 
                 if (filteredRules.Count == 0)
                 {
-                    Logger?.LogWarning("No rules remaining after applying filters");
+                    Logger?.WriteWarningWithTimestamp("No rules remaining after applying filters");
                     WriteWarning("No rules found matching the specified filters");
                     return;
                 }
@@ -176,7 +176,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
             }
             catch (Exception ex)
             {
-                Logger?.LogError($"Error retrieving mailbox rules: {ex.Message}", ex);
+                Logger?.WriteErrorWithTimestamp($"Error retrieving mailbox rules: {ex.Message}", ex);
                 WriteErrorWithTimestamp($"Failed to retrieve mailbox rules: {ex.Message}", ex);
             }
         }
@@ -195,7 +195,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
                     "Retrieving Mailbox Rules",
                     $"Processing {report.currentUser} ({report.processed}/{report.total})",
                     percentComplete);
-                
+
                 WriteVerboseWithTimestamp($"Processing mailbox {report.processed}/{report.total}: {report.currentUser}");
             });
 
@@ -205,7 +205,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
                 {
                     // Process specific users
                     var users = UserPrincipalNames
-                        .SelectMany(u => u.Split(',', StringSplitOptions.RemoveEmptyEntries))
+                        .SelectMany(u => u.Split(new char[] { ',' }, StringSplitOptions.RemoveEmptyEntries))
                         .Select(u => u.Trim())
                         .Where(u => !string.IsNullOrWhiteSpace(u))
                         .Distinct()
@@ -225,7 +225,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
                 {
                     // Process all mailboxes
                     Logger?.LogInfo("Processing all mailboxes in the organization");
-                    
+
                     await foreach (var rule in _exchangeClient.GetAllMailboxInboxRulesAsync(
                         null, MaxConcurrency, progress, CancellationToken))
                     {
@@ -244,7 +244,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
             }
             catch (Exception ex)
             {
-                Logger?.LogError($"Failed to retrieve mailbox rules: {ex.Message}", ex);
+                Logger?.WriteErrorWithTimestamp($"Failed to retrieve mailbox rules: {ex.Message}", ex);
                 throw new PSInvalidOperationException($"Failed to retrieve mailbox rules: {ex.Message}", ex);
             }
         }
@@ -375,13 +375,13 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
         private bool HasSuspiciousPatterns(InboxRule rule)
         {
             var suspiciousKeywords = new[] { "invoice", "payment", "urgent", "verify", "suspended", "security" };
-            
-            if (rule.SubjectContainsWords?.Any(w => 
-                suspiciousKeywords.Any(s => w.Contains(s, StringComparison.OrdinalIgnoreCase))) == true)
+
+            if (rule.SubjectContainsWords?.Any(w =>
+                suspiciousKeywords.Any(s => w.IndexOf(s, StringComparison.OrdinalIgnoreCase) >= 0)) == true)
                 return true;
 
-            if (rule.BodyContainsWords?.Any(w => 
-                suspiciousKeywords.Any(s => w.Contains(s, StringComparison.OrdinalIgnoreCase))) == true)
+            if (rule.BodyContainsWords?.Any(w =>
+                suspiciousKeywords.Any(s => w.IndexOf(s, StringComparison.OrdinalIgnoreCase) >= 0)) == true)
                 return true;
 
             return false;
@@ -398,9 +398,9 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
 
             if (ForwardingOnly)
             {
-                filtered = filtered.Where(r => 
-                    r.ForwardTo?.Any() == true || 
-                    r.RedirectTo?.Any() == true || 
+                filtered = filtered.Where(r =>
+                    r.ForwardTo?.Any() == true ||
+                    r.RedirectTo?.Any() == true ||
                     r.ForwardAsAttachmentTo?.Any() == true);
             }
 
@@ -419,7 +419,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
 
                 foreach (var rule in userGroup.OrderBy(r => r.Priority))
                 {
-                    WriteHost($"  [{(rule.Enabled ? "ENABLED" : "DISABLED")}] ", 
+                    WriteHost($"  [{(rule.Enabled ? "ENABLED" : "DISABLED")}] ",
                         rule.Enabled ? ConsoleColor.Green : ConsoleColor.Gray);
                     WriteHost($"{rule.Name}\n");
 
@@ -461,8 +461,8 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
 
             // Additional analysis logic
             var externalForwardingUsers = rules
-                .Where(r => r.Enabled && 
-                    (r.ForwardTo?.Any(IsExternalAddress) == true || 
+                .Where(r => r.Enabled &&
+                    (r.ForwardTo?.Any(IsExternalAddress) == true ||
                      r.RedirectTo?.Any(IsExternalAddress) == true))
                 .Select(r => r.MailboxOwnerId)
                 .Distinct()
@@ -474,8 +474,8 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
             }
 
             // Check for potential data exfiltration patterns
-            var suspiciousRules = rules.Where(r => 
-                r.Enabled && 
+            var suspiciousRules = rules.Where(r =>
+                r.Enabled &&
                 (r.DeleteMessage || r.SoftDeleteMessage) &&
                 (r.ForwardTo?.Any() == true || r.ForwardAsAttachmentTo?.Any() == true))
                 .ToList();
@@ -568,31 +568,31 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
             WriteHost($"Users Processed: {_stats.TotalUsers}\n");
             WriteHost($"Users with Rules: {_stats.UsersWithRules}\n");
             WriteHost($"Total Rules Found: {_stats.TotalRules}\n");
-            
+
             if (_stats.EnabledRules > 0)
                 WriteHost($"  - Enabled Rules: {_stats.EnabledRules}\n", ConsoleColor.Green);
-            
+
             if (_stats.ForwardingRules > 0)
                 WriteHost($"  - Forwarding Rules: {_stats.ForwardingRules}\n", ConsoleColor.Yellow);
-            
+
             if (_stats.ForwardAsAttachmentRules > 0)
                 WriteHost($"  - Forward As Attachment: {_stats.ForwardAsAttachmentRules}\n", ConsoleColor.Yellow);
-            
+
             if (_stats.RedirectRules > 0)
                 WriteHost($"  - Redirect Rules: {_stats.RedirectRules}\n", ConsoleColor.Yellow);
-            
+
             if (_stats.DeleteRules > 0)
                 WriteHost($"  - Delete Rules: {_stats.DeleteRules}\n", ConsoleColor.Red);
-            
+
             if (_stats.SoftDeleteRules > 0)
                 WriteHost($"  - Soft Delete Rules: {_stats.SoftDeleteRules}\n", ConsoleColor.Yellow);
-            
+
             if (_stats.RulesInError > 0)
                 WriteHost($"  - Rules in Error: {_stats.RulesInError}\n", ConsoleColor.Red);
-            
+
             if (_stats.UsersWithExternalForwarding > 0)
                 WriteHost($"\nUsers with External Forwarding: {_stats.UsersWithExternalForwarding}\n", ConsoleColor.Red);
-            
+
             if (_stats.SuspiciousRules > 0)
                 WriteHost($"Suspicious Rules Detected: {_stats.SuspiciousRules}\n", ConsoleColor.Red);
         }

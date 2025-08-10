@@ -168,7 +168,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Azure
                     var response = await _httpClient.GetAsync(uriBase, cancellationToken);
                     response.EnsureSuccessStatusCode();
 
-                    var content = await response.Content.ReadAsStringAsync(cancellationToken);
+                    var content = await response.Content.ReadAsStringAsync();
                     var activityResponse = JsonSerializer.Deserialize<DirectoryActivityLogResponse>(content);
 
                     if (activityResponse?.Value != null && activityResponse.Value.Any())
@@ -176,7 +176,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Azure
                         // Process and transform the events
                         var processedEvents = activityResponse.Value.Select(ProcessEvent).ToList();
                         events.AddRange(processedEvents);
-                        
+
                         WriteVerboseWithTimestamp($"Retrieved {activityResponse.Value.Count} events in batch {apiCallCount}");
                     }
 

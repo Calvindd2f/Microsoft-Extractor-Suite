@@ -11,36 +11,36 @@ namespace Microsoft.ExtractorSuite.Core
     {
         private CancellationTokenSource? _cancellationTokenSource;
         protected ILogger? Logger { get; private set; }
-        
+
         [Parameter]
         public LogLevel LogLevel { get; set; } = LogLevel.Standard;
-        
+
         [Parameter]
         public string? OutputDirectory { get; set; }
-        
+
         protected AuthenticationManager AuthManager => AuthenticationManager.Instance;
-        
+
         protected CancellationToken CancellationToken => _cancellationTokenSource?.Token ?? CancellationToken.None;
-        
+
         protected override void BeginProcessing()
         {
             base.BeginProcessing();
             _cancellationTokenSource = new CancellationTokenSource();
-            
+
             // Initialize logger
             Logger = new FileLogger(LogLevel, OutputDirectory ?? Environment.CurrentDirectory);
-            
+
             // Log cmdlet start
             Logger.LogInfo($"Starting cmdlet: {this.MyInvocation.MyCommand.Name}");
         }
-        
+
         protected override void StopProcessing()
         {
             base.StopProcessing();
             _cancellationTokenSource?.Cancel();
             Logger?.LogInfo($"Stopping cmdlet: {this.MyInvocation.MyCommand.Name}");
         }
-        
+
         protected override void EndProcessing()
         {
             base.EndProcessing();
@@ -48,7 +48,7 @@ namespace Microsoft.ExtractorSuite.Core
             Logger?.LogInfo($"Completed cmdlet: {this.MyInvocation.MyCommand.Name}");
             Logger?.Dispose();
         }
-        
+
         protected T RunAsync<T>(Task<T> task)
         {
             try
@@ -60,7 +60,7 @@ namespace Microsoft.ExtractorSuite.Core
                 throw ex.InnerException ?? ex;
             }
         }
-        
+
         protected void RunAsync(Task task)
         {
             try
@@ -72,19 +72,19 @@ namespace Microsoft.ExtractorSuite.Core
                 throw ex.InnerException ?? ex;
             }
         }
-        
+
         protected void WriteVerboseWithTimestamp(string message)
         {
             WriteVerbose($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] {message}");
             Logger?.LogDebug(message);
         }
-        
+
         protected void WriteWarningWithTimestamp(string message)
         {
             WriteWarning($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] {message}");
-            Logger?.LogWarning(message);
+            Logger?.WriteWarningWithTimestamp(message);
         }
-        
+
         protected void WriteErrorWithTimestamp(string message, Exception? exception = null)
         {
             var errorRecord = new ErrorRecord(
@@ -92,11 +92,11 @@ namespace Microsoft.ExtractorSuite.Core
                 "ExtractorSuiteError",
                 ErrorCategory.InvalidOperation,
                 null);
-            
+
             WriteError(errorRecord);
-            Logger?.LogError(message, exception);
+            Logger?.WriteErrorWithTimestamp(message, exception);
         }
-        
+
         protected void WriteProgressSafe(string activity, string statusDescription, int percentComplete)
         {
             try
@@ -112,7 +112,7 @@ namespace Microsoft.ExtractorSuite.Core
                 // Ignore progress errors (some hosts don't support progress)
             }
         }
-        
+
         protected bool RequireGraphConnection()
         {
             if (!AuthManager.IsGraphConnected)
@@ -122,7 +122,7 @@ namespace Microsoft.ExtractorSuite.Core
             }
             return true;
         }
-        
+
         protected bool RequireAzureConnection()
         {
             if (!AuthManager.IsAzureConnected)

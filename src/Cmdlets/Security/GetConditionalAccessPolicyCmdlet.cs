@@ -154,7 +154,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Security
             }
             catch (ServiceException ex)
             {
-                WriteErrorWithTimestamp($"Microsoft Graph API error: {ex.Error?.Code} - {ex.Error?.Message}", ex);
+                WriteErrorWithTimestamp($"Microsoft Graph API error: {ex.ResponseStatusCode} - {ex.Message}", ex);
                 throw;
             }
             catch (Exception ex)

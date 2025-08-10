@@ -186,7 +186,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
             }
             catch (ServiceException ex)
             {
-                WriteErrorWithTimestamp($"Microsoft Graph API error: {ex.Error?.Code} - {ex.Error?.Message}", ex);
+                WriteErrorWithTimestamp($"Microsoft Graph API error: {ex.ResponseStatusCode} - {ex.Message}", ex);
                 throw;
             }
             catch (Exception ex)
@@ -272,7 +272,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                                 DisplayName = (member as User)?.DisplayName ?? (member as Group)?.DisplayName ?? "",
                                 Mail = (member as User)?.Mail ?? (member as Group)?.Mail ?? "",
                                 UserPrincipalName = (member as User)?.UserPrincipalName ?? "",
-                                MemberType = member.OdataType?.Contains("user") == true ? "User" : 
+                                MemberType = member.OdataType?.Contains("user") == true ? "User" :
                                            member.OdataType?.Contains("group") == true ? "Group" : "Unknown"
                             };
 
@@ -284,7 +284,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                 }
                 catch (ServiceException ex)
                 {
-                    WriteWarningWithTimestamp($"Failed to retrieve members for group {group.DisplayName}: {ex.Error?.Message}");
+                    WriteWarningWithTimestamp($"Failed to retrieve members for group {group.DisplayName}: {ex.Message}");
                 }
                 catch (Exception ex)
                 {
@@ -375,7 +375,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
             {
                 WriteIndented = true
             });
-            await File.WriteAllTextAsync(summaryFileName, summaryJson, cancellationToken);
+            using (var writer = new StreamWriter(summaryFileName)) { await writer.WriteAsync(summaryJson); }
         }
 
         private async Task ExportGroupMembersAsync(

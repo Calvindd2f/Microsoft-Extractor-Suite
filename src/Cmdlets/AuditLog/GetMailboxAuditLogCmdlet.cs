@@ -62,12 +62,12 @@ namespace Microsoft.ExtractorSuite.Cmdlets.AuditLog
 
         protected override async Task ProcessRecordAsync()
         {
-            LogInformation("=== Starting Mailbox Audit Log Collection ===");
-            
+            WriteVerbose("=== Starting Mailbox Audit Log Collection ===");
+
             // Check for authentication
             if (!await _exchangeClient.IsConnectedAsync())
             {
-                LogError("Not connected to Exchange Online. Please run Connect-M365 first.");
+                WriteErrorWithTimestamp("Not connected to Exchange Online. Please run Connect-M365 first.");
                 return;
             }
 
@@ -87,7 +87,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.AuditLog
 
         private async Task ProcessUALMethodAsync(string outputDirectory)
         {
-            LogInformation("== Starting the Mailbox Audit Log Collection (utilizing Get-UAL) ==");
+            WriteVerbose("== Starting the Mailbox Audit Log Collection (utilizing Get-UAL) ==");
 
             var ualParams = new Dictionary<string, object>
             {
@@ -102,10 +102,10 @@ namespace Microsoft.ExtractorSuite.Cmdlets.AuditLog
             // Add optional parameters if provided
             if (StartDate.HasValue)
                 ualParams["StartDate"] = StartDate.Value;
-            
+
             if (EndDate.HasValue)
                 ualParams["EndDate"] = EndDate.Value;
-            
+
             if (MergeOutput)
                 ualParams["MergeOutput"] = MergeOutput.IsPresent;
 
@@ -113,21 +113,21 @@ namespace Microsoft.ExtractorSuite.Cmdlets.AuditLog
             {
                 // Call the UAL collection method
                 await CallGetUALAsync(ualParams);
-                
-                LogInformation($"Mailbox audit log collection completed successfully.");
-                LogInformation($"Results saved to: {outputDirectory}");
+
+                WriteVerbose($"Mailbox audit log collection completed successfully.");
+                WriteVerbose($"Results saved to: {outputDirectory}");
             }
             catch (Exception ex)
             {
-                LogError($"Failed to collect mailbox audit logs: {ex.Message}");
+                WriteErrorWithTimestamp($"Failed to collect mailbox audit logs: {ex.Message}");
                 throw;
             }
         }
 
         private async Task ProcessLegacyMethodAsync(string outputDirectory)
         {
-            LogInformation("== Starting Mailbox Audit Log Collection (Legacy Method) ==");
-            
+            WriteVerbose("== Starting Mailbox Audit Log Collection (Legacy Method) ==");
+
             var summary = new MailboxAuditLogSummary
             {
                 StartTime = DateTime.Now,
@@ -144,16 +144,16 @@ namespace Microsoft.ExtractorSuite.Cmdlets.AuditLog
                 var startDate = StartDate ?? DateTime.Now.AddDays(-90);
                 var endDate = EndDate ?? DateTime.Now;
 
-                LogInformation($"Date range: {startDate:yyyy-MM-dd} to {endDate:yyyy-MM-dd}");
+                WriteVerbose($"Date range: {startDate:yyyy-MM-dd} to {endDate:yyyy-MM-dd}");
 
                 if (string.IsNullOrEmpty(UserIds) || UserIds == "*")
                 {
-                    LogInformation("No specific users provided. Getting the MailboxAuditLog for all users");
+                    WriteVerbose("No specific users provided. Getting the MailboxAuditLog for all users");
                     await ProcessAllMailboxesAsync(outputDirectory, startDate, endDate, summary);
                 }
                 else if (UserIds.Contains(","))
                 {
-                    var userList = UserIds.Split(',', StringSplitOptions.RemoveEmptyEntries);
+                    var userList = UserIds.Split(new char[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
                     foreach (var user in userList)
                     {
                         var trimmedUser = user.Trim();
@@ -170,7 +170,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.AuditLog
             }
             catch (Exception ex)
             {
-                LogError($"An error occurred during mailbox audit log collection: {ex.Message}");
+                WriteErrorWithTimestamp($"An error occurred during mailbox audit log collection: {ex.Message}");
                 throw;
             }
         }
@@ -178,9 +178,9 @@ namespace Microsoft.ExtractorSuite.Cmdlets.AuditLog
         private async Task ProcessAllMailboxesAsync(string outputDirectory, DateTime startDate, DateTime endDate, MailboxAuditLogSummary summary)
         {
             var mailboxes = await _exchangeClient.GetMailboxesAsync(unlimited: true);
-            
-            LogInformation($"Found {mailboxes.Count} mailboxes to process");
-            
+
+            WriteVerbose($"Found {mailboxes.Count} mailboxes to process");
+
             foreach (var mailbox in mailboxes)
             {
                 try
@@ -190,21 +190,21 @@ namespace Microsoft.ExtractorSuite.Cmdlets.AuditLog
                 }
                 catch (Exception ex)
                 {
-                    LogWarning($"Failed to process mailbox {mailbox.UserPrincipalName}: {ex.Message}");
+                    WriteWarningWithTimestamp($"Failed to process mailbox {mailbox.UserPrincipalName}: {ex.Message}");
                 }
-                
+
                 // Progress reporting
                 if (summary.ProcessedMailboxes % 10 == 0)
                 {
-                    LogInformation($"Processed {summary.ProcessedMailboxes}/{mailboxes.Count} mailboxes");
+                    WriteVerbose($"Processed {summary.ProcessedMailboxes}/{mailboxes.Count} mailboxes");
                 }
             }
         }
 
         private async Task ProcessSingleMailboxAsync(string outputDirectory, string userPrincipalName, DateTime startDate, DateTime endDate, MailboxAuditLogSummary summary)
         {
-            LogInformation($"Collecting the MailboxAuditLog for {userPrincipalName}");
-            
+            WriteVerbose($"Collecting the MailboxAuditLog for {userPrincipalName}");
+
             try
             {
                 await ProcessMailboxAuditLog(outputDirectory, userPrincipalName, startDate, endDate, summary);
@@ -212,7 +212,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.AuditLog
             }
             catch (Exception ex)
             {
-                LogError($"Failed to process mailbox {userPrincipalName}: {ex.Message}");
+                WriteErrorWithTimestamp($"Failed to process mailbox {userPrincipalName}: {ex.Message}");
                 throw;
             }
         }
@@ -235,22 +235,22 @@ namespace Microsoft.ExtractorSuite.Cmdlets.AuditLog
             try
             {
                 var results = await _exchangeClient.SearchMailboxAuditLogAsync(searchParams);
-                
+
                 if (results != null && results.Count > 0)
                 {
                     await WriteResultsToFileAsync(results, outputFile);
                     summary.TotalRecords += results.Count;
-                    
-                    LogInformation($"Output written to: {outputFile} ({results.Count} records)");
+
+                    WriteVerbose($"Output written to: {outputFile} ({results.Count} records)");
                 }
                 else
                 {
-                    LogInformation($"No audit log entries found for {userPrincipalName}");
+                    WriteVerbose($"No audit log entries found for {userPrincipalName}");
                 }
             }
             catch (Exception ex)
             {
-                LogError($"Error retrieving audit logs for {userPrincipalName}: {ex.Message}");
+                WriteErrorWithTimestamp($"Error retrieving audit logs for {userPrincipalName}: {ex.Message}");
                 throw;
             }
         }
@@ -264,12 +264,12 @@ namespace Microsoft.ExtractorSuite.Cmdlets.AuditLog
                 {
                     ["ResultSize"] = 1
                 };
-                
+
                 await _exchangeClient.SearchMailboxAuditLogAsync(testParams);
             }
             catch (Exception ex)
             {
-                LogError("Connection test failed. Ensure you are connected to M365 by running the Connect-M365 command.");
+                WriteErrorWithTimestamp("Connection test failed. Ensure you are connected to M365 by running the Connect-M365 command.");
                 throw new InvalidOperationException("Exchange Online connection required", ex);
             }
         }
@@ -278,8 +278,8 @@ namespace Microsoft.ExtractorSuite.Cmdlets.AuditLog
         {
             // This would call the existing Get-UAL cmdlet functionality
             // For now, we'll simulate the call with a placeholder
-            LogInformation("Calling Get-UAL with ExchangeItem record type...");
-            
+            WriteVerbose("Calling Get-UAL with ExchangeItem record type...");
+
             try
             {
                 var searchParams = new Dictionary<string, object>
@@ -297,19 +297,19 @@ namespace Microsoft.ExtractorSuite.Cmdlets.AuditLog
                 }
 
                 var records = await _exchangeClient.SearchUnifiedAuditLogAsync(searchParams);
-                
+
                 if (records != null && records.Count > 0)
                 {
-                    var outputPath = Path.Combine((string)parameters["OutputDir"], 
+                    var outputPath = Path.Combine((string)parameters["OutputDir"],
                         $"{DateTime.Now:yyyyMMddHHmmss}-ExchangeItem-UAL.{Output.ToLower()}");
-                    
+
                     await WriteResultsToFileAsync(records, outputPath);
-                    LogInformation($"UAL records written to: {outputPath} ({records.Count} records)");
+                    WriteVerbose($"UAL records written to: {outputPath} ({records.Count} records)");
                 }
             }
             catch (Exception ex)
             {
-                LogError($"Failed to execute UAL collection: {ex.Message}");
+                WriteErrorWithTimestamp($"Failed to execute UAL collection: {ex.Message}");
                 throw;
             }
         }
@@ -317,7 +317,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.AuditLog
         private string GetOutputDirectory(string timestamp)
         {
             var directory = OutputDir;
-            
+
             if (OutputDir == "Output\\MailboxAuditLog")
             {
                 directory = Path.Combine(OutputDir, timestamp);
@@ -326,7 +326,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.AuditLog
             if (!Directory.Exists(directory))
             {
                 Directory.CreateDirectory(directory);
-                LogInformation($"Created output directory: {directory}");
+                WriteVerbose($"Created output directory: {directory}");
             }
 
             return directory;
@@ -334,13 +334,13 @@ namespace Microsoft.ExtractorSuite.Cmdlets.AuditLog
 
         private void LogSummary(MailboxAuditLogSummary summary)
         {
-            LogInformation("");
-            LogInformation("=== Mailbox Audit Log Collection Summary ===");
-            LogInformation($"Processing Time: {summary.ProcessingTime?.ToString(@"mm\:ss")}");
-            LogInformation($"Mailboxes Processed: {summary.ProcessedMailboxes:N0}");
-            LogInformation($"Total Records: {summary.TotalRecords:N0}");
-            LogInformation($"Output Directory: {summary.OutputDirectory}");
-            LogInformation("============================================");
+            WriteVerbose("");
+            WriteVerbose("=== Mailbox Audit Log Collection Summary ===");
+            WriteVerbose($"Processing Time: {summary.ProcessingTime?.ToString(@"mm\:ss")}");
+            WriteVerbose($"Mailboxes Processed: {summary.ProcessedMailboxes:N0}");
+            WriteVerbose($"Total Records: {summary.TotalRecords:N0}");
+            WriteVerbose($"Output Directory: {summary.OutputDirectory}");
+            WriteVerbose("============================================");
         }
 
         private async Task WriteResultsToFileAsync<T>(IEnumerable<T> results, string filePath)
@@ -369,7 +369,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.AuditLog
             }
             catch (Exception ex)
             {
-                LogError($"Failed to write results to file {filePath}: {ex.Message}");
+                WriteErrorWithTimestamp($"Failed to write results to file {filePath}: {ex.Message}");
                 throw;
             }
         }
@@ -378,16 +378,16 @@ namespace Microsoft.ExtractorSuite.Cmdlets.AuditLog
         {
             // Implement CSV writing logic
             var csv = ConvertToCsv(results);
-            await File.WriteAllTextAsync(filePath, csv);
+            using (var writer = new StreamWriter(filePath)) { await writer.WriteAsync(csv); }
         }
 
         private async Task WriteJsonAsync<T>(IEnumerable<T> results, string filePath)
         {
-            var json = System.Text.Json.JsonSerializer.Serialize(results, new System.Text.Json.JsonSerializerOptions 
-            { 
-                WriteIndented = true 
+            var json = System.Text.Json.JsonSerializer.Serialize(results, new System.Text.Json.JsonSerializerOptions
+            {
+                WriteIndented = true
             });
-            await File.WriteAllTextAsync(filePath, json);
+            using (var writer = new StreamWriter(filePath)) { await writer.WriteAsync(json); }
         }
 
         private async Task WriteSofElkAsync<T>(IEnumerable<T> results, string filePath)
@@ -399,7 +399,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.AuditLog
                 var json = System.Text.Json.JsonSerializer.Serialize(result);
                 lines.Add(json);
             }
-            await File.WriteAllLinesAsync(filePath, lines);
+            using (var writer = new StreamWriter(filePath)) { foreach (var line in lines) await writer.WriteLineAsync(line); }
         }
 
         private string ConvertToCsv<T>(IEnumerable<T> results)
@@ -407,17 +407,17 @@ namespace Microsoft.ExtractorSuite.Cmdlets.AuditLog
             // Simple CSV conversion - in practice, you'd want a more robust implementation
             var properties = typeof(T).GetProperties();
             var csv = string.Join(",", properties.Select(p => p.Name)) + Environment.NewLine;
-            
+
             foreach (var item in results)
             {
-                var values = properties.Select(p => 
+                var values = properties.Select(p =>
                 {
                     var value = p.GetValue(item)?.ToString() ?? "";
                     return value.Contains(",") ? $"\"{value}\"" : value;
                 });
                 csv += string.Join(",", values) + Environment.NewLine;
             }
-            
+
             return csv;
         }
     }

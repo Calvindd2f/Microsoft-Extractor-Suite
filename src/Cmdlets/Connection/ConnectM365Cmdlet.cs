@@ -11,47 +11,47 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Connection
     {
         [Parameter(Position = 0)]
         public string? TenantId { get; set; }
-        
+
         [Parameter]
         public string[]? Scopes { get; set; }
-        
+
         [Parameter]
         public SwitchParameter UseBeta { get; set; }
-        
+
         [Parameter]
         public SwitchParameter ExchangeOnline { get; set; }
-        
+
         protected override void ProcessRecord()
         {
             try
             {
                 WriteVerboseWithTimestamp("Connecting to Microsoft 365...");
-                
+
                 // Connect to Microsoft Graph
-                var graphTask = Task.Run(async () => 
+                var graphTask = Task.Run(async () =>
                     await AuthManager.ConnectGraphAsync(Scopes, TenantId, UseBeta.IsPresent, CancellationToken));
-                
+
                 var graphConnected = RunAsync(graphTask);
-                
+
                 if (!graphConnected)
                 {
                     WriteErrorWithTimestamp("Failed to connect to Microsoft Graph");
                     WriteObject(false);
                     return;
                 }
-                
+
                 WriteVerboseWithTimestamp($"Successfully connected to Microsoft Graph (Beta: {UseBeta.IsPresent})");
-                
+
                 // Connect to Exchange Online if requested
                 if (ExchangeOnline.IsPresent)
                 {
                     WriteVerboseWithTimestamp("Connecting to Exchange Online...");
-                    
-                    var exchangeTask = Task.Run(async () => 
+
+                    var exchangeTask = Task.Run(async () =>
                         await AuthManager.GetExchangeOnlineTokenAsync(CancellationToken));
-                    
+
                     var exchangeToken = RunAsync(exchangeTask);
-                    
+
                     if (string.IsNullOrEmpty(exchangeToken))
                     {
                         WriteWarningWithTimestamp("Failed to connect to Exchange Online");
@@ -61,14 +61,14 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Connection
                         WriteVerboseWithTimestamp("Successfully connected to Exchange Online");
                     }
                 }
-                
+
                 // Output connection info
                 var connectionInfo = new PSObject();
                 connectionInfo.Properties.Add(new PSNoteProperty("GraphConnected", true));
                 connectionInfo.Properties.Add(new PSNoteProperty("TenantId", AuthManager.CurrentTenantId));
                 connectionInfo.Properties.Add(new PSNoteProperty("UseBeta", UseBeta.IsPresent));
                 connectionInfo.Properties.Add(new PSNoteProperty("ExchangeOnline", ExchangeOnline.IsPresent));
-                
+
                 WriteObject(connectionInfo);
             }
             catch (Exception ex)

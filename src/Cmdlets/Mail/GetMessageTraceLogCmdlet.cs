@@ -76,12 +76,12 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
 
         protected override async Task ProcessRecordAsync()
         {
-            LogInformation("=== Starting Message Trace Log Collection ===");
-            
+            WriteVerbose("=== Starting Message Trace Log Collection ===");
+
             // Check for authentication
             if (!await _exchangeClient.IsConnectedAsync())
             {
-                LogError("Not connected to Exchange Online. Please run Connect-M365 first.");
+                WriteErrorWithTimestamp("Not connected to Exchange Online. Please run Connect-M365 first.");
                 return;
             }
 
@@ -91,7 +91,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
 
             if (startDate >= endDate)
             {
-                LogError("StartDate must be before EndDate");
+                WriteErrorWithTimestamp("StartDate must be before EndDate");
                 return;
             }
 
@@ -100,7 +100,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
 
             if (daysDifference > 90)
             {
-                LogError("Message trace logs are only available for the past 90 days");
+                WriteErrorWithTimestamp("Message trace logs are only available for the past 90 days");
                 return;
             }
 
@@ -118,8 +118,8 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
                 StatusBreakdown = new Dictionary<string, int>()
             };
 
-            LogInformation($"Date range: {startDate:yyyy-MM-dd} to {endDate:yyyy-MM-dd}");
-            LogInformation($"Using {(useHistorical ? "historical" : "standard")} message trace");
+            WriteVerbose($"Date range: {startDate:yyyy-MM-dd} to {endDate:yyyy-MM-dd}");
+            WriteVerbose($"Using {(useHistorical ? "historical" : "standard")} message trace");
 
             try
             {
@@ -139,13 +139,13 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
                 {
                     var outputFile = Path.Combine(outputDirectory, $"{timestamp}-MessageTrace.csv");
                     await WriteResultsToFileAsync(messages, outputFile);
-                    
-                    LogInformation($"Message trace results written to: {outputFile}");
+
+                    WriteVerbose($"Message trace results written to: {outputFile}");
                     summary.OutputFile = outputFile;
                 }
                 else
                 {
-                    LogInformation("No message trace entries found matching the specified criteria.");
+                    WriteVerbose("No message trace entries found matching the specified criteria.");
                 }
 
                 summary.ProcessingTime = DateTime.Now - summary.StartTime;
@@ -161,7 +161,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
             }
             catch (Exception ex)
             {
-                LogError($"An error occurred during message trace collection: {ex.Message}");
+                WriteErrorWithTimestamp($"An error occurred during message trace collection: {ex.Message}");
                 throw;
             }
         }
@@ -196,7 +196,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
                 else
                 {
                     // Multiple users - process them individually
-                    LogInformation($"Processing {UserIds.Length} users individually");
+                    WriteVerbose($"Processing {UserIds.Length} users individually");
                 }
             }
 
@@ -220,8 +220,8 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
 
         private async Task<List<MessageTraceEntry>> GetStandardMessageTraceAsync(Dictionary<string, object> searchParameters, MessageTraceLogSummary summary)
         {
-            LogInformation("Executing standard message trace...");
-            
+            WriteVerbose("Executing standard message trace...");
+
             var messages = new List<MessageTraceEntry>();
 
             if (UserIds != null && UserIds.Length > 1)
@@ -236,13 +236,13 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
 
                     try
                     {
-                        LogInformation($"Processing message trace for: {userId}");
+                        WriteVerbose($"Processing message trace for: {userId}");
                         var userMessages = await _exchangeClient.GetMessageTraceAsync(userParameters);
                         messages.AddRange(ProcessMessageTraceResults(userMessages, summary));
                     }
                     catch (Exception ex)
                     {
-                        LogWarning($"Failed to get message trace for {userId}: {ex.Message}");
+                        WriteWarningWithTimestamp($"Failed to get message trace for {userId}: {ex.Message}");
                     }
                 }
             }
@@ -258,8 +258,8 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
 
         private async Task<List<MessageTraceEntry>> GetHistoricalMessageTraceAsync(Dictionary<string, object> searchParameters, MessageTraceLogSummary summary)
         {
-            LogInformation("Executing historical message trace...");
-            
+            WriteVerbose("Executing historical message trace...");
+
             var messages = new List<MessageTraceEntry>();
 
             if (UserIds != null && UserIds.Length > 1)
@@ -274,13 +274,13 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
 
                     try
                     {
-                        LogInformation($"Processing historical message trace for: {userId}");
+                        WriteVerbose($"Processing historical message trace for: {userId}");
                         var userMessages = await _exchangeClient.GetHistoricalMessageTraceAsync(userParameters);
                         messages.AddRange(ProcessMessageTraceResults(userMessages, summary));
                     }
                     catch (Exception ex)
                     {
-                        LogWarning($"Failed to get historical message trace for {userId}: {ex.Message}");
+                        WriteWarningWithTimestamp($"Failed to get historical message trace for {userId}: {ex.Message}");
                     }
                 }
             }
@@ -328,7 +328,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
                 }
                 catch (Exception ex)
                 {
-                    LogWarning($"Failed to process message trace result: {ex.Message}");
+                    WriteWarningWithTimestamp($"Failed to process message trace result: {ex.Message}");
                 }
             }
 
@@ -338,11 +338,11 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
         private string GetOutputDirectory()
         {
             var directory = OutputDir;
-            
+
             if (!Directory.Exists(directory))
             {
                 Directory.CreateDirectory(directory);
-                LogInformation($"Created output directory: {directory}");
+                WriteVerbose($"Created output directory: {directory}");
             }
 
             return directory;
@@ -350,30 +350,30 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
 
         private void LogSummary(MessageTraceLogSummary summary)
         {
-            LogInformation("");
-            LogInformation("=== Message Trace Log Collection Summary ===");
-            LogInformation($"Processing Time: {summary.ProcessingTime?.ToString(@"mm\:ss")}");
-            LogInformation($"Search Period: {summary.SearchStartDate:yyyy-MM-dd} to {summary.SearchEndDate:yyyy-MM-dd}");
-            LogInformation($"Trace Type: {(summary.UseHistoricalTrace ? "Historical" : "Standard")}");
-            LogInformation($"Total Messages: {summary.TotalMessages:N0}");
-            
+            WriteVerbose("");
+            WriteVerbose("=== Message Trace Log Collection Summary ===");
+            WriteVerbose($"Processing Time: {summary.ProcessingTime?.ToString(@"mm\:ss")}");
+            WriteVerbose($"Search Period: {summary.SearchStartDate:yyyy-MM-dd} to {summary.SearchEndDate:yyyy-MM-dd}");
+            WriteVerbose($"Trace Type: {(summary.UseHistoricalTrace ? "Historical" : "Standard")}");
+            WriteVerbose($"Total Messages: {summary.TotalMessages:N0}");
+
             if (summary.StatusBreakdown.Count > 0)
             {
-                LogInformation("");
-                LogInformation("Status Breakdown:");
+                WriteVerbose("");
+                WriteVerbose("Status Breakdown:");
                 foreach (var kvp in summary.StatusBreakdown.OrderByDescending(x => x.Value))
                 {
-                    LogInformation($"  {kvp.Key}: {kvp.Value:N0}");
+                    WriteVerbose($"  {kvp.Key}: {kvp.Value:N0}");
                 }
             }
-            
+
             if (!string.IsNullOrEmpty(summary.OutputFile))
             {
-                LogInformation("");
-                LogInformation($"Output File: {summary.OutputFile}");
+                WriteVerbose("");
+                WriteVerbose($"Output File: {summary.OutputFile}");
             }
-            
-            LogInformation("============================================");
+
+            WriteVerbose("============================================");
         }
 
         private async Task WriteResultsToFileAsync(IEnumerable<MessageTraceEntry> results, string filePath)
@@ -388,11 +388,11 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
 
                 // Write as CSV
                 var csv = ConvertToCsv(results);
-                await File.WriteAllTextAsync(filePath, csv);
+                using (var writer = new StreamWriter(filePath)) { await writer.WriteAsync(csv); }
             }
             catch (Exception ex)
             {
-                LogError($"Failed to write results to file {filePath}: {ex.Message}");
+                WriteErrorWithTimestamp($"Failed to write results to file {filePath}: {ex.Message}");
                 throw;
             }
         }
@@ -400,7 +400,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
         private string ConvertToCsv(IEnumerable<MessageTraceEntry> results)
         {
             var csv = "Received,SenderAddress,RecipientAddress,Subject,Status,ToIP,FromIP,Size,MessageId,MessageTraceId" + Environment.NewLine;
-            
+
             foreach (var item in results)
             {
                 var values = new[]
@@ -416,10 +416,10 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
                     EscapeCsvValue(item.MessageId),
                     EscapeCsvValue(item.MessageTraceId)
                 };
-                
+
                 csv += string.Join(",", values) + Environment.NewLine;
             }
-            
+
             return csv;
         }
 
@@ -427,12 +427,12 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
         {
             if (string.IsNullOrEmpty(value))
                 return "";
-            
+
             if (value.Contains(",") || value.Contains("\"") || value.Contains("\n"))
             {
                 return "\"" + value.Replace("\"", "\"\"") + "\"";
             }
-            
+
             return value;
         }
     }

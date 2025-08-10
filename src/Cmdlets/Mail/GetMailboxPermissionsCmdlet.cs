@@ -6,6 +6,7 @@ using System.Management.Automation;
 using System.Threading.Tasks;
 using Microsoft.ExtractorSuite.Core;
 using Microsoft.ExtractorSuite.Core.Exchange;
+using Microsoft.ExtractorSuite.Models.Exchange;
 
 namespace Microsoft.ExtractorSuite.Cmdlets.Mail
 {
@@ -42,12 +43,12 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
 
         protected override async Task ProcessRecordAsync()
         {
-            LogInformation("=== Starting Mailbox Permissions Collection ===");
-            
+            WriteVerbose("=== Starting Mailbox Permissions Collection ===");
+
             // Check for authentication
             if (!await _exchangeClient.IsConnectedAsync())
             {
-                LogError("Not connected to Exchange Online. Please run Connect-M365 first.");
+                WriteErrorWithTimestamp("Not connected to Exchange Online. Please run Connect-M365 first.");
                 return;
             }
 
@@ -68,7 +69,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
             try
             {
                 var mailboxes = await GetMailboxesToProcessAsync();
-                LogInformation($"Found {mailboxes.Count} mailboxes to process");
+                WriteVerbose($"Found {mailboxes.Count} mailboxes to process");
 
                 var allPermissions = new List<MailboxPermissionEntry>();
 
@@ -76,22 +77,22 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
                 {
                     try
                     {
-                        LogInformation($"Processing mailbox: {mailbox.UserPrincipalName}");
-                        
+                        WriteVerbose($"Processing mailbox: {mailbox.UserPrincipalName}");
+
                         var permissions = await ProcessMailboxPermissionsAsync(mailbox.UserPrincipalName, summary);
                         allPermissions.AddRange(permissions);
-                        
+
                         summary.ProcessedMailboxes++;
-                        
+
                         // Progress reporting
                         if (summary.ProcessedMailboxes % 10 == 0)
                         {
-                            LogInformation($"Processed {summary.ProcessedMailboxes}/{mailboxes.Count} mailboxes");
+                            WriteVerbose($"Processed {summary.ProcessedMailboxes}/{mailboxes.Count} mailboxes");
                         }
                     }
                     catch (Exception ex)
                     {
-                        LogWarning($"Failed to process mailbox {mailbox.UserPrincipalName}: {ex.Message}");
+                        WriteWarningWithTimestamp($"Failed to process mailbox {mailbox.UserPrincipalName}: {ex.Message}");
                     }
                 }
 
@@ -101,8 +102,8 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
                     var consolidatedFile = Path.Combine(outputDirectory, $"{timestamp}-AllMailboxPermissions.csv");
                     await WriteResultsToFileAsync(allPermissions, consolidatedFile);
                     summary.OutputFiles.Add(consolidatedFile);
-                    
-                    LogInformation($"Consolidated permissions written to: {consolidatedFile}");
+
+                    WriteVerbose($"Consolidated permissions written to: {consolidatedFile}");
                 }
 
                 summary.ProcessingTime = DateTime.Now - summary.StartTime;
@@ -118,7 +119,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
             }
             catch (Exception ex)
             {
-                LogError($"An error occurred during mailbox permissions collection: {ex.Message}");
+                WriteErrorWithTimestamp($"An error occurred during mailbox permissions collection: {ex.Message}");
                 throw;
             }
         }
@@ -142,7 +143,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
                     }
                     catch (Exception ex)
                     {
-                        LogWarning($"Could not retrieve mailbox for {userId}: {ex.Message}");
+                        WriteWarningWithTimestamp($"Could not retrieve mailbox for {userId}: {ex.Message}");
                     }
                 }
             }
@@ -163,11 +164,11 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
             {
                 // Get mailbox permissions
                 var mailboxPermissions = await _exchangeClient.GetMailboxPermissionsAsync(userPrincipalName);
-                
+
                 foreach (var permission in mailboxPermissions)
                 {
                     var isSystemAccount = IsSystemAccount(permission.User);
-                    
+
                     if (!IncludeSystemPermissions && isSystemAccount)
                     {
                         summary.SystemPermissions++;
@@ -187,7 +188,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
                     };
 
                     permissions.Add(entry);
-                    
+
                     if (isSystemAccount)
                         summary.SystemPermissions++;
                     else
@@ -196,11 +197,11 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
 
                 // Get recipient permissions
                 var recipientPermissions = await _exchangeClient.GetRecipientPermissionsAsync(userPrincipalName);
-                
+
                 foreach (var permission in recipientPermissions)
                 {
                     var isSystemAccount = IsSystemAccount(permission.Trustee);
-                    
+
                     if (!IncludeSystemPermissions && isSystemAccount)
                     {
                         summary.SystemPermissions++;
@@ -220,7 +221,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
                     };
 
                     permissions.Add(entry);
-                    
+
                     if (isSystemAccount)
                         summary.SystemPermissions++;
                     else
@@ -229,11 +230,11 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
 
                 // Get send-as permissions
                 var sendAsPermissions = await _exchangeClient.GetSendAsPermissionsAsync(userPrincipalName);
-                
+
                 foreach (var permission in sendAsPermissions)
                 {
                     var isSystemAccount = IsSystemAccount(permission.Trustee);
-                    
+
                     if (!IncludeSystemPermissions && isSystemAccount)
                     {
                         summary.SystemPermissions++;
@@ -253,7 +254,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
                     };
 
                     permissions.Add(entry);
-                    
+
                     if (isSystemAccount)
                         summary.SystemPermissions++;
                     else
@@ -264,7 +265,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
             }
             catch (Exception ex)
             {
-                LogError($"Error retrieving permissions for {userPrincipalName}: {ex.Message}");
+                WriteErrorWithTimestamp($"Error retrieving permissions for {userPrincipalName}: {ex.Message}");
                 throw;
             }
 
@@ -288,18 +289,18 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
                 "BUILTIN\\"
             };
 
-            return systemAccounts.Any(account => 
+            return systemAccounts.Any(account =>
                 user.StartsWith(account, StringComparison.OrdinalIgnoreCase));
         }
 
         private string GetOutputDirectory()
         {
             var directory = OutputDir;
-            
+
             if (!Directory.Exists(directory))
             {
                 Directory.CreateDirectory(directory);
-                LogInformation($"Created output directory: {directory}");
+                WriteVerbose($"Created output directory: {directory}");
             }
 
             return directory;
@@ -307,20 +308,20 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
 
         private void LogSummary(MailboxPermissionsSummary summary)
         {
-            LogInformation("");
-            LogInformation("=== Mailbox Permissions Collection Summary ===");
-            LogInformation($"Processing Time: {summary.ProcessingTime?.ToString(@"mm\:ss")}");
-            LogInformation($"Mailboxes Processed: {summary.ProcessedMailboxes:N0}");
-            LogInformation($"Total Permissions Found: {summary.TotalPermissions:N0}");
-            LogInformation($"  - User Permissions: {summary.UserPermissions:N0}");
-            LogInformation($"  - System Permissions: {summary.SystemPermissions:N0}");
-            LogInformation("");
-            LogInformation("Output Files:");
+            WriteVerbose("");
+            WriteVerbose("=== Mailbox Permissions Collection Summary ===");
+            WriteVerbose($"Processing Time: {summary.ProcessingTime?.ToString(@"mm\:ss")}");
+            WriteVerbose($"Mailboxes Processed: {summary.ProcessedMailboxes:N0}");
+            WriteVerbose($"Total Permissions Found: {summary.TotalPermissions:N0}");
+            WriteVerbose($"  - User Permissions: {summary.UserPermissions:N0}");
+            WriteVerbose($"  - System Permissions: {summary.SystemPermissions:N0}");
+            WriteVerbose("");
+            WriteVerbose("Output Files:");
             foreach (var file in summary.OutputFiles)
             {
-                LogInformation($"  - {file}");
+                WriteVerbose($"  - {file}");
             }
-            LogInformation("=============================================");
+            WriteVerbose("=============================================");
         }
 
         private async Task WriteResultsToFileAsync(IEnumerable<MailboxPermissionEntry> results, string filePath)
@@ -335,11 +336,11 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
 
                 // Write as CSV
                 var csv = ConvertToCsv(results);
-                await File.WriteAllTextAsync(filePath, csv);
+                using (var writer = new StreamWriter(filePath)) { await writer.WriteAsync(csv); }
             }
             catch (Exception ex)
             {
-                LogError($"Failed to write results to file {filePath}: {ex.Message}");
+                WriteErrorWithTimestamp($"Failed to write results to file {filePath}: {ex.Message}");
                 throw;
             }
         }
@@ -347,7 +348,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
         private string ConvertToCsv(IEnumerable<MailboxPermissionEntry> results)
         {
             var csv = "Mailbox,User,AccessRights,IsInherited,Deny,InheritanceType,IsSystemAccount,PermissionType" + Environment.NewLine;
-            
+
             foreach (var item in results)
             {
                 var values = new[]
@@ -361,10 +362,10 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
                     item.IsSystemAccount.ToString(),
                     EscapeCsvValue(item.PermissionType)
                 };
-                
+
                 csv += string.Join(",", values) + Environment.NewLine;
             }
-            
+
             return csv;
         }
 
@@ -372,12 +373,12 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
         {
             if (string.IsNullOrEmpty(value))
                 return "";
-            
+
             if (value.Contains(",") || value.Contains("\"") || value.Contains("\n"))
             {
                 return "\"" + value.Replace("\"", "\"\"") + "\"";
             }
-            
+
             return value;
         }
     }

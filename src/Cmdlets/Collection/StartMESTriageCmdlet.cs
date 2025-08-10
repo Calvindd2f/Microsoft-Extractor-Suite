@@ -65,32 +65,32 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Collection
 
         protected override async Task ProcessRecordAsync()
         {
-            LogInformation("=== Starting MES Triage ===");
-            LogInformation($"Project: {TriageName}");
-            LogInformation($"Template: {Template}");
+            WriteVerbose("=== Starting MES Triage ===");
+            WriteVerbose($"Project: {TriageName}");
+            WriteVerbose($"Template: {Template}");
 
             // Parse user IDs
             var userIdArray = ParseUserIds(UserIds);
-            
+
             if (userIdArray.Length == 0)
             {
-                LogInformation("Target: All users");
+                WriteVerbose("Target: All users");
             }
             else if (userIdArray.Length == 1)
             {
-                LogInformation($"Target User: {userIdArray[0]}");
+                WriteVerbose($"Target User: {userIdArray[0]}");
             }
             else
             {
-                LogInformation("Target Users:");
+                WriteVerbose("Target Users:");
                 foreach (var user in userIdArray)
                 {
-                    LogInformation($"  - {user}");
+                    WriteVerbose($"  - {user}");
                 }
             }
 
-            LogInformation($"Output Format: {GetOutputFormatDescription()}");
-            LogInformation($"Start Time: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+            WriteVerbose($"Output Format: {GetOutputFormatDescription()}");
+            WriteVerbose($"Start Time: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
 
             // Set up output directory
             var outputDirectory = SetupOutputDirectory();
@@ -117,20 +117,20 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Collection
                 var templateConfig = await _templateProcessor.LoadTemplateAsync(Template);
                 if (templateConfig == null)
                 {
-                    LogError($"Template '{Template}' not found or could not be loaded.");
+                    WriteErrorWithTimestamp($"Template '{Template}' not found or could not be loaded.");
                     return;
                 }
 
                 if (templateConfig.Tasks == null || templateConfig.Tasks.Count == 0)
                 {
-                    LogError("No tasks defined in template");
+                    WriteErrorWithTimestamp("No tasks defined in template");
                     return;
                 }
 
-                LogInformation("");
-                LogInformation("==== Executing Template Tasks ====");
-                LogInformation($"Total tasks to execute: {templateConfig.Tasks.Count}");
-                LogInformation("");
+                WriteVerbose("");
+                WriteVerbose("==== Executing Template Tasks ====");
+                WriteVerbose($"Total tasks to execute: {templateConfig.Tasks.Count}");
+                WriteVerbose("");
 
                 summary.TotalTasks = templateConfig.Tasks.Count;
 
@@ -142,13 +142,13 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Collection
 
                     switch (taskResult.Status)
                     {
-                        case TaskStatus.Completed:
+                        case MESTaskStatus.Completed:
                             summary.SuccessfulTasks++;
                             break;
-                        case TaskStatus.Failed:
+                        case MESTaskStatus.Failed:
                             summary.FailedTasks++;
                             break;
-                        case TaskStatus.Skipped:
+                        case MESTaskStatus.Skipped:
                             summary.SkippedTasks++;
                             break;
                     }
@@ -167,7 +167,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Collection
             }
             catch (Exception ex)
             {
-                LogError($"An error occurred during triage execution: {ex.Message}");
+                WriteErrorWithTimestamp($"An error occurred during triage execution: {ex.Message}");
                 throw;
             }
         }
@@ -197,7 +197,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Collection
         private string SetupOutputDirectory()
         {
             string outputDirectory;
-            
+
             if (string.IsNullOrEmpty(OutputDir))
             {
                 outputDirectory = Path.Combine("Output", TriageName);
@@ -210,7 +210,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Collection
             if (!Directory.Exists(outputDirectory))
             {
                 Directory.CreateDirectory(outputDirectory);
-                LogInformation($"Creating output directory: {outputDirectory}");
+                WriteVerbose($"Creating output directory: {outputDirectory}");
             }
 
             return outputDirectory;
@@ -222,7 +222,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Collection
             {
                 TaskName = GetTaskName(task),
                 StartTime = DateTime.Now,
-                Status = TaskStatus.InProgress
+                Status = MESTaskStatus.InProgress
             };
 
             try
@@ -230,13 +230,13 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Collection
                 // Check if task should be skipped
                 if (ShouldSkipTask(task, userIds))
                 {
-                    taskResult.Status = TaskStatus.Skipped;
+                    taskResult.Status = MESTaskStatus.Skipped;
                     taskResult.Message = "Task skipped - not applicable for user-specific triage";
                     taskResult.ProcessingTime = DateTime.Now - taskResult.StartTime;
                     return taskResult;
                 }
 
-                LogTaskProgress(taskResult.TaskName, TaskStatus.InProgress);
+                LogTaskProgress(taskResult.TaskName, MESTaskStatus.InProgress);
 
                 // Execute the task based on its type
                 var success = await _taskExecutor.ExecuteTaskAsync(new TaskExecutionContext
@@ -252,18 +252,18 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Collection
                     LogLevel = LogLevel
                 });
 
-                taskResult.Status = success ? TaskStatus.Completed : TaskStatus.Failed;
+                taskResult.Status = success ? MESTaskStatus.Completed : MESTaskStatus.Failed;
                 taskResult.Message = success ? "Task completed successfully" : "Task failed";
-                
+
                 LogTaskProgress(taskResult.TaskName, taskResult.Status);
             }
             catch (Exception ex)
             {
-                taskResult.Status = TaskStatus.Failed;
+                taskResult.Status = MESTaskStatus.Failed;
                 taskResult.Message = ex.Message;
-                
-                LogTaskProgress(taskResult.TaskName, TaskStatus.Failed, ex.Message);
-                LogError($"Task {taskResult.TaskName} failed: {ex.Message}");
+
+                LogTaskProgress(taskResult.TaskName, MESTaskStatus.Failed, ex.Message);
+                WriteErrorWithTimestamp($"Task {taskResult.TaskName} failed: {ex.Message}");
             }
 
             taskResult.ProcessingTime = DateTime.Now - taskResult.StartTime;
@@ -274,7 +274,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Collection
         {
             if (task is string stringTask)
                 return stringTask;
-            
+
             if (task is Dictionary<string, object> dictTask)
             {
                 if (dictTask.ContainsKey("Task"))
@@ -298,7 +298,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Collection
         private bool ShouldSkipTask(dynamic task, string[] userIds)
         {
             var taskName = GetTaskName(task);
-            
+
             // Tasks that should be skipped for user-specific triage
             var userSpecificSkipTasks = new[]
             {
@@ -320,53 +320,53 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Collection
             return userIds.Length > 0 && userSpecificSkipTasks.Contains(taskName);
         }
 
-        private void LogTaskProgress(string taskName, TaskStatus status, string errorMessage = null)
+        private void LogTaskProgress(string taskName, MESTaskStatus status, string? errorMessage = null)
         {
             switch (status)
             {
-                case TaskStatus.InProgress:
-                    LogInformation($"[IN PROGRESS] {taskName}");
+                case MESTaskStatus.InProgress:
+                    WriteVerbose($"[IN PROGRESS] {taskName}");
                     break;
-                case TaskStatus.Completed:
-                    LogInformation($"[COMPLETED] {taskName}");
+                case MESTaskStatus.Completed:
+                    WriteVerbose($"[COMPLETED] {taskName}");
                     break;
-                case TaskStatus.Failed:
-                    LogError($"[FAILED] {taskName}" + (string.IsNullOrEmpty(errorMessage) ? "" : $": {errorMessage}"));
+                case MESTaskStatus.Failed:
+                    WriteErrorWithTimestamp($"[FAILED] {taskName}" + (string.IsNullOrEmpty(errorMessage) ? "" : $": {errorMessage}"));
                     break;
-                case TaskStatus.Skipped:
-                    LogInformation($"[SKIPPED] {taskName}");
+                case MESTaskStatus.Skipped:
+                    WriteVerbose($"[SKIPPED] {taskName}");
                     break;
             }
         }
 
         private void LogTriageSummary(MESTriageSummary summary)
         {
-            LogInformation("");
-            LogInformation($"=== {Template} Triage Summary ===");
-            LogInformation($"Start Time: {summary.StartTime:yyyy-MM-dd HH:mm:ss}");
-            LogInformation($"End Time: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
-            LogInformation($"Duration: {summary.ProcessingTime?.ToString(@"hh\:mm\:ss")}");
-            LogInformation("");
-            LogInformation("Task Results:");
-            LogInformation($"  Successful: {summary.SuccessfulTasks}", summary.SuccessfulTasks > 0 ? ConsoleColor.Green : ConsoleColor.Gray);
-            LogInformation($"  Failed: {summary.FailedTasks}", summary.FailedTasks > 0 ? ConsoleColor.Red : ConsoleColor.Green);
-            LogInformation($"  Skipped: {summary.SkippedTasks}", ConsoleColor.Yellow);
-            LogInformation($"  Total: {summary.TotalTasks}");
-            LogInformation("");
-            LogInformation($"Output Location: {summary.OutputDirectory}");
-            LogInformation("=============================================");
+            WriteVerbose("");
+            WriteVerbose($"=== {Template} Triage Summary ===");
+            WriteVerbose($"Start Time: {summary.StartTime:yyyy-MM-dd HH:mm:ss}");
+            WriteVerbose($"End Time: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+            WriteVerbose($"Duration: {summary.ProcessingTime?.ToString(@"hh\:mm\:ss")}");
+            WriteVerbose("");
+            WriteVerbose("Task Results:");
+            WriteVerbose($"  Successful: {summary.SuccessfulTasks}", summary.SuccessfulTasks > 0 ? ConsoleColor.Green : ConsoleColor.Gray);
+            WriteVerbose($"  Failed: {summary.FailedTasks}", summary.FailedTasks > 0 ? ConsoleColor.Red : ConsoleColor.Green);
+            WriteVerbose($"  Skipped: {summary.SkippedTasks}", ConsoleColor.Yellow);
+            WriteVerbose($"  Total: {summary.TotalTasks}");
+            WriteVerbose("");
+            WriteVerbose($"Output Location: {summary.OutputDirectory}");
+            WriteVerbose("=============================================");
         }
 
-        private void LogInformation(string message, ConsoleColor color = ConsoleColor.White)
+        private void WriteVerbose(string message, ConsoleColor color = ConsoleColor.White)
         {
             // In a real implementation, this would use the PowerShell logging infrastructure
             // For now, we'll use the base class logging
-            LogInformation(message);
+            WriteVerbose(message);
         }
     }
 
     // Supporting classes and enums
-    public enum TaskStatus
+    public enum MESTaskStatus
     {
         InProgress,
         Completed,
@@ -379,7 +379,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Collection
         public string TaskName { get; set; }
         public DateTime StartTime { get; set; }
         public TimeSpan ProcessingTime { get; set; }
-        public TaskStatus Status { get; set; }
+        public MESTaskStatus Status { get; set; }
         public string Message { get; set; }
         public List<string> OutputFiles { get; set; } = new List<string>();
     }
@@ -441,7 +441,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Collection
                 "quick" => new List<object>
                 {
                     "Get-RiskyUsers",
-                    "Get-RiskyDetections", 
+                    "Get-RiskyDetections",
                     "Get-MFA",
                     "Get-MailboxRules",
                     "Get-OAuthPermissionsGraph"
@@ -483,7 +483,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Collection
                 _ => new List<object>
                 {
                     "Get-RiskyUsers",
-                    "Get-MFA", 
+                    "Get-MFA",
                     "Get-MailboxRules"
                 }
             };
@@ -502,16 +502,16 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Collection
         public async Task<bool> ExecuteTaskAsync(TaskExecutionContext context)
         {
             var taskName = GetTaskName(context.Task);
-            
+
             try
             {
                 // This is where we would invoke the actual PowerShell cmdlets or C# methods
                 // For now, simulate task execution
                 await Task.Delay(100); // Simulate work
-                
+
                 // In a real implementation, this would call the appropriate cmdlet
                 // based on the task name and context parameters
-                
+
                 return true; // Simulate success
             }
             catch
@@ -524,7 +524,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Collection
         {
             if (task is string stringTask)
                 return stringTask;
-            
+
             // Handle other task types as needed
             return "Unknown Task";
         }

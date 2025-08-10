@@ -106,7 +106,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Collection
 
                 completedTasks++;
                 var taskProgress = (int)((completedTasks / (double)totalTasks) * 100);
-                
+
                 progress.Report(new Core.AsyncOperations.TaskProgress
                 {
                     CurrentOperation = $"Executing: {task.Name}",
@@ -326,8 +326,8 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Collection
         }
 
         private async Task<CollectionTaskResult> ExecuteCollectionTaskAsync(
-            CollectionTaskDefinition task, 
-            string outputDir, 
+            CollectionTaskDefinition task,
+            string outputDir,
             CancellationToken cancellationToken)
         {
             var result = new CollectionTaskResult
@@ -355,7 +355,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Collection
             catch (Exception ex)
             {
                 result.ErrorMessage = ex.Message;
-                Logger?.LogError($"Task {task.Name} failed: {ex.Message}", ex);
+                Logger?.WriteErrorWithTimestamp($"Task {task.Name} failed: {ex.Message}", ex);
             }
             finally
             {
@@ -370,26 +370,26 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Collection
         {
             // Simulate task execution - in real implementation, this would call actual cmdlets
             WriteVerboseWithTimestamp($"Executing task: {task.Name}");
-            
+
             // Simulate some work
             await Task.Delay(1000, cancellationToken);
-            
+
             // Create a dummy output file to indicate completion
             var outputFile = Path.Combine(outputDir, $"{DateTime.UtcNow:yyyyMMddHHmmss}-{task.TaskType}.csv");
-            await File.WriteAllTextAsync(outputFile, "# Placeholder for actual data collection", cancellationToken);
+            using (var writer = new StreamWriter(outputFile)) { await writer.WriteAsync("# Placeholder for actual data collection"); }
         }
 
         private async Task GenerateCollectionReportAsync(CollectionSummary summary, string outputDir, CancellationToken cancellationToken)
         {
             var reportPath = Path.Combine(outputDir, $"{DateTime.UtcNow:yyyyMMddHHmmss}-CollectionSummary.json");
-            
+
             var reportData = System.Text.Json.JsonSerializer.Serialize(summary, new System.Text.Json.JsonSerializerOptions
             {
                 WriteIndented = true,
                 PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase
             });
 
-            await File.WriteAllTextAsync(reportPath, reportData, cancellationToken);
+            using (var writer = new StreamWriter(reportPath)) { await writer.WriteAsync(reportData); }
             WriteVerboseWithTimestamp($"Collection report saved to: {reportPath}");
         }
     }

@@ -191,7 +191,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Azure
             {
                 // Get all subscriptions
                 var subscriptionsUri = "https://management.azure.com/subscriptions?api-version=2020-01-01";
-                
+
                 try
                 {
                     _httpClient.DefaultRequestHeaders.Clear();
@@ -201,7 +201,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Azure
                     var response = await _httpClient.GetAsync(subscriptionsUri, cancellationToken);
                     response.EnsureSuccessStatusCode();
 
-                    var content = await response.Content.ReadAsStringAsync(cancellationToken);
+                    var content = await response.Content.ReadAsStringAsync();
                     var subscriptionResponse = JsonSerializer.Deserialize<SubscriptionResponse>(content);
 
                     if (subscriptionResponse?.Value != null)
@@ -220,9 +220,9 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Azure
         }
 
         private async Task<List<ActivityLogEntry>> GetSubscriptionActivityLogsAsync(
-            AzureSubscription subscription, 
+            AzureSubscription subscription,
             string accessToken,
-            DateTime startDate, 
+            DateTime startDate,
             DateTime endDate,
             CancellationToken cancellationToken)
         {
@@ -249,7 +249,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Azure
                     var response = await _httpClient.GetAsync(uriBase, cancellationToken);
                     response.EnsureSuccessStatusCode();
 
-                    var content = await response.Content.ReadAsStringAsync(cancellationToken);
+                    var content = await response.Content.ReadAsStringAsync();
                     var activityResponse = JsonSerializer.Deserialize<ActivityLogResponse>(content);
 
                     if (activityResponse?.Value != null && activityResponse.Value.Any())

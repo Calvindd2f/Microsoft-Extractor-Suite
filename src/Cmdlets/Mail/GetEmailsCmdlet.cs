@@ -116,7 +116,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
                 {
                     var exportResult = await ProcessSingleEmailAsync(
                         graphClient, messageId.Trim(), duplicateTracker, cancellationToken);
-                    
+
                     results.Add(exportResult);
 
                     if (exportResult.Success)
@@ -287,7 +287,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
             catch (ServiceException ex)
             {
                 result.Success = false;
-                result.ErrorMessage = $"Graph API error: {ex.Error?.Code} - {ex.Error?.Message}";
+                result.ErrorMessage = $"Graph API error: {ex.ResponseStatusCode} - {ex.Message}";
             }
             catch (Exception ex)
             {
@@ -305,7 +305,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
 
             // Sanitize subject for filename
             var sanitizedSubject = SanitizeFileName(subject);
-            
+
             // Truncate if too long
             if (sanitizedSubject.Length > 100)
             {
@@ -400,7 +400,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
                 counter++;
             }
 
-            await File.WriteAllBytesAsync(filePath, attachment.ContentBytes);
+            await Task.Run(() => File.WriteAllBytes(filePath, attachment.ContentBytes));
         }
 
         private async Task SaveItemAttachmentAsync(
@@ -438,7 +438,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
                         WriteIndented = true
                     });
 
-                    await File.WriteAllTextAsync(filePath, json, cancellationToken);
+                    using (var writer = new StreamWriter(filePath)) { await writer.WriteAsync(json); }
                 }
             }
             catch (Exception ex)

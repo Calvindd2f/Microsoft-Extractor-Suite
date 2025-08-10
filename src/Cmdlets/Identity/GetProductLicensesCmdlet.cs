@@ -55,12 +55,12 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
 
         protected override async Task ProcessRecordAsync()
         {
-            LogInformation("=== Starting Product Licenses Collection ===");
-            
+            WriteVerbose("=== Starting Product Licenses Collection ===");
+
             // Check for authentication
             if (!await _graphClient.IsConnectedAsync())
             {
-                LogError("Not connected to Microsoft Graph. Please run Connect-M365 first.");
+                WriteErrorWithTimestamp("Not connected to Microsoft Graph. Please run Connect-M365 first.");
                 return;
             }
 
@@ -112,14 +112,14 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
             }
             catch (Exception ex)
             {
-                LogError($"An error occurred during product licenses collection: {ex.Message}");
+                WriteErrorWithTimestamp($"An error occurred during product licenses collection: {ex.Message}");
                 throw;
             }
         }
 
         private async Task ProcessAllLicensesAsync(string outputDirectory, string timestamp, ProductLicensesSummary summary)
         {
-            LogInformation("Processing all product licenses...");
+            WriteVerbose("Processing all product licenses...");
 
             // Get all available SKUs
             var subscribedSkus = await _graphClient.GetSubscribedSkusAsync();
@@ -151,8 +151,8 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                 var fileName = Path.Combine(outputDirectory, $"{timestamp}-ProductLicenses.csv");
                 await WriteProductLicensesAsync(licenses, fileName);
                 summary.OutputFiles.Add(fileName);
-                
-                LogInformation($"Product licenses written to: {fileName}");
+
+                WriteVerbose($"Product licenses written to: {fileName}");
             }
 
             // Get user license assignments
@@ -161,7 +161,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
 
         private async Task ProcessLicensesByUserAsync(string outputDirectory, string timestamp, ProductLicensesSummary summary)
         {
-            LogInformation("Processing licenses by user...");
+            WriteVerbose("Processing licenses by user...");
 
             var userLicenses = new List<UserLicense>();
             var users = new List<dynamic>();
@@ -181,7 +181,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                     }
                     catch (Exception ex)
                     {
-                        LogWarning($"Could not retrieve user {userId}: {ex.Message}");
+                        WriteWarningWithTimestamp($"Could not retrieve user {userId}: {ex.Message}");
                     }
                 }
             }
@@ -201,7 +201,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                 }
                 catch (Exception ex)
                 {
-                    LogWarning($"Failed to process licenses for user {user.UserPrincipalName}: {ex.Message}");
+                    WriteWarningWithTimestamp($"Failed to process licenses for user {user.UserPrincipalName}: {ex.Message}");
                 }
             }
 
@@ -210,14 +210,14 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                 var fileName = Path.Combine(outputDirectory, $"{timestamp}-UserLicenses.csv");
                 await WriteUserLicensesAsync(userLicenses, fileName);
                 summary.OutputFiles.Add(fileName);
-                
-                LogInformation($"User licenses written to: {fileName}");
+
+                WriteVerbose($"User licenses written to: {fileName}");
             }
         }
 
         private async Task ProcessLicenseSummaryAsync(string outputDirectory, string timestamp, ProductLicensesSummary summary)
         {
-            LogInformation("Processing license summary...");
+            WriteVerbose("Processing license summary...");
 
             var subscribedSkus = await _graphClient.GetSubscribedSkusAsync();
             var licenseSummaries = new List<LicenseSummary>();
@@ -246,14 +246,14 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                 var fileName = Path.Combine(outputDirectory, $"{timestamp}-LicenseSummary.csv");
                 await WriteLicenseSummaryAsync(licenseSummaries, fileName);
                 summary.OutputFiles.Add(fileName);
-                
-                LogInformation($"License summary written to: {fileName}");
+
+                WriteVerbose($"License summary written to: {fileName}");
             }
         }
 
         private async Task ProcessCompatibilityAnalysisAsync(string outputDirectory, string timestamp, ProductLicensesSummary summary)
         {
-            LogInformation("Processing license compatibility analysis...");
+            WriteVerbose("Processing license compatibility analysis...");
 
             var subscribedSkus = await _graphClient.GetSubscribedSkusAsync();
             var compatibilityResults = new List<LicenseCompatibility>();
@@ -287,14 +287,14 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                 var fileName = Path.Combine(outputDirectory, $"{timestamp}-LicenseCompatibility.csv");
                 await WriteLicenseCompatibilityAsync(compatibilityResults, fileName);
                 summary.OutputFiles.Add(fileName);
-                
-                LogInformation($"License compatibility analysis written to: {fileName}");
+
+                WriteVerbose($"License compatibility analysis written to: {fileName}");
             }
         }
 
         private async Task ProcessUserLicenseAssignmentsAsync(string outputDirectory, string timestamp, ProductLicensesSummary summary)
         {
-            LogInformation("Processing user license assignments...");
+            WriteVerbose("Processing user license assignments...");
 
             var users = await _graphClient.GetUsersWithLicensesAsync();
             var userLicenseAssignments = new List<UserLicenseAssignment>();
@@ -326,7 +326,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                 }
                 catch (Exception ex)
                 {
-                    LogWarning($"Failed to process license assignments for user {user.UserPrincipalName}: {ex.Message}");
+                    WriteWarningWithTimestamp($"Failed to process license assignments for user {user.UserPrincipalName}: {ex.Message}");
                 }
             }
 
@@ -335,8 +335,8 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                 var fileName = Path.Combine(outputDirectory, $"{timestamp}-UserLicenseAssignments.csv");
                 await WriteUserLicenseAssignmentsAsync(userLicenseAssignments, fileName);
                 summary.OutputFiles.Add(fileName);
-                
-                LogInformation($"User license assignments written to: {fileName}");
+
+                WriteVerbose($"User license assignments written to: {fileName}");
             }
         }
 
@@ -357,7 +357,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
             if (user.AssignedLicenses != null)
             {
                 var subscribedSkus = await _graphClient.GetSubscribedSkusAsync();
-                
+
                 foreach (var assignedLicense in user.AssignedLicenses)
                 {
                     var sku = subscribedSkus.FirstOrDefault(s => s.SkuId == assignedLicense.SkuId);
@@ -389,7 +389,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
         private List<ServicePlan> ProcessServicePlans(dynamic servicePlans)
         {
             var plans = new List<ServicePlan>();
-            
+
             if (servicePlans != null)
             {
                 foreach (var plan in servicePlans)
@@ -401,21 +401,21 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                         ProvisioningStatus = plan.ProvisioningStatus,
                         AppliesTo = plan.AppliesTo
                     };
-                    
+
                     plans.Add(servicePlan);
                 }
             }
-            
+
             return plans;
         }
 
         private List<string> FindServicePlanConflicts(dynamic servicePlans1, dynamic servicePlans2)
         {
             var conflicts = new List<string>();
-            
+
             // This would contain logic to identify conflicting service plans
             // For now, return empty list as placeholder
-            
+
             return conflicts;
         }
 
@@ -454,11 +454,11 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
         private string GetOutputDirectory()
         {
             var directory = OutputDir;
-            
+
             if (!Directory.Exists(directory))
             {
                 Directory.CreateDirectory(directory);
-                LogInformation($"Created output directory: {directory}");
+                WriteVerbose($"Created output directory: {directory}");
             }
 
             return directory;
@@ -466,28 +466,28 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
 
         private void LogSummary(ProductLicensesSummary summary)
         {
-            LogInformation("");
-            LogInformation("=== Product Licenses Collection Summary ===");
-            LogInformation($"Processing Time: {summary.ProcessingTime?.ToString(@"mm\:ss")}");
-            LogInformation($"Users Processed: {summary.ProcessedUsers:N0}");
-            LogInformation($"Total Licenses: {summary.TotalLicenses:N0}");
-            LogInformation($"Assigned Licenses: {summary.AssignedLicenses:N0}");
-            LogInformation($"Unassigned Licenses: {summary.UnassignedLicenses:N0}");
-            LogInformation($"Utilization Rate: {(summary.TotalLicenses > 0 ? Math.Round((double)summary.AssignedLicenses / summary.TotalLicenses * 100, 1) : 0):F1}%");
-            LogInformation("");
-            LogInformation("Output Files:");
+            WriteVerbose("");
+            WriteVerbose("=== Product Licenses Collection Summary ===");
+            WriteVerbose($"Processing Time: {summary.ProcessingTime?.ToString(@"mm\:ss")}");
+            WriteVerbose($"Users Processed: {summary.ProcessedUsers:N0}");
+            WriteVerbose($"Total Licenses: {summary.TotalLicenses:N0}");
+            WriteVerbose($"Assigned Licenses: {summary.AssignedLicenses:N0}");
+            WriteVerbose($"Unassigned Licenses: {summary.UnassignedLicenses:N0}");
+            WriteVerbose($"Utilization Rate: {(summary.TotalLicenses > 0 ? Math.Round((double)summary.AssignedLicenses / summary.TotalLicenses * 100, 1) : 0):F1}%");
+            WriteVerbose("");
+            WriteVerbose("Output Files:");
             foreach (var file in summary.OutputFiles)
             {
-                LogInformation($"  - {file}");
+                WriteVerbose($"  - {file}");
             }
-            LogInformation("============================================");
+            WriteVerbose("============================================");
         }
 
         // Write methods for different file types
         private async Task WriteProductLicensesAsync(IEnumerable<ProductLicense> licenses, string filePath)
         {
             var csv = "SkuId,SkuPartNumber,ProductName,ConsumedUnits,EnabledUnits,AvailableUnits,CapabilityStatus" + Environment.NewLine;
-            
+
             foreach (var license in licenses)
             {
                 var values = new[]
@@ -500,17 +500,17 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                     license.AvailableUnits.ToString(),
                     EscapeCsvValue(license.CapabilityStatus)
                 };
-                
+
                 csv += string.Join(",", values) + Environment.NewLine;
             }
-            
-            await File.WriteAllTextAsync(filePath, csv);
+
+            using (var writer = new StreamWriter(filePath)) { await writer.WriteAsync(csv); }
         }
 
         private async Task WriteUserLicensesAsync(IEnumerable<UserLicense> licenses, string filePath)
         {
             var csv = "UserId,UserPrincipalName,DisplayName,Department,JobTitle,AccountEnabled,Licenses,TotalLicenseCost" + Environment.NewLine;
-            
+
             foreach (var license in licenses)
             {
                 var values = new[]
@@ -524,17 +524,17 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                     EscapeCsvValue(string.Join("; ", license.Licenses)),
                     license.TotalLicenseCost.ToString("F2")
                 };
-                
+
                 csv += string.Join(",", values) + Environment.NewLine;
             }
-            
-            await File.WriteAllTextAsync(filePath, csv);
+
+            using (var writer = new StreamWriter(filePath)) { await writer.WriteAsync(csv); }
         }
 
         private async Task WriteLicenseSummaryAsync(IEnumerable<LicenseSummary> summaries, string filePath)
         {
             var csv = "ProductName,SkuPartNumber,TotalLicenses,AssignedLicenses,AvailableLicenses,UtilizationPercentage" + Environment.NewLine;
-            
+
             foreach (var summary in summaries)
             {
                 var values = new[]
@@ -546,17 +546,17 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                     summary.AvailableLicenses.ToString(),
                     summary.UtilizationPercentage.ToString("F1")
                 };
-                
+
                 csv += string.Join(",", values) + Environment.NewLine;
             }
-            
-            await File.WriteAllTextAsync(filePath, csv);
+
+            using (var writer = new StreamWriter(filePath)) { await writer.WriteAsync(csv); }
         }
 
         private async Task WriteLicenseCompatibilityAsync(IEnumerable<LicenseCompatibility> compatibilities, string filePath)
         {
             var csv = "License1,License2,ConflictingServicePlans,CompatibilityStatus,RecommendedAction" + Environment.NewLine;
-            
+
             foreach (var compatibility in compatibilities)
             {
                 var values = new[]
@@ -567,17 +567,17 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                     EscapeCsvValue(compatibility.CompatibilityStatus),
                     EscapeCsvValue(compatibility.RecommendedAction)
                 };
-                
+
                 csv += string.Join(",", values) + Environment.NewLine;
             }
-            
-            await File.WriteAllTextAsync(filePath, csv);
+
+            using (var writer = new StreamWriter(filePath)) { await writer.WriteAsync(csv); }
         }
 
         private async Task WriteUserLicenseAssignmentsAsync(IEnumerable<UserLicenseAssignment> assignments, string filePath)
         {
             var csv = "UserId,UserPrincipalName,DisplayName,SkuId,DisabledPlans,AssignmentSource,LastUpdated" + Environment.NewLine;
-            
+
             foreach (var assignment in assignments)
             {
                 var values = new[]
@@ -590,23 +590,23 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                     EscapeCsvValue(assignment.AssignmentSource),
                     assignment.LastUpdated.ToString("yyyy-MM-dd HH:mm:ss")
                 };
-                
+
                 csv += string.Join(",", values) + Environment.NewLine;
             }
-            
-            await File.WriteAllTextAsync(filePath, csv);
+
+            using (var writer = new StreamWriter(filePath)) { await writer.WriteAsync(csv); }
         }
 
         private string EscapeCsvValue(string value)
         {
             if (string.IsNullOrEmpty(value))
                 return "";
-            
+
             if (value.Contains(",") || value.Contains("\"") || value.Contains("\n"))
             {
                 return "\"" + value.Replace("\"", "\"\"") + "\"";
             }
-            
+
             return value;
         }
     }

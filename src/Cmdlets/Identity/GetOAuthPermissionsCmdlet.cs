@@ -51,12 +51,12 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
 
         protected override async Task ProcessRecordAsync()
         {
-            LogInformation("=== Starting OAuth Permissions Collection ===");
-            
+            WriteVerbose("=== Starting OAuth Permissions Collection ===");
+
             // Check for authentication
             if (!await _graphClient.IsConnectedAsync())
             {
-                LogError("Not connected to Microsoft Graph. Please run Connect-M365 first.");
+                WriteErrorWithTimestamp("Not connected to Microsoft Graph. Please run Connect-M365 first.");
                 return;
             }
 
@@ -99,14 +99,14 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
             }
             catch (Exception ex)
             {
-                LogError($"An error occurred during OAuth permissions collection: {ex.Message}");
+                WriteErrorWithTimestamp($"An error occurred during OAuth permissions collection: {ex.Message}");
                 throw;
             }
         }
 
         private async Task ProcessGraphMethodAsync(string outputDirectory, string timestamp, OAuthPermissionsSummary summary)
         {
-            LogInformation("Using Graph API method for OAuth permissions collection");
+            WriteVerbose("Using Graph API method for OAuth permissions collection");
 
             // Get all application registrations
             await ProcessApplicationRegistrationsAsync(outputDirectory, timestamp, summary);
@@ -127,7 +127,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
 
         private async Task ProcessApplicationRegistrationsAsync(string outputDirectory, string timestamp, OAuthPermissionsSummary summary)
         {
-            LogInformation("Collecting application registrations...");
+            WriteVerbose("Collecting application registrations...");
 
             var applications = await _graphClient.GetApplicationsAsync();
             var applicationPermissions = new List<ApplicationPermission>();
@@ -151,7 +151,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                     {
                         applicationPermissions.Add(appPermission);
                         summary.TotalPermissions += appPermission.RequiredResourceAccess?.Count ?? 0;
-                        
+
                         if (appPermission.IsHighRisk)
                             summary.HighRiskPermissions++;
                     }
@@ -160,7 +160,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                 }
                 catch (Exception ex)
                 {
-                    LogWarning($"Failed to process application {app.DisplayName}: {ex.Message}");
+                    WriteWarningWithTimestamp($"Failed to process application {app.DisplayName}: {ex.Message}");
                 }
             }
 
@@ -169,14 +169,14 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                 var fileName = Path.Combine(outputDirectory, $"{timestamp}-ApplicationPermissions.csv");
                 await WriteApplicationPermissionsAsync(applicationPermissions, fileName);
                 summary.OutputFiles.Add(fileName);
-                
-                LogInformation($"Application permissions written to: {fileName}");
+
+                WriteVerbose($"Application permissions written to: {fileName}");
             }
         }
 
         private async Task ProcessServicePrincipalsAsync(string outputDirectory, string timestamp, OAuthPermissionsSummary summary)
         {
-            LogInformation("Collecting service principal permissions...");
+            WriteVerbose("Collecting service principal permissions...");
 
             var servicePrincipals = await _graphClient.GetServicePrincipalsAsync();
             var spPermissions = new List<ServicePrincipalPermission>();
@@ -187,7 +187,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                 {
                     // Get OAuth2 permission grants
                     var oauth2Grants = await _graphClient.GetOAuth2PermissionGrantsAsync($"clientId eq '{sp.Id}'");
-                    
+
                     // Get app role assignments
                     var appRoleAssignments = await _graphClient.GetAppRoleAssignmentsAsync(sp.Id);
 
@@ -205,14 +205,14 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                     if (!HighRiskOnly || spPermission.IsHighRisk)
                     {
                         spPermissions.Add(spPermission);
-                        
+
                         if (spPermission.IsHighRisk)
                             summary.HighRiskPermissions++;
                     }
                 }
                 catch (Exception ex)
                 {
-                    LogWarning($"Failed to process service principal {sp.DisplayName}: {ex.Message}");
+                    WriteWarningWithTimestamp($"Failed to process service principal {sp.DisplayName}: {ex.Message}");
                 }
             }
 
@@ -221,14 +221,14 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                 var fileName = Path.Combine(outputDirectory, $"{timestamp}-ServicePrincipalPermissions.csv");
                 await WriteServicePrincipalPermissionsAsync(spPermissions, fileName);
                 summary.OutputFiles.Add(fileName);
-                
-                LogInformation($"Service principal permissions written to: {fileName}");
+
+                WriteVerbose($"Service principal permissions written to: {fileName}");
             }
         }
 
         private async Task ProcessSpecificUsersAsync(string outputDirectory, string timestamp, OAuthPermissionsSummary summary)
         {
-            LogInformation($"Processing OAuth consents for {UserIds.Length} specific users...");
+            WriteVerbose($"Processing OAuth consents for {UserIds.Length} specific users...");
 
             var userConsents = new List<UserConsentPermission>();
 
@@ -237,14 +237,14 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                 try
                 {
                     var grants = await _graphClient.GetOAuth2PermissionGrantsAsync($"principalId eq '{userId}'");
-                    
+
                     foreach (var grant in grants)
                     {
                         var consent = ProcessUserConsent(grant, userId);
                         if (!HighRiskOnly || consent.IsHighRisk)
                         {
                             userConsents.Add(consent);
-                            
+
                             if (consent.IsHighRisk)
                                 summary.HighRiskPermissions++;
                         }
@@ -254,7 +254,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                 }
                 catch (Exception ex)
                 {
-                    LogWarning($"Failed to process user consents for {userId}: {ex.Message}");
+                    WriteWarningWithTimestamp($"Failed to process user consents for {userId}: {ex.Message}");
                 }
             }
 
@@ -263,14 +263,14 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                 var fileName = Path.Combine(outputDirectory, $"{timestamp}-UserConsents.csv");
                 await WriteUserConsentsAsync(userConsents, fileName);
                 summary.OutputFiles.Add(fileName);
-                
-                LogInformation($"User consents written to: {fileName}");
+
+                WriteVerbose($"User consents written to: {fileName}");
             }
         }
 
         private async Task ProcessAllUserConsentsAsync(string outputDirectory, string timestamp, OAuthPermissionsSummary summary)
         {
-            LogInformation("Processing OAuth consents for all users...");
+            WriteVerbose("Processing OAuth consents for all users...");
 
             var allGrants = await _graphClient.GetOAuth2PermissionGrantsAsync();
             var userConsents = new List<UserConsentPermission>();
@@ -284,12 +284,12 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                     if (!string.IsNullOrEmpty(grant.PrincipalId))
                     {
                         processedUsers.Add(grant.PrincipalId);
-                        
+
                         var consent = ProcessUserConsent(grant, grant.PrincipalId);
                         if (!HighRiskOnly || consent.IsHighRisk)
                         {
                             userConsents.Add(consent);
-                            
+
                             if (consent.IsHighRisk)
                                 summary.HighRiskPermissions++;
                         }
@@ -297,7 +297,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                 }
                 catch (Exception ex)
                 {
-                    LogWarning($"Failed to process user consent: {ex.Message}");
+                    WriteWarningWithTimestamp($"Failed to process user consent: {ex.Message}");
                 }
             }
 
@@ -308,16 +308,16 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                 var fileName = Path.Combine(outputDirectory, $"{timestamp}-AllUserConsents.csv");
                 await WriteUserConsentsAsync(userConsents, fileName);
                 summary.OutputFiles.Add(fileName);
-                
-                LogInformation($"User consents written to: {fileName}");
+
+                WriteVerbose($"User consents written to: {fileName}");
             }
         }
 
         private async Task ProcessLegacyMethodAsync(string outputDirectory, string timestamp, OAuthPermissionsSummary summary)
         {
-            LogInformation("Using legacy Exchange method for OAuth permissions collection");
-            LogWarning("Legacy method implementation not available in C# version. Please use Graph API method.");
-            
+            WriteVerbose("Using legacy Exchange method for OAuth permissions collection");
+            WriteWarningWithTimestamp("Legacy method implementation not available in C# version. Please use Graph API method.");
+
             // For the legacy method, we would typically use Exchange Online PowerShell commands
             // This would require different authentication and cmdlets
             throw new NotImplementedException("Legacy Exchange method is not implemented in C# version. Use -UseGraphAPI parameter.");
@@ -326,7 +326,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
         private List<RequiredResourceAccessInfo> ProcessRequiredResourceAccess(dynamic requiredResourceAccess)
         {
             var resourceAccess = new List<RequiredResourceAccessInfo>();
-            
+
             if (requiredResourceAccess != null)
             {
                 foreach (var resource in requiredResourceAccess)
@@ -336,18 +336,18 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                         ResourceAppId = resource.ResourceAppId?.ToString(),
                         ResourceAccess = ProcessResourceAccess(resource.ResourceAccess)
                     };
-                    
+
                     resourceAccess.Add(info);
                 }
             }
-            
+
             return resourceAccess;
         }
 
         private List<ResourceAccessInfo> ProcessResourceAccess(dynamic resourceAccess)
         {
             var accessList = new List<ResourceAccessInfo>();
-            
+
             if (resourceAccess != null)
             {
                 foreach (var access in resourceAccess)
@@ -357,18 +357,18 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                         Id = access.Id?.ToString(),
                         Type = access.Type?.ToString()
                     };
-                    
+
                     accessList.Add(info);
                 }
             }
-            
+
             return accessList;
         }
 
         private List<OAuth2GrantInfo> ProcessOAuth2Grants(IEnumerable<dynamic> grants)
         {
             var grantList = new List<OAuth2GrantInfo>();
-            
+
             foreach (var grant in grants)
             {
                 var info = new OAuth2GrantInfo
@@ -381,17 +381,17 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                     Scope = grant.Scope?.ToString(),
                     CreatedDateTime = grant.CreatedDateTime
                 };
-                
+
                 grantList.Add(info);
             }
-            
+
             return grantList;
         }
 
         private List<AppRoleAssignmentInfo> ProcessAppRoleAssignments(IEnumerable<dynamic> assignments)
         {
             var assignmentList = new List<AppRoleAssignmentInfo>();
-            
+
             foreach (var assignment in assignments)
             {
                 var info = new AppRoleAssignmentInfo
@@ -405,10 +405,10 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                     ResourceId = assignment.ResourceId?.ToString(),
                     CreatedDateTime = assignment.CreatedDateTime
                 };
-                
+
                 assignmentList.Add(info);
             }
-            
+
             return assignmentList;
         }
 
@@ -463,17 +463,17 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                 "Files.ReadWrite.All"
             };
 
-            return highRiskScopes.Any(hrs => scope.Contains(hrs, StringComparison.OrdinalIgnoreCase));
+            return highRiskScopes.Any(hrs => scope.IndexOf(hrs, StringComparison.OrdinalIgnoreCase) >= 0);
         }
 
         private string GetOutputDirectory()
         {
             var directory = OutputDir;
-            
+
             if (!Directory.Exists(directory))
             {
                 Directory.CreateDirectory(directory);
-                LogInformation($"Created output directory: {directory}");
+                WriteVerbose($"Created output directory: {directory}");
             }
 
             return directory;
@@ -481,26 +481,26 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
 
         private void LogSummary(OAuthPermissionsSummary summary)
         {
-            LogInformation("");
-            LogInformation("=== OAuth Permissions Collection Summary ===");
-            LogInformation($"Processing Time: {summary.ProcessingTime?.ToString(@"mm\:ss")}");
-            LogInformation($"Applications Processed: {summary.ProcessedApplications:N0}");
-            LogInformation($"Users Processed: {summary.ProcessedUsers:N0}");
-            LogInformation($"Total Permissions: {summary.TotalPermissions:N0}");
-            LogInformation($"High-Risk Permissions: {summary.HighRiskPermissions:N0}");
-            LogInformation("");
-            LogInformation("Output Files:");
+            WriteVerbose("");
+            WriteVerbose("=== OAuth Permissions Collection Summary ===");
+            WriteVerbose($"Processing Time: {summary.ProcessingTime?.ToString(@"mm\:ss")}");
+            WriteVerbose($"Applications Processed: {summary.ProcessedApplications:N0}");
+            WriteVerbose($"Users Processed: {summary.ProcessedUsers:N0}");
+            WriteVerbose($"Total Permissions: {summary.TotalPermissions:N0}");
+            WriteVerbose($"High-Risk Permissions: {summary.HighRiskPermissions:N0}");
+            WriteVerbose("");
+            WriteVerbose("Output Files:");
             foreach (var file in summary.OutputFiles)
             {
-                LogInformation($"  - {file}");
+                WriteVerbose($"  - {file}");
             }
-            LogInformation("============================================");
+            WriteVerbose("============================================");
         }
 
         private async Task WriteApplicationPermissionsAsync(IEnumerable<ApplicationPermission> permissions, string filePath)
         {
             var csv = "ApplicationId,DisplayName,CreatedDateTime,PublisherDomain,SignInAudience,RequiredResourceAccess,IsHighRisk" + Environment.NewLine;
-            
+
             foreach (var perm in permissions)
             {
                 var resourceAccessJson = JsonSerializer.Serialize(perm.RequiredResourceAccess);
@@ -514,22 +514,22 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                     EscapeCsvValue(resourceAccessJson),
                     perm.IsHighRisk.ToString()
                 };
-                
+
                 csv += string.Join(",", values) + Environment.NewLine;
             }
-            
-            await File.WriteAllTextAsync(filePath, csv);
+
+            using (var writer = new StreamWriter(filePath)) { await writer.WriteAsync(csv); }
         }
 
         private async Task WriteServicePrincipalPermissionsAsync(IEnumerable<ServicePrincipalPermission> permissions, string filePath)
         {
             var csv = "ServicePrincipalId,AppId,DisplayName,CreatedDateTime,OAuth2Grants,AppRoleAssignments,IsHighRisk" + Environment.NewLine;
-            
+
             foreach (var perm in permissions)
             {
                 var oauth2GrantsJson = JsonSerializer.Serialize(perm.OAuth2Grants);
                 var appRoleAssignmentsJson = JsonSerializer.Serialize(perm.AppRoleAssignments);
-                
+
                 var values = new[]
                 {
                     EscapeCsvValue(perm.ServicePrincipalId),
@@ -540,17 +540,17 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                     EscapeCsvValue(appRoleAssignmentsJson),
                     perm.IsHighRisk.ToString()
                 };
-                
+
                 csv += string.Join(",", values) + Environment.NewLine;
             }
-            
-            await File.WriteAllTextAsync(filePath, csv);
+
+            using (var writer = new StreamWriter(filePath)) { await writer.WriteAsync(csv); }
         }
 
         private async Task WriteUserConsentsAsync(IEnumerable<UserConsentPermission> consents, string filePath)
         {
             var csv = "UserId,ClientId,ConsentType,ResourceId,Scope,CreatedDateTime,IsHighRisk" + Environment.NewLine;
-            
+
             foreach (var consent in consents)
             {
                 var values = new[]
@@ -563,23 +563,23 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                     consent.CreatedDateTime?.ToString("yyyy-MM-dd HH:mm:ss") ?? "",
                     consent.IsHighRisk.ToString()
                 };
-                
+
                 csv += string.Join(",", values) + Environment.NewLine;
             }
-            
-            await File.WriteAllTextAsync(filePath, csv);
+
+            using (var writer = new StreamWriter(filePath)) { await writer.WriteAsync(csv); }
         }
 
         private string EscapeCsvValue(string value)
         {
             if (string.IsNullOrEmpty(value))
                 return "";
-            
+
             if (value.Contains(",") || value.Contains("\"") || value.Contains("\n"))
             {
                 return "\"" + value.Replace("\"", "\"\"") + "\"";
             }
-            
+
             return value;
         }
     }

@@ -24,28 +24,28 @@ namespace Microsoft.ExtractorSuite.Core.Exchange
     public class ExchangeRestClient : IDisposable
     {
         private readonly HttpClient _httpClient;
-        private readonly AuthenticationManager _authManager;
+        private readonly Core.Authentication.AuthenticationManager _authManager;
         private readonly IAsyncPolicy<HttpResponseMessage> _retryPolicy;
         private readonly JsonSerializerOptions _jsonOptions;
         private readonly SemaphoreSlim _rateLimitSemaphore;
-        
+
         // Exchange Online REST API endpoints
         private const string ExchangeRestBaseUrl = "https://outlook.office365.com/api/v2.0";
         private const string ExchangeAdminApiUrl = "https://outlook.office365.com/adminapi/beta";
         private const string ComplianceApiUrl = "https://compliance.microsoft.com/api";
         private const string EwsUrl = "https://outlook.office365.com/EWS/Exchange.asmx";
-        
+
         // Rate limiting
         private const int MaxConcurrentRequests = 20;
         private const int RequestsPerMinute = 300;
         private readonly Queue<DateTime> _requestTimestamps = new();
         private readonly object _rateLimitLock = new();
-        
-        public ExchangeRestClient(AuthenticationManager authManager)
+
+        public ExchangeRestClient(Core.Authentication.AuthenticationManager authManager)
         {
             _authManager = authManager;
             _rateLimitSemaphore = new SemaphoreSlim(MaxConcurrentRequests, MaxConcurrentRequests);
-            
+
             // Configure HttpClient with optimal settings
             var handler = new HttpClientHandler
             {
@@ -53,7 +53,7 @@ namespace Microsoft.ExtractorSuite.Core.Exchange
                 MaxConnectionsPerServer = 50,
                 UseProxy = false
             };
-            
+
             _httpClient = new HttpClient(handler)
             {
                 Timeout = TimeSpan.FromMinutes(5), // Long timeout for large operations
@@ -63,11 +63,11 @@ namespace Microsoft.ExtractorSuite.Core.Exchange
                     UserAgent = { new ProductInfoHeaderValue("Microsoft-Extractor-Suite", "4.0.0") }
                 }
             };
-            
+
             // Configure retry policy with exponential backoff
             _retryPolicy = HttpPolicyExtensions
                 .HandleTransientHttpError()
-                .OrResult(msg => msg.StatusCode == HttpStatusCode.TooManyRequests)
+                .OrResult(msg => msg.StatusCode == (HttpStatusCode)429)
                 .WaitAndRetryAsync(
                     5,
                     retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)),
@@ -76,7 +76,7 @@ namespace Microsoft.ExtractorSuite.Core.Exchange
                         var reason = outcome.Result?.StatusCode.ToString() ?? outcome.Exception?.Message;
                         Console.WriteLine($"Retry {retryCount} after {timespan}s: {reason}");
                     });
-            
+
             // Configure System.Text.Json for optimal performance
             _jsonOptions = new JsonSerializerOptions
             {
@@ -91,9 +91,9 @@ namespace Microsoft.ExtractorSuite.Core.Exchange
                 }
             };
         }
-        
+
         #region Unified Audit Log via REST API
-        
+
         public async Task<UnifiedAuditLogResult> SearchUnifiedAuditLogAsync(
             DateTime startDate,
             DateTime endDate,
@@ -105,7 +105,7 @@ namespace Microsoft.ExtractorSuite.Core.Exchange
             CancellationToken cancellationToken = default)
         {
             await ThrottleRequestAsync(cancellationToken);
-            
+
             var requestBody = new
             {
                 StartDate = startDate.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss"),
@@ -117,26 +117,26 @@ namespace Microsoft.ExtractorSuite.Core.Exchange
                 RecordTypes = recordTypes,
                 UserIds = userIds
             };
-            
+
             var url = $"{ExchangeAdminApiUrl}/{_authManager.CurrentTenantId}/ActivityFeed/SearchUnifiedAuditLog";
-            
+
             using var content = new StringContent(
                 JsonSerializer.Serialize(requestBody, _jsonOptions),
                 Encoding.UTF8,
                 "application/json");
-            
+
             var response = await ExecuteWithRetryAsync(
                 () => _httpClient.PostAsync(url, content, cancellationToken),
                 cancellationToken);
-            
+
             var json = await response.Content.ReadAsStringAsync();
             return JsonSerializer.Deserialize<UnifiedAuditLogResult>(json, _jsonOptions)!;
         }
-        
+
         #endregion
-        
+
         #region Message Trace via REST API
-        
+
         public async IAsyncEnumerable<MessageTraceResult> GetMessageTraceAsync(
             DateTime startDate,
             DateTime endDate,
@@ -144,15 +144,15 @@ namespace Microsoft.ExtractorSuite.Core.Exchange
             string? recipientAddress = null,
             string? messageId = null,
             int pageSize = 5000,
-            CancellationToken cancellationToken = default)
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             var page = 1;
             bool hasMoreData;
-            
+
             do
             {
                 await ThrottleRequestAsync(cancellationToken);
-                
+
                 var queryParams = new Dictionary<string, string>
                 {
                     ["StartDate"] = startDate.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss"),
@@ -160,58 +160,58 @@ namespace Microsoft.ExtractorSuite.Core.Exchange
                     ["$top"] = pageSize.ToString(),
                     ["Page"] = page.ToString()
                 };
-                
+
                 if (!string.IsNullOrEmpty(senderAddress))
                     queryParams["SenderAddress"] = senderAddress;
                 if (!string.IsNullOrEmpty(recipientAddress))
                     queryParams["RecipientAddress"] = recipientAddress;
                 if (!string.IsNullOrEmpty(messageId))
                     queryParams["MessageId"] = messageId;
-                
+
                 var url = BuildUrl($"{ExchangeAdminApiUrl}/{_authManager.CurrentTenantId}/MessageTrace", queryParams);
-                
+
                 var response = await ExecuteWithRetryAsync(
                     () => _httpClient.GetAsync(url, cancellationToken),
                     cancellationToken);
-                
+
                 var json = await response.Content.ReadAsStringAsync();
                 var result = JsonSerializer.Deserialize<MessageTraceResult>(json, _jsonOptions)!;
-                
+
                 hasMoreData = result.Value?.Length == pageSize;
                 page++;
-                
+
                 yield return result;
-                
+
             } while (hasMoreData && !cancellationToken.IsCancellationRequested);
         }
-        
+
         #endregion
-        
+
         #region Mailbox Operations via Graph/REST Hybrid
-        
+
         public async Task<MailboxInfo> GetMailboxAsync(string userPrincipalName, CancellationToken cancellationToken = default)
         {
             await ThrottleRequestAsync(cancellationToken);
-            
+
             // Use Graph API for mailbox info (more reliable than EXO REST)
-            var graphClient = _authManager.GraphClient 
+            var graphClient = _authManager.GraphClient
                 ?? throw new InvalidOperationException("Graph client not initialized");
-            
+
             var user = await graphClient.Users[userPrincipalName]
-                .Request()
-                .Select("id,displayName,mail,mailboxSettings,assignedLicenses")
-                .GetAsync(cancellationToken);
-            
+                .GetAsync(requestConfiguration => {
+                    requestConfiguration.QueryParameters.Select = new string[] { "id", "displayName", "mail", "mailboxSettings", "assignedLicenses" };
+                }, cancellationToken);
+
             // Get additional Exchange-specific info via REST
             var url = $"{ExchangeAdminApiUrl}/{_authManager.CurrentTenantId}/Mailbox('{userPrincipalName}')";
-            
+
             var response = await ExecuteWithRetryAsync(
                 () => _httpClient.GetAsync(url, cancellationToken),
                 cancellationToken);
-            
+
             var json = await response.Content.ReadAsStringAsync();
             var exchangeData = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(json, _jsonOptions);
-            
+
             return new MailboxInfo
             {
                 UserPrincipalName = userPrincipalName,
@@ -223,22 +223,22 @@ namespace Microsoft.ExtractorSuite.Core.Exchange
                 LitigationHoldEnabled = exchangeData?["LitigationHoldEnabled"].GetBoolean() ?? false
             };
         }
-        
+
         public async IAsyncEnumerable<MailboxAuditLogRecord> GetMailboxAuditLogAsync(
             string userPrincipalName,
             DateTime startDate,
             DateTime endDate,
             string[]? operations = null,
-            CancellationToken cancellationToken = default)
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             var sessionId = Guid.NewGuid().ToString();
             string? resultSetId = null;
             bool hasMoreData;
-            
+
             do
             {
                 await ThrottleRequestAsync(cancellationToken);
-                
+
                 var requestBody = new
                 {
                     Identity = userPrincipalName,
@@ -249,21 +249,21 @@ namespace Microsoft.ExtractorSuite.Core.Exchange
                     SessionId = sessionId,
                     ResultSetId = resultSetId
                 };
-                
+
                 var url = $"{ExchangeAdminApiUrl}/{_authManager.CurrentTenantId}/MailboxAuditLog";
-                
+
                 using var content = new StringContent(
                     JsonSerializer.Serialize(requestBody, _jsonOptions),
                     Encoding.UTF8,
                     "application/json");
-                
+
                 var response = await ExecuteWithRetryAsync(
                     () => _httpClient.PostAsync(url, content, cancellationToken),
                     cancellationToken);
-                
+
                 var json = await response.Content.ReadAsStringAsync();
                 var result = JsonSerializer.Deserialize<MailboxAuditLogResult>(json, _jsonOptions)!;
-                
+
                 if (result.Records != null)
                 {
                     foreach (var record in result.Records)
@@ -271,73 +271,73 @@ namespace Microsoft.ExtractorSuite.Core.Exchange
                         yield return record;
                     }
                 }
-                
+
                 resultSetId = result.ResultSetId;
                 hasMoreData = result.HasMoreData;
-                
+
             } while (hasMoreData && !cancellationToken.IsCancellationRequested);
         }
-        
+
         #endregion
-        
+
         #region Transport Rules via REST
-        
+
         public async Task<TransportRule[]> GetTransportRulesAsync(CancellationToken cancellationToken = default)
         {
             await ThrottleRequestAsync(cancellationToken);
-            
+
             var url = $"{ExchangeAdminApiUrl}/{_authManager.CurrentTenantId}/TransportRule";
-            
+
             var response = await ExecuteWithRetryAsync(
                 () => _httpClient.GetAsync(url, cancellationToken),
                 cancellationToken);
-            
+
             var json = await response.Content.ReadAsStringAsync();
             var result = JsonSerializer.Deserialize<TransportRuleResult>(json, _jsonOptions)!;
-            
+
             return result.Value ?? Array.Empty<TransportRule>();
         }
-        
+
         #endregion
-        
+
         #region Inbox Rules via REST
-        
+
         public async Task<InboxRule[]> GetInboxRulesAsync(
-            string userPrincipalName, 
+            string userPrincipalName,
             CancellationToken cancellationToken = default)
         {
             await ThrottleRequestAsync(cancellationToken);
-            
+
             var url = $"{ExchangeAdminApiUrl}/{_authManager.CurrentTenantId}/InboxRule?Mailbox={Uri.EscapeDataString(userPrincipalName)}";
-            
+
             var response = await ExecuteWithRetryAsync(
                 () => _httpClient.GetAsync(url, cancellationToken),
                 cancellationToken);
-            
+
             var json = await response.Content.ReadAsStringAsync();
             var result = JsonSerializer.Deserialize<InboxRuleResult>(json, _jsonOptions)!;
-            
+
             return result.Value ?? Array.Empty<InboxRule>();
         }
-        
+
         public async IAsyncEnumerable<InboxRule> GetAllMailboxInboxRulesAsync(
             string[]? specificUsers = null,
             int maxDegreeOfParallelism = 10,
             IProgress<(int processed, int total, string currentUser)>? progress = null,
-            CancellationToken cancellationToken = default)
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             // Get list of mailboxes to process
             var mailboxes = specificUsers ?? await GetAllMailboxesAsync(cancellationToken);
             var totalMailboxes = mailboxes.Length;
             var processedCount = 0;
-            
+
             using var semaphore = new SemaphoreSlim(maxDegreeOfParallelism, maxDegreeOfParallelism);
             var tasks = new List<Task<(string user, InboxRule[] rules)>>();
-            
+
             foreach (var mailbox in mailboxes)
             {
                 await semaphore.WaitAsync(cancellationToken);
-                
+
                 var task = Task.Run(async () =>
                 {
                     try
@@ -351,15 +351,15 @@ namespace Microsoft.ExtractorSuite.Core.Exchange
                         semaphore.Release();
                     }
                 }, cancellationToken);
-                
+
                 tasks.Add(task);
-                
+
                 // Process completed tasks
                 while (tasks.Any(t => t.IsCompleted))
                 {
                     var completed = await Task.WhenAny(tasks);
                     tasks.Remove(completed);
-                    
+
                     var (user, rules) = await completed;
                     foreach (var rule in rules)
                     {
@@ -368,13 +368,13 @@ namespace Microsoft.ExtractorSuite.Core.Exchange
                     }
                 }
             }
-            
+
             // Process remaining tasks
             while (tasks.Any())
             {
                 var completed = await Task.WhenAny(tasks);
                 tasks.Remove(completed);
-                
+
                 var (user, rules) = await completed;
                 foreach (var rule in rules)
                 {
@@ -383,35 +383,60 @@ namespace Microsoft.ExtractorSuite.Core.Exchange
                 }
             }
         }
-        
+
         private async Task<string[]> GetAllMailboxesAsync(CancellationToken cancellationToken)
         {
             await ThrottleRequestAsync(cancellationToken);
-            
-            var graphClient = _authManager.GraphClient 
+
+            var graphClient = _authManager.GraphClient
                 ?? throw new InvalidOperationException("Graph client not initialized");
-            
+
             var users = new List<string>();
-            var request = graphClient.Users
-                .Request()
-                .Select("userPrincipalName,mail,assignedLicenses")
-                .Filter("assignedLicenses/any()") // Only licensed users
-                .Top(999);
             
-            do
+            var response = await graphClient.Users
+                .GetAsync(requestConfiguration => {
+                    requestConfiguration.QueryParameters.Select = new string[] { "userPrincipalName", "mail", "assignedLicenses" };
+                    requestConfiguration.QueryParameters.Filter = "assignedLicenses/any()"; // Only licensed users
+                    requestConfiguration.QueryParameters.Top = 999;
+                }, cancellationToken);
+
+            if (response?.Value != null)
             {
-                var page = await request.GetAsync(cancellationToken);
-                users.AddRange(page.Select(u => u.UserPrincipalName ?? u.Mail).Where(u => !string.IsNullOrEmpty(u)));
-                request = page.NextPageRequest;
-            } while (request != null);
-            
+                users.AddRange(response.Value.Select(u => u.UserPrincipalName ?? u.Mail).Where(u => !string.IsNullOrEmpty(u)));
+            }
+
             return users.ToArray();
         }
-        
+
         #endregion
-        
+
+        #region Connection Status Methods
+
+        /// <summary>
+        /// Checks if the Exchange REST client is properly connected
+        /// </summary>
+        public async Task<bool> IsConnectedAsync()
+        {
+            try
+            {
+                var token = await _authManager.GetExchangeOnlineTokenAsync();
+                return !string.IsNullOrEmpty(token) && _authManager.IsGraphConnected;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Synchronous check for Exchange connection
+        /// </summary>
+        public bool IsExchangeConnected => _authManager.IsGraphConnected;
+
+        #endregion
+
         #region Helper Methods
-        
+
         private async Task<HttpResponseMessage> ExecuteWithRetryAsync(
             Func<Task<HttpResponseMessage>> operation,
             CancellationToken cancellationToken)
@@ -422,16 +447,16 @@ namespace Microsoft.ExtractorSuite.Core.Exchange
             {
                 throw new InvalidOperationException("Failed to obtain Exchange Online access token");
             }
-            
-            _httpClient.DefaultRequestHeaders.Authorization = 
+
+            _httpClient.DefaultRequestHeaders.Authorization =
                 new AuthenticationHeaderValue("Bearer", token);
-            
+
             var response = await _retryPolicy.ExecuteAsync(async () =>
             {
                 var result = await operation();
-                
+
                 // Handle rate limiting
-                if (result.StatusCode == HttpStatusCode.TooManyRequests)
+                if (result.StatusCode == (HttpStatusCode)429)
                 {
                     if (result.Headers.RetryAfter != null)
                     {
@@ -439,31 +464,31 @@ namespace Microsoft.ExtractorSuite.Core.Exchange
                         await Task.Delay(delay, cancellationToken);
                     }
                 }
-                
+
                 result.EnsureSuccessStatusCode();
                 return result;
             });
-            
+
             return response;
         }
-        
+
         private async Task ThrottleRequestAsync(CancellationToken cancellationToken)
         {
             await _rateLimitSemaphore.WaitAsync(cancellationToken);
-            
+
             try
             {
                 lock (_rateLimitLock)
                 {
                     var now = DateTime.UtcNow;
                     var oneMinuteAgo = now.AddMinutes(-1);
-                    
+
                     // Remove timestamps older than 1 minute
                     while (_requestTimestamps.Count > 0 && _requestTimestamps.Peek() < oneMinuteAgo)
                     {
                         _requestTimestamps.Dequeue();
                     }
-                    
+
                     // If we're at the rate limit, wait
                     if (_requestTimestamps.Count >= RequestsPerMinute)
                     {
@@ -474,7 +499,7 @@ namespace Microsoft.ExtractorSuite.Core.Exchange
                             Task.Delay(waitTime, cancellationToken).Wait(cancellationToken);
                         }
                     }
-                    
+
                     _requestTimestamps.Enqueue(now);
                 }
             }
@@ -483,27 +508,27 @@ namespace Microsoft.ExtractorSuite.Core.Exchange
                 _rateLimitSemaphore.Release();
             }
         }
-        
+
         private string BuildUrl(string baseUrl, Dictionary<string, string> queryParams)
         {
             if (queryParams == null || queryParams.Count == 0)
                 return baseUrl;
-            
-            var query = string.Join("&", queryParams.Select(kvp => 
+
+            var query = string.Join("&", queryParams.Select(kvp =>
                 $"{Uri.EscapeDataString(kvp.Key)}={Uri.EscapeDataString(kvp.Value)}"));
-            
+
             return $"{baseUrl}?{query}";
         }
-        
+
         public void Dispose()
         {
             _httpClient?.Dispose();
             _rateLimitSemaphore?.Dispose();
         }
-        
+
         #endregion
     }
-    
+
     // Custom DateTime converter for System.Text.Json
     public class DateTimeOffsetConverter : JsonConverter<DateTimeOffset>
     {
@@ -517,7 +542,7 @@ namespace Microsoft.ExtractorSuite.Core.Exchange
             }
             return DateTimeOffset.MinValue;
         }
-        
+
         public override void Write(Utf8JsonWriter writer, DateTimeOffset value, JsonSerializerOptions options)
         {
             writer.WriteStringValue(value.ToString("yyyy-MM-ddTHH:mm:ssZ"));

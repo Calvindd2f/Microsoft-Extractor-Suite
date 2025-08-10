@@ -18,25 +18,25 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
     {
         [Parameter]
         public string[]? UserIds { get; set; }
-        
+
         [Parameter]
         public string OutputFormat { get; set; } = "CSV";
-        
+
         [Parameter]
         public SwitchParameter IncludeGuests { get; set; }
-        
+
         [Parameter]
         public SwitchParameter IncludeDisabled { get; set; }
-        
+
         protected override void ProcessRecord()
         {
             if (!RequireGraphConnection())
             {
                 return;
             }
-            
+
             var users = RunAsyncOperation(GetUsersAsync, "Get Users");
-            
+
             if (!Async.IsPresent && users != null)
             {
                 foreach (var user in users)
@@ -45,60 +45,78 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                 }
             }
         }
-        
+
         private async Task<List<UserInfo>> GetUsersAsync(
             IProgress<Core.AsyncOperations.TaskProgress> progress,
             CancellationToken cancellationToken)
         {
-            var graphClient = AuthManager.GraphClient 
+            var graphClient = AuthManager.GraphClient
                 ?? throw new InvalidOperationException("Graph client not initialized");
-            
+
             var users = new List<UserInfo>();
             var processedCount = 0;
-            
+
             try
             {
-                // Build query
-                var request = graphClient.Users
-                    .Request()
-                    .Select("id,displayName,userPrincipalName,mail,createdDateTime,lastPasswordChangeDateTime,accountEnabled,userType,assignedLicenses,signInActivity")
-                    .Top(999); // Max page size
-                
+                // Build query with modern SDK patterns
+                var queryOptions = new List<string>
+                {
+                    "$select=id,displayName,userPrincipalName,mail,createdDateTime,lastPasswordChangeDateTime,accountEnabled,userType,assignedLicenses,signInActivity",
+                    "$top=999"
+                };
+
                 // Apply filters
                 var filters = new List<string>();
-                
+
                 if (!IncludeGuests.IsPresent)
                 {
                     filters.Add("userType eq 'Member'");
                 }
-                
+
                 if (!IncludeDisabled.IsPresent)
                 {
                     filters.Add("accountEnabled eq true");
                 }
-                
+
                 if (UserIds != null && UserIds.Length > 0)
                 {
-                    var userFilter = string.Join(" or ", 
+                    var userFilter = string.Join(" or ",
                         UserIds.Select(u => $"userPrincipalName eq '{u}' or mail eq '{u}'"));
                     filters.Add($"({userFilter})");
                 }
-                
+
                 if (filters.Any())
                 {
-                    request = request.Filter(string.Join(" and ", filters));
+                    queryOptions.Add($"$filter={string.Join(" and ", filters)}");
                 }
-                
-                // Page through results
-                var pageIterator = PageIterator<User>
+
+                // Configure and get users
+                var usersResponse = await graphClient.Users.GetAsync(requestConfiguration =>
+                {
+                    requestConfiguration.QueryParameters.Select = new string[] 
+                    {
+                        "id", "displayName", "userPrincipalName", "mail", "createdDateTime", 
+                        "lastPasswordChangeDateTime", "accountEnabled", "userType", 
+                        "assignedLicenses", "signInActivity"
+                    };
+                    requestConfiguration.QueryParameters.Top = 999;
+                    
+                    if (filters.Any())
+                    {
+                        requestConfiguration.QueryParameters.Filter = string.Join(" and ", filters);
+                    }
+                }, cancellationToken);
+
+                // Process all pages using pagination
+                var pageIterator = Microsoft.Graph.PageIterator<User, UserCollectionResponse>
                     .CreatePageIterator(
                         graphClient,
-                        request,
+                        usersResponse,
                         (user) =>
                         {
                             users.Add(MapToUserInfo(user));
                             processedCount++;
-                            
+
                             if (processedCount % 100 == 0)
                             {
                                 progress.Report(new Core.AsyncOperations.TaskProgress
@@ -108,20 +126,20 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                                     PercentComplete = -1
                                 });
                             }
-                            
+
                             return !cancellationToken.IsCancellationRequested;
                         });
-                
+
                 await pageIterator.IterateAsync(cancellationToken);
-                
+
                 WriteVerboseWithTimestamp($"Retrieved {users.Count} users");
-                
+
                 // Export to file if output directory specified
                 if (!string.IsNullOrEmpty(OutputDirectory))
                 {
                     await ExportUsersAsync(users, cancellationToken);
                 }
-                
+
                 return users;
             }
             catch (ServiceException ex)
@@ -130,7 +148,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                 throw;
             }
         }
-        
+
         private UserInfo MapToUserInfo(User user)
         {
             return new UserInfo
@@ -150,15 +168,15 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                     : -1
             };
         }
-        
+
         private async Task ExportUsersAsync(List<UserInfo> users, CancellationToken cancellationToken)
         {
             var fileName = Path.Combine(
                 OutputDirectory!,
                 $"Users_{DateTime.UtcNow:yyyyMMdd_HHmmss}.{OutputFormat.ToLower()}");
-            
+
             Directory.CreateDirectory(Path.GetDirectoryName(fileName)!);
-            
+
             if (OutputFormat.Equals("JSON", StringComparison.OrdinalIgnoreCase))
             {
                 using var stream = File.Create(fileName);
@@ -171,11 +189,11 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                 using var csv = new CsvHelper.CsvWriter(writer, System.Globalization.CultureInfo.InvariantCulture);
                 await csv.WriteRecordsAsync(users);
             }
-            
+
             WriteVerboseWithTimestamp($"Exported users to {fileName}");
         }
     }
-    
+
     public class UserInfo
     {
         public string? Id { get; set; }

@@ -18,12 +18,12 @@ namespace Microsoft.ExtractorSuite.Core.AsyncOperations
         private readonly CancellationTokenSource _globalCancellation;
         private readonly Timer _cleanupTimer;
         private readonly object _lock = new();
-        
+
         public AsyncTaskManager()
         {
             _activeTasks = new ConcurrentDictionary<Guid, TrackedTask>();
             _globalCancellation = new CancellationTokenSource();
-            
+
             // Cleanup completed tasks every 30 seconds
             _cleanupTimer = new Timer(
                 CleanupCompletedTasks,
@@ -31,7 +31,7 @@ namespace Microsoft.ExtractorSuite.Core.AsyncOperations
                 TimeSpan.FromSeconds(30),
                 TimeSpan.FromSeconds(30));
         }
-        
+
         /// <summary>
         /// Executes a long-running task with progress reporting
         /// </summary>
@@ -43,7 +43,7 @@ namespace Microsoft.ExtractorSuite.Core.AsyncOperations
             var taskId = Guid.NewGuid();
             var cts = CancellationTokenSource.CreateLinkedTokenSource(_globalCancellation.Token);
             var progress = new Progress<TaskProgress>(p => ReportProgress(cmdlet, p));
-            
+
             var task = Task.Run(async () =>
             {
                 try
@@ -55,7 +55,7 @@ namespace Microsoft.ExtractorSuite.Core.AsyncOperations
                     throw new PipelineStoppedException($"Task '{taskName}' was cancelled");
                 }
             }, cts.Token);
-            
+
             var trackedTask = new TrackedTask
             {
                 Id = taskId,
@@ -65,9 +65,9 @@ namespace Microsoft.ExtractorSuite.Core.AsyncOperations
                 StartTime = DateTime.UtcNow,
                 Status = TaskStatus.Running
             };
-            
+
             _activeTasks.TryAdd(taskId, trackedTask);
-            
+
             // Set up continuation to update status
             task.ContinueWith(t =>
             {
@@ -75,17 +75,17 @@ namespace Microsoft.ExtractorSuite.Core.AsyncOperations
                 {
                     tracked.EndTime = DateTime.UtcNow;
                     tracked.Status = t.Status;
-                    
+
                     if (t.IsFaulted)
                     {
                         tracked.Error = t.Exception?.GetBaseException();
                     }
                 }
             }, TaskScheduler.Default);
-            
+
             return taskId;
         }
-        
+
         /// <summary>
         /// Waits for a task with periodic progress updates to PowerShell
         /// </summary>
@@ -98,7 +98,7 @@ namespace Microsoft.ExtractorSuite.Core.AsyncOperations
             {
                 throw new InvalidOperationException($"Task {taskId} not found");
             }
-            
+
             var progressTimer = new Timer(_ =>
             {
                 if (trackedTask.LastProgress != null)
@@ -106,7 +106,7 @@ namespace Microsoft.ExtractorSuite.Core.AsyncOperations
                     ReportProgress(cmdlet, trackedTask.LastProgress);
                 }
             }, null, progressUpdateIntervalMs, progressUpdateIntervalMs);
-            
+
             try
             {
                 // Use Task.Run to avoid blocking the calling thread
@@ -121,7 +121,7 @@ namespace Microsoft.ExtractorSuite.Core.AsyncOperations
                 progressTimer?.Dispose();
             }
         }
-        
+
         /// <summary>
         /// Non-blocking check for task completion
         /// </summary>
@@ -133,7 +133,7 @@ namespace Microsoft.ExtractorSuite.Core.AsyncOperations
             }
             return true;
         }
-        
+
         /// <summary>
         /// Gets task result without blocking (throws if not complete)
         /// </summary>
@@ -143,26 +143,26 @@ namespace Microsoft.ExtractorSuite.Core.AsyncOperations
             {
                 throw new InvalidOperationException($"Task {taskId} not found");
             }
-            
+
             if (!trackedTask.Task.IsCompleted)
             {
                 throw new InvalidOperationException($"Task {taskId} is still running");
             }
-            
+
             if (trackedTask.Task.IsFaulted)
             {
-                throw trackedTask.Task.Exception?.GetBaseException() 
+                throw trackedTask.Task.Exception?.GetBaseException()
                     ?? new InvalidOperationException("Task failed");
             }
-            
+
             if (trackedTask.Task.IsCanceled)
             {
                 throw new OperationCanceledException($"Task {taskId} was cancelled");
             }
-            
+
             return ((Task<T>)trackedTask.Task).Result;
         }
-        
+
         /// <summary>
         /// Cancels a specific task
         /// </summary>
@@ -173,7 +173,7 @@ namespace Microsoft.ExtractorSuite.Core.AsyncOperations
                 trackedTask.CancellationSource.Cancel();
             }
         }
-        
+
         /// <summary>
         /// Cancels all active tasks
         /// </summary>
@@ -181,7 +181,7 @@ namespace Microsoft.ExtractorSuite.Core.AsyncOperations
         {
             _globalCancellation.Cancel();
         }
-        
+
         /// <summary>
         /// Gets status of all active tasks
         /// </summary>
@@ -199,7 +199,7 @@ namespace Microsoft.ExtractorSuite.Core.AsyncOperations
                 CurrentOperation = t.LastProgress?.CurrentOperation
             });
         }
-        
+
         /// <summary>
         /// Executes multiple tasks in parallel with controlled concurrency
         /// </summary>
@@ -213,7 +213,7 @@ namespace Microsoft.ExtractorSuite.Core.AsyncOperations
             var tasks = new List<Task<T>>();
             var totalTasks = taskFactories.Count();
             var completedTasks = 0;
-            
+
             foreach (var factory in taskFactories)
             {
                 var task = Task.Run(async () =>
@@ -222,9 +222,9 @@ namespace Microsoft.ExtractorSuite.Core.AsyncOperations
                     try
                     {
                         var result = await factory(_globalCancellation.Token);
-                        
+
                         Interlocked.Increment(ref completedTasks);
-                        
+
                         var progress = new TaskProgress
                         {
                             PercentComplete = (completedTasks * 100) / totalTasks,
@@ -232,9 +232,9 @@ namespace Microsoft.ExtractorSuite.Core.AsyncOperations
                             ItemsProcessed = completedTasks,
                             TotalItems = totalTasks
                         };
-                        
+
                         ReportProgress(cmdlet, progress);
-                        
+
                         return result;
                     }
                     finally
@@ -242,13 +242,13 @@ namespace Microsoft.ExtractorSuite.Core.AsyncOperations
                         semaphore.Release();
                     }
                 });
-                
+
                 tasks.Add(task);
             }
-            
+
             return await Task.WhenAll(tasks);
         }
-        
+
         private void ReportProgress(PSCmdlet cmdlet, TaskProgress progress)
         {
             try
@@ -261,13 +261,13 @@ namespace Microsoft.ExtractorSuite.Core.AsyncOperations
                     PercentComplete = progress.PercentComplete,
                     SecondsRemaining = progress.EstimatedSecondsRemaining ?? -1
                 };
-                
+
                 if (progress.ItemsProcessed.HasValue && progress.TotalItems.HasValue)
                 {
-                    progressRecord.StatusDescription = 
+                    progressRecord.StatusDescription =
                         $"{progress.CurrentOperation} ({progress.ItemsProcessed}/{progress.TotalItems})";
                 }
-                
+
                 cmdlet.WriteProgress(progressRecord);
             }
             catch
@@ -275,17 +275,17 @@ namespace Microsoft.ExtractorSuite.Core.AsyncOperations
                 // Ignore progress reporting errors
             }
         }
-        
+
         private void CleanupCompletedTasks(object? state)
         {
             var cutoffTime = DateTime.UtcNow.AddMinutes(-5);
             var toRemove = _activeTasks
-                .Where(kvp => kvp.Value.Task.IsCompleted && 
-                             kvp.Value.EndTime.HasValue && 
+                .Where(kvp => kvp.Value.Task.IsCompleted &&
+                             kvp.Value.EndTime.HasValue &&
                              kvp.Value.EndTime.Value < cutoffTime)
                 .Select(kvp => kvp.Key)
                 .ToList();
-            
+
             foreach (var id in toRemove)
             {
                 if (_activeTasks.TryRemove(id, out var task))
@@ -294,21 +294,21 @@ namespace Microsoft.ExtractorSuite.Core.AsyncOperations
                 }
             }
         }
-        
+
         public void Dispose()
         {
             _cleanupTimer?.Dispose();
             _globalCancellation?.Cancel();
             _globalCancellation?.Dispose();
-            
+
             foreach (var task in _activeTasks.Values)
             {
                 task.CancellationSource?.Dispose();
             }
-            
+
             _activeTasks.Clear();
         }
-        
+
         private class TrackedTask
         {
             public Guid Id { get; set; }
@@ -322,7 +322,7 @@ namespace Microsoft.ExtractorSuite.Core.AsyncOperations
             public TaskProgress? LastProgress { get; set; }
         }
     }
-    
+
     public class TaskProgress
     {
         public int ActivityId { get; set; }
@@ -333,7 +333,7 @@ namespace Microsoft.ExtractorSuite.Core.AsyncOperations
         public int? ItemsProcessed { get; set; }
         public int? TotalItems { get; set; }
     }
-    
+
     public class TaskStatusInfo
     {
         public Guid Id { get; set; }
