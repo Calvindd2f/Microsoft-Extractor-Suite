@@ -6,6 +6,7 @@ using System.Management.Automation;
 using System.Threading.Tasks;
 using Microsoft.ExtractorSuite.Core;
 using Microsoft.ExtractorSuite.Core.Graph;
+using Microsoft.Graph.Models;
 
 namespace Microsoft.ExtractorSuite.Cmdlets.Identity
 {
@@ -133,16 +134,18 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
             try
             {
                 var allRoles = await _graphClient.GetDirectoryRolesAsync();
-                WriteVerbose($"Found {allRoles?.Count ?? 0} directory roles");
+                var allRolesList = allRoles?.ToList() ?? new List<DirectoryRole>();
+                WriteVerbose($"Found {allRolesList.Count} directory roles");
 
-                foreach (var role in allRoles)
+                foreach (var role in allRolesList)
                 {
                     summary.ProcessedRoles++;
                     var displayName = role.DisplayName;
 
                     var roleMembers = await _graphClient.GetDirectoryRoleMembersAsync(role.Id);
+                    var roleMembersList = roleMembers?.ToList() ?? new List<DirectoryObject>();
 
-                    if (roleMembers == null || (roleMembers?.Count ?? 0) == 0)
+                    if (roleMembersList.Count == 0)
                     {
                         summary.RolesWithoutMembers++;
                         emptyRoles.Add(displayName);
@@ -152,7 +155,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                     summary.RolesWithMembers++;
                     var roleMemberCount = 0;
 
-                    foreach (var member in roleMembers)
+                    foreach (var member in roleMembersList)
                     {
                         // Skip service principals
                         if (member.OdataType?.Contains("servicePrincipal") == true)

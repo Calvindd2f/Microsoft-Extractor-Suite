@@ -178,9 +178,9 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Security
                             RiskLevel = item.RiskLevel?.ToString(),
                             RiskState = item.RiskState?.ToString(),
                             RiskDetail = item.RiskDetail?.ToString(),
-                            Activity = item.Activity?.RiskEventTypes?.FirstOrDefault()?.ToString(),
+                            Activity = string.Empty, // RiskEventTypes is not available on RiskyUserHistoryItem
                             InitiatedBy = item.InitiatedBy,
-                            DateTime = item.Activity?.ActivityDateTime
+                            DateTime = item.RiskLastUpdatedDateTime
                         });
                     }
                 }

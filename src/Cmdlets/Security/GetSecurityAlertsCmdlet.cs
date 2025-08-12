@@ -185,10 +185,10 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Security
                 Severity = alert.Severity?.ToString(),
                 Status = alert.Status?.ToString(),
                 CreatedDateTime = alert.CreatedDateTime?.DateTime,
-                LastModifiedDateTime = alert.UpdatedDateTime?.DateTime,
+                LastModifiedDateTime = null, // LastModifiedDateTime not available in Alert model
                 AssignedTo = alert.AssignedTo ?? string.Empty,
                 Description = alert.Description ?? string.Empty,
-                Confidence = alert.AdditionalData?.TryGetValue("confidence", out var confidence) == true ? confidence?.ToString() ?? string.Empty : string.Empty,
+                Confidence = null, // confidence not directly available in Alert model
                 AzureTenantId = alert.TenantId ?? string.Empty,
                 Feedback = alert.Status?.ToString() ?? string.Empty
             };

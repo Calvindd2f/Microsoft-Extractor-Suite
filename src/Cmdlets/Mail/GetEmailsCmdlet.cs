@@ -266,7 +266,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
                 if (emailStream != null)
                 {
                     using var fileStream = File.Create(filePath);
-                    await emailStream.CopyToAsync(fileStream, cancellationToken);
+                    await emailStream.CopyToAsync(fileStream);
                 }
 
                 result.Success = true;

@@ -218,7 +218,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.AuditLog
                 // Merge output if requested
                 if (MergeOutput)
                 {
-                    await MergeOutputFiles();
+                    MergeOutputFiles().GetAwaiter().GetResult();
                 }
             }
             catch (Exception ex)

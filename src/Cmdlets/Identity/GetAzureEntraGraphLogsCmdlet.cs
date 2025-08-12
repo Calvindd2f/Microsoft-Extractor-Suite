@@ -187,7 +187,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                             requestConfiguration.QueryParameters.Top = 1000;
                         }, cancellationToken);
 
-                    var pageIterator = PageIterator<SignIn, SignInCollectionResponse>
+                    var pageIterator = PageIterator<Microsoft.Graph.Models.SignIn, SignInCollectionResponse>
                         .CreatePageIterator(
                             graphClient,
                             signIns,
@@ -340,7 +340,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
             return filter;
         }
 
-        private EntraLogEntry MapSignInToLogEntry(Microsoft.Graph.SignIn signIn, string eventType)
+        private EntraLogEntry MapSignInToLogEntry(Microsoft.Graph.Models.SignIn signIn, string eventType)
         {
             return new EntraLogEntry
             {

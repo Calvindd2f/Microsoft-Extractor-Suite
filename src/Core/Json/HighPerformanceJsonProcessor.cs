@@ -342,7 +342,7 @@ namespace Microsoft.ExtractorSuite.Core.Json
 
                 foreach (var segment in buffer)
                 {
-                    await stream.WriteAsync(segment.Array, segment.Offset, segment.Count, cancellationToken);
+                    await stream.WriteAsync(segment.ToArray(), 0, segment.Length, cancellationToken);
                 }
 
                 reader.AdvanceTo(buffer.End);

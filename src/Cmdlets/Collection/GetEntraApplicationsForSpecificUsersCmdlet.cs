@@ -87,7 +87,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Collection
                 try
                 {
                     var user = await graphClient.Users[userId]
-                        .GetAsync(cancellationToken);
+                        .GetAsync(requestConfiguration => {}, cancellationToken);
 
                     validUsers.Add(user);
                     WriteVerboseWithTimestamp($"Resolved user: {user.UserPrincipalName}");
@@ -113,7 +113,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Collection
                 try
                 {
                     var ownedObjects = await graphClient.Users[user.Id].OwnedObjects
-                        .GetAsync(cancellationToken);
+                        .GetAsync(requestConfiguration => {}, cancellationToken);
 
                     var pageIterator = PageIterator<DirectoryObject, DirectoryObjectCollectionResponse>
                         .CreatePageIterator(
@@ -121,7 +121,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Collection
                             ownedObjects,
                             async (obj) =>
                             {
-                                if (obj.ODataType == "#microsoft.graph.application")
+                                if (obj.GetType().Name == "Application")
                                 {
                                     await ProcessOwnedApplication(
                                         graphClient,
@@ -146,7 +146,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Collection
                 try
                 {
                     var assignments = await graphClient.Users[user.Id].AppRoleAssignments
-                        .GetAsync(cancellationToken);
+                        .GetAsync(requestConfiguration => {}, cancellationToken);
 
                     var assignmentIterator = PageIterator<AppRoleAssignment, AppRoleAssignmentCollectionResponse>
                         .CreatePageIterator(
@@ -156,7 +156,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Collection
                             {
                                 await ProcessAssignedApplication(
                                     graphClient,
-                                    assignment.ResourceId,
+                                    assignment.ResourceId?.ToString(),
                                     user.UserPrincipalName,
                                     processedAppIds,
                                     results,
@@ -235,7 +235,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Collection
                     ApplicationName = app.DisplayName,
                     ApplicationId = app.AppId,
                     ObjectId = app.Id,
-                    PublisherName = servicePrincipal?.PublisherName ?? string.Empty,
+                    PublisherName = string.Empty, // ServicePrincipal doesn't have PublisherName property
                     ApplicationType = DetermineApplicationType(servicePrincipal),
                     CreatedDateTime = app.CreatedDateTime?.DateTime,
                     ServicePrincipalEnabled = servicePrincipal?.AccountEnabled?.ToString() ?? "N/A",

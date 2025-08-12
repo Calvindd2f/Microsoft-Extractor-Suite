@@ -70,7 +70,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
 
             if (Logger?.CurrentLevel == LogLevel.Debug)
             {
-                Logger.LogDebug($"PowerShell Version: {PSVersionTable.PSVersion}");
+                Logger.LogDebug($"PowerShell Version: {this.Host?.Version ?? new Version("7.0")}");
                 Logger.LogDebug("Input parameters:");
                 Logger.LogDebug($"  OutputDir: '{OutputDir}'");
                 Logger.LogDebug($"  Encoding: '{Encoding}'");
