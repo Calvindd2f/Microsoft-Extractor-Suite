@@ -108,7 +108,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                 }, cancellationToken);
 
                 // Process all pages using pagination
-                var pageIterator = Microsoft.Graph.PageIterator<User, UserCollectionResponse>
+                var pageIterator = PageIterator<User, UserCollectionResponse>
                     .CreatePageIterator(
                         graphClient,
                         usersResponse,

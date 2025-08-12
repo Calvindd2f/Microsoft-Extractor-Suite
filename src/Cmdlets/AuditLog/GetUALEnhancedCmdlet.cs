@@ -611,12 +611,14 @@ namespace Microsoft.ExtractorSuite.Cmdlets.AuditLog
             {
                 case "JSONL":
                     await _jsonProcessor!.SerializeAsync(stream, record, false, cancellationToken);
-                    await stream.WriteAsync(Encoding.UTF8.GetBytes("\n"), cancellationToken);
+                    var newlineBytes = Encoding.UTF8.GetBytes("\n");
+                    await stream.WriteAsync(newlineBytes, 0, newlineBytes.Length, cancellationToken);
                     break;
 
                 case "JSON":
                     await _jsonProcessor!.SerializeAsync(stream, record, true, cancellationToken);
-                    await stream.WriteAsync(Encoding.UTF8.GetBytes(",\n"), cancellationToken);
+                    var commaNewlineBytes = Encoding.UTF8.GetBytes(",\n");
+                    await stream.WriteAsync(commaNewlineBytes, 0, commaNewlineBytes.Length, cancellationToken);
                     break;
 
                 case "CSV":

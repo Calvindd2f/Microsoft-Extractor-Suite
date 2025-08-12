@@ -130,11 +130,11 @@ namespace Microsoft.ExtractorSuite.Cmdlets.AuditLog
                     AuditBypassEnabled = bypassStatus,
                     DefaultAuditSet = mailbox.DefaultAuditSet != null ? string.Join(", ", mailbox.DefaultAuditSet.OrderBy(x => x)) : string.Empty,
                     OwnerAuditActions = mailbox.AuditOwner != null ? string.Join(", ", mailbox.AuditOwner.OrderBy(x => x)) : string.Empty,
-                    OwnerAuditActionsCount = mailbox.AuditOwner?.Count ?? 0,
+                    OwnerAuditActionsCount = mailbox.AuditOwner?.Count() ?? 0,
                     DelegateAuditActions = mailbox.AuditDelegate != null ? string.Join(", ", mailbox.AuditDelegate.OrderBy(x => x)) : string.Empty,
-                    DelegateAuditActionsCount = mailbox.AuditDelegate?.Count ?? 0,
+                    DelegateAuditActionsCount = mailbox.AuditDelegate?.Count() ?? 0,
                     AdminAuditActions = mailbox.AuditAdmin != null ? string.Join(", ", mailbox.AuditAdmin.OrderBy(x => x)) : string.Empty,
-                    AdminAuditActionsCount = mailbox.AuditAdmin?.Count ?? 0,
+                    AdminAuditActionsCount = mailbox.AuditAdmin?.Count() ?? 0,
                     EffectiveAuditState = GetEffectiveAuditState(summary.OrgWideAuditingEnabled, bypassStatus, mailbox.AuditEnabled)
                 };
 

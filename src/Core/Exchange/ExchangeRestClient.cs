@@ -282,7 +282,7 @@ namespace Microsoft.ExtractorSuite.Core.Exchange
 
         #region Transport Rules via REST
 
-        public async Task<TransportRule[]> GetTransportRulesAsync(CancellationToken cancellationToken = default)
+        public async Task<TransportRule[]> GetTransportRulesTypedAsync(CancellationToken cancellationToken = default)
         {
             await ThrottleRequestAsync(cancellationToken);
 
@@ -406,6 +406,173 @@ namespace Microsoft.ExtractorSuite.Core.Exchange
             }
 
             return users.ToArray();
+        }
+
+        #endregion
+
+        #region Missing Methods
+
+        /// <summary>
+        /// Gets all mailboxes in the tenant
+        /// </summary>
+        public async Task<string[]> GetMailboxesAsync(CancellationToken cancellationToken = default)
+        {
+            return await GetAllMailboxesAsync(cancellationToken);
+        }
+
+        /// <summary>
+        /// Gets mailbox permissions for a specific mailbox
+        /// </summary>
+        public async Task<object[]> GetMailboxPermissionsAsync(string mailbox, CancellationToken cancellationToken = default)
+        {
+            await ThrottleRequestAsync(cancellationToken);
+
+            var url = $"{ExchangeAdminApiUrl}/{_authManager.CurrentTenantId}/MailboxPermission?Identity={Uri.EscapeDataString(mailbox)}";
+
+            var response = await ExecuteWithRetryAsync(
+                () => _httpClient.GetAsync(url, cancellationToken),
+                cancellationToken);
+
+            var json = await response.Content.ReadAsStringAsync();
+            var result = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(json, _jsonOptions);
+            
+            return result?["value"].EnumerateArray().Select(x => (object)x).ToArray() ?? Array.Empty<object>();
+        }
+
+        /// <summary>
+        /// Gets recipient permissions for a specific recipient
+        /// </summary>
+        public async Task<object[]> GetRecipientPermissionsAsync(string recipient, CancellationToken cancellationToken = default)
+        {
+            await ThrottleRequestAsync(cancellationToken);
+
+            var url = $"{ExchangeAdminApiUrl}/{_authManager.CurrentTenantId}/RecipientPermission?Identity={Uri.EscapeDataString(recipient)}";
+
+            var response = await ExecuteWithRetryAsync(
+                () => _httpClient.GetAsync(url, cancellationToken),
+                cancellationToken);
+
+            var json = await response.Content.ReadAsStringAsync();
+            var result = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(json, _jsonOptions);
+            
+            return result?["value"].EnumerateArray().Select(x => (object)x).ToArray() ?? Array.Empty<object>();
+        }
+
+        /// <summary>
+        /// Gets send-as permissions for a specific mailbox
+        /// </summary>
+        public async Task<object[]> GetSendAsPermissionsAsync(string mailbox, CancellationToken cancellationToken = default)
+        {
+            await ThrottleRequestAsync(cancellationToken);
+
+            var url = $"{ExchangeAdminApiUrl}/{_authManager.CurrentTenantId}/SendAsPermission?Identity={Uri.EscapeDataString(mailbox)}";
+
+            var response = await ExecuteWithRetryAsync(
+                () => _httpClient.GetAsync(url, cancellationToken),
+                cancellationToken);
+
+            var json = await response.Content.ReadAsStringAsync();
+            var result = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(json, _jsonOptions);
+            
+            return result?["value"].EnumerateArray().Select(x => (object)x).ToArray() ?? Array.Empty<object>();
+        }
+
+        /// <summary>
+        /// Gets mailbox rules for a specific mailbox
+        /// </summary>
+        public async Task<object[]> GetMailboxRulesAsync(string mailbox, CancellationToken cancellationToken = default)
+        {
+            var rules = await GetInboxRulesAsync(mailbox, cancellationToken);
+            return rules.Cast<object>().ToArray();
+        }
+
+        /// <summary>
+        /// Gets transport rules (alternative overload)
+        /// </summary>
+        public async Task<object[]> GetTransportRulesAsync(CancellationToken cancellationToken = default)
+        {
+            var rules = await GetTransportRulesInternalAsync(cancellationToken);
+            return rules.Cast<object>().ToArray();
+        }
+
+        private async Task<TransportRule[]> GetTransportRulesInternalAsync(CancellationToken cancellationToken = default)
+        {
+            return await GetTransportRulesTypedAsync(cancellationToken);
+        }
+
+        /// <summary>
+        /// Searches message trace logs
+        /// </summary>
+        public async IAsyncEnumerable<object> SearchMessageTraceAsync(
+            DateTime startDate,
+            DateTime endDate,
+            string? senderAddress = null,
+            string? recipientAddress = null,
+            string? messageId = null,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            await foreach (var result in GetMessageTraceAsync(startDate, endDate, senderAddress, recipientAddress, messageId, cancellationToken: cancellationToken))
+            {
+                yield return result;
+            }
+        }
+
+        /// <summary>
+        /// Gets admin audit log entries
+        /// </summary>
+        public async IAsyncEnumerable<object> GetAdminAuditLogEntriesAsync(
+            DateTime startDate,
+            DateTime endDate,
+            string[]? operations = null,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            await ThrottleRequestAsync(cancellationToken);
+
+            var requestBody = new
+            {
+                StartDate = startDate.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss"),
+                EndDate = endDate.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss"),
+                Operations = operations,
+                ResultSize = 5000
+            };
+
+            var url = $"{ExchangeAdminApiUrl}/{_authManager.CurrentTenantId}/AdminAuditLogSearch";
+
+            using var content = new StringContent(
+                JsonSerializer.Serialize(requestBody, _jsonOptions),
+                Encoding.UTF8,
+                "application/json");
+
+            var response = await ExecuteWithRetryAsync(
+                () => _httpClient.PostAsync(url, content, cancellationToken),
+                cancellationToken);
+
+            var json = await response.Content.ReadAsStringAsync();
+            var result = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(json, _jsonOptions);
+
+            if (result?["value"].EnumerateArray() != null)
+            {
+                foreach (var entry in result["value"].EnumerateArray())
+                {
+                    yield return entry;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Searches mailbox audit logs
+        /// </summary>
+        public async IAsyncEnumerable<object> SearchMailboxAuditLogAsync(
+            string mailbox,
+            DateTime startDate,
+            DateTime endDate,
+            string[]? operations = null,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            await foreach (var record in GetMailboxAuditLogAsync(mailbox, startDate, endDate, operations, cancellationToken))
+            {
+                yield return record;
+            }
         }
 
         #endregion

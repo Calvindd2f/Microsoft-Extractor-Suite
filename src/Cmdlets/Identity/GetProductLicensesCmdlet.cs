@@ -6,6 +6,7 @@ using System.Management.Automation;
 using System.Threading.Tasks;
 using Microsoft.ExtractorSuite.Core;
 using Microsoft.ExtractorSuite.Core.Graph;
+using Microsoft.Graph.Models;
 
 namespace Microsoft.ExtractorSuite.Cmdlets.Identity
 {
@@ -46,11 +47,15 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
         [ValidateSet("All", "ByUser", "Summary")]
         public string Mode { get; set; } = "All";
 
-        private readonly GraphApiClient _graphClient;
+        private GraphApiClient? _graphClient;
 
-        public GetProductLicensesCmdlet()
+        protected override void BeginProcessing()
         {
-            _graphClient = new GraphApiClient();
+            base.BeginProcessing();
+            if (AuthManager.GraphClient != null)
+            {
+                _graphClient = new GraphApiClient(AuthManager.GraphClient);
+            }
         }
 
         protected override async Task ProcessRecordAsync()
@@ -58,7 +63,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
             WriteVerbose("=== Starting Product Licenses Collection ===");
 
             // Check for authentication
-            if (!await _graphClient.IsConnectedAsync())
+            if (_graphClient == null || !await _graphClient.IsConnectedAsync())
             {
                 WriteErrorWithTimestamp("Not connected to Microsoft Graph. Please run Connect-M365 first.");
                 return;
@@ -129,7 +134,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
             {
                 var license = new ProductLicense
                 {
-                    SkuId = sku.SkuId,
+                    SkuId = sku.SkuId?.ToString() ?? string.Empty,
                     SkuPartNumber = sku.SkuPartNumber,
                     ProductName = GetProductName(sku.SkuPartNumber),
                     ConsumedUnits = sku.ConsumedUnits ?? 0,
@@ -164,7 +169,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
             WriteVerbose("Processing licenses by user...");
 
             var userLicenses = new List<UserLicense>();
-            var users = new List<dynamic>();
+            var users = new List<User>();
 
             if (UserIds != null && UserIds.Length > 0)
             {
@@ -263,7 +268,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
             {
                 foreach (var sku2 in subscribedSkus)
                 {
-                    if (sku1.SkuId == sku2.SkuId) continue;
+                    if (sku1.SkuId?.ToString() == sku2.SkuId?.ToString()) continue;
 
                     var conflicts = FindServicePlanConflicts(sku1.ServicePlans, sku2.ServicePlans);
                     if (conflicts.Count > 0)
@@ -312,7 +317,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                                 UserId = user.Id,
                                 UserPrincipalName = user.UserPrincipalName,
                                 DisplayName = user.DisplayName,
-                                SkuId = assignedLicense.SkuId,
+                                SkuId = assignedLicense.SkuId?.ToString() ?? string.Empty,
                                 DisabledPlans = assignedLicense.DisabledPlans?.ToList() ?? new List<string>(),
                                 AssignmentSource = DetermineAssignmentSource(assignedLicense),
                                 LastUpdated = DateTime.Now
@@ -340,7 +345,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
             }
         }
 
-        private async Task<UserLicense> ProcessUserLicenseAsync(dynamic user)
+        private async Task<UserLicense> ProcessUserLicenseAsync(User user)
         {
             var userLicense = new UserLicense
             {
@@ -396,7 +401,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                 {
                     var servicePlan = new ServicePlan
                     {
-                        ServicePlanId = plan.ServicePlanId,
+                        ServicePlanId = plan.ServicePlanId?.ToString() ?? string.Empty,
                         ServicePlanName = plan.ServicePlanName,
                         ProvisioningStatus = plan.ProvisioningStatus,
                         AppliesTo = plan.AppliesTo

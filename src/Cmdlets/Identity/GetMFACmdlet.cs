@@ -58,12 +58,6 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
 
             try
             {
-                // Build user query
-                var request = graphClient.Users
-                    .Request()
-                    .Select("id,displayName,userPrincipalName,mail,accountEnabled,userType,createdDateTime,signInActivity,authenticationMethods")
-                    .Top(999);
-
                 // Apply filters
                 var filters = new List<string>();
 
@@ -84,21 +78,33 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                     filters.Add($"({userFilter})");
                 }
 
-                if (filters.Any())
-                {
-                    request = request.Filter(string.Join(" and ", filters));
-                }
+                // Build user query with v5 syntax
+                var usersResponse = await graphClient.Users
+                    .GetAsync(requestConfiguration =>
+                    {
+                        requestConfiguration.QueryParameters.Select = new string[]
+                        {
+                            "id", "displayName", "userPrincipalName", "mail", "accountEnabled", 
+                            "userType", "createdDateTime", "signInActivity"
+                        };
+                        requestConfiguration.QueryParameters.Top = 999;
+                        
+                        if (filters.Any())
+                        {
+                            requestConfiguration.QueryParameters.Filter = string.Join(" and ", filters);
+                        }
+                    }, cancellationToken);
 
-                // Process users
-                var pageIterator = PageIterator<User>
+                // Process users with v5 PageIterator
+                var pageIterator = PageIterator<User, UserCollectionResponse>
                     .CreatePageIterator(
                         graphClient,
-                        request,
-                        async (user) =>
+                        usersResponse,
+                        (user) =>
                         {
                             try
                             {
-                                var mfaStatus = await GetUserMFAStatusAsync(graphClient, user, cancellationToken);
+                                var mfaStatus = GetUserMFAStatusAsync(graphClient, user, cancellationToken).GetAwaiter().GetResult();
                                 mfaStatuses.Add(mfaStatus);
 
                                 processedCount++;
@@ -162,21 +168,23 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
             {
                 // Get authentication methods
                 var authMethods = await graphClient.Users[user.Id].Authentication.Methods
-                    .Request()
-                    .GetAsync(cancellationToken);
+                    .GetAsync();
 
                 mfaStatus.AuthenticationMethods = new List<string>();
                 mfaStatus.HasMFAEnabled = false;
 
-                foreach (var method in authMethods)
+                if (authMethods?.Value != null)
                 {
-                    var methodType = GetAuthMethodType(method);
-                    mfaStatus.AuthenticationMethods.Add(methodType);
-
-                    // Check if this is an MFA method
-                    if (IsMethodMFA(methodType))
+                    foreach (var method in authMethods.Value)
                     {
-                        mfaStatus.HasMFAEnabled = true;
+                        var methodType = GetAuthMethodType(method);
+                        mfaStatus.AuthenticationMethods.Add(methodType);
+
+                        // Check if this is an MFA method
+                        if (IsMethodMFA(methodType))
+                        {
+                            mfaStatus.HasMFAEnabled = true;
+                        }
                     }
                 }
 
@@ -195,9 +203,9 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                 mfaStatus.ConditionalAccessEnforced = await CheckConditionalAccessMFAAsync(
                     graphClient, user.Id, cancellationToken);
             }
-            catch (ServiceException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Forbidden)
+            catch (ServiceException ex) when (ex.ResponseStatusCode == (int)System.Net.HttpStatusCode.Forbidden)
             {
-                mfaStatus.MFAStatus = "Unknown - Insufficient Permissions";
+                mfaStatus.Status = "Unknown - Insufficient Permissions";
                 WriteVerboseWithTimestamp($"Insufficient permissions to get MFA details for {user.UserPrincipalName}");
             }
 
@@ -206,7 +214,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
 
         private string GetAuthMethodType(AuthenticationMethod method)
         {
-            return method.ODataType switch
+            return method.OdataType switch
             {
                 "#microsoft.graph.phoneAuthenticationMethod" => "Phone",
                 "#microsoft.graph.emailAuthenticationMethod" => "Email",
@@ -216,7 +224,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                 "#microsoft.graph.microsoftAuthenticatorAuthenticationMethod" => "Microsoft Authenticator",
                 "#microsoft.graph.temporaryAccessPassAuthenticationMethod" => "Temporary Access Pass",
                 "#microsoft.graph.softwareOathAuthenticationMethod" => "Software OATH",
-                _ => method.ODataType?.Replace("#microsoft.graph.", "").Replace("AuthenticationMethod", "") ?? "Unknown"
+                _ => method.OdataType?.Replace("#microsoft.graph.", "").Replace("AuthenticationMethod", "") ?? "Unknown"
             };
         }
 
@@ -312,11 +320,11 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                         requestConfiguration.QueryParameters.Filter = "state eq 'enabled'";
                     }, cancellationToken);
                 
-                var policies = response?.Value ?? new List<Microsoft.Graph.ConditionalAccessPolicy>();
+                var policies = response?.Value ?? new List<ConditionalAccessPolicy>();
 
                 foreach (var policy in policies)
                 {
-                    if (policy.GrantControls?.BuiltInControls?.Contains("mfa") == true)
+                    if (policy.GrantControls?.BuiltInControls?.Contains(ConditionalAccessGrantControl.Mfa) == true)
                     {
                         // Check if user is in scope of this policy
                         // This would require evaluating conditions
@@ -397,7 +405,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                     m.CreatedDateTime,
                     m.LastSignInDateTime,
                     m.HasMFAEnabled,
-                    m.MFAStatus,
+                    m.Status,
                     AuthMethods = string.Join("; ", m.AuthenticationMethods),
                     m.DefaultMFAMethod,
                     m.PerUserMFAState,

@@ -249,7 +249,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Collection
                     Output = Output,
                     MergeOutput = MergeOutput,
                     Encoding = Encoding,
-                    LogLevel = LogLevel
+                    LogLevel = LogLevel.ToString()
                 });
 
                 taskResult.Status = success ? MESTaskStatus.Completed : MESTaskStatus.Failed;
@@ -317,7 +317,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Collection
                 "Get-AllRoleActivity"
             };
 
-            return userIds.Length > 0 && userSpecificSkipTasks.Contains(taskName);
+            return userIds.Length > 0 && userSpecificSkipTasks.Contains((string)taskName);
         }
 
         private void LogTaskProgress(string taskName, MESTaskStatus status, string? errorMessage = null)

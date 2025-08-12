@@ -6,6 +6,7 @@ using System.Management.Automation;
 using System.Threading.Tasks;
 using Microsoft.ExtractorSuite.Core;
 using Microsoft.ExtractorSuite.Core.Exchange;
+using Microsoft.ExtractorSuite.Models.Exchange;
 
 namespace Microsoft.ExtractorSuite.Cmdlets.Mail
 {
@@ -71,7 +72,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
 
         public GetMessageTraceLogCmdlet()
         {
-            _exchangeClient = new ExchangeRestClient();
+            _exchangeClient = new ExchangeRestClient(AuthManager);
         }
 
         protected override async Task ProcessRecordAsync()
@@ -237,8 +238,19 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
                     try
                     {
                         WriteVerbose($"Processing message trace for: {userId}");
-                        var userMessages = await _exchangeClient.GetMessageTraceAsync(userParameters);
-                        messages.AddRange(ProcessMessageTraceResults(userMessages, summary));
+                        var startDate = (DateTime)userParameters["StartDate"];
+                        var endDate = (DateTime)userParameters["EndDate"];
+                        
+                        var userMessageTraces = new List<MessageTrace>();
+                        await foreach (var result in _exchangeClient.GetMessageTraceAsync(startDate, endDate,
+                            userParameters.ContainsKey("SenderAddress") ? userParameters["SenderAddress"]?.ToString() : null,
+                            userParameters.ContainsKey("RecipientAddress") ? userParameters["RecipientAddress"]?.ToString() : null,
+                            userParameters.ContainsKey("MessageId") ? userParameters["MessageId"]?.ToString() : null))
+                        {
+                            if (result.Value != null)
+                                userMessageTraces.AddRange(result.Value);
+                        }
+                        messages.AddRange(ProcessMessageTraceResults(userMessageTraces, summary));
                     }
                     catch (Exception ex)
                     {
@@ -249,8 +261,19 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
             else
             {
                 // Single query
-                var results = await _exchangeClient.GetMessageTraceAsync(searchParameters);
-                messages.AddRange(ProcessMessageTraceResults(results, summary));
+                var startDate = (DateTime)searchParameters["StartDate"];
+                var endDate = (DateTime)searchParameters["EndDate"];
+                
+                var messageTraces = new List<MessageTrace>();
+                await foreach (var result in _exchangeClient.GetMessageTraceAsync(startDate, endDate,
+                    searchParameters.ContainsKey("SenderAddress") ? searchParameters["SenderAddress"]?.ToString() : null,
+                    searchParameters.ContainsKey("RecipientAddress") ? searchParameters["RecipientAddress"]?.ToString() : null,
+                    searchParameters.ContainsKey("MessageId") ? searchParameters["MessageId"]?.ToString() : null))
+                {
+                    if (result.Value != null)
+                        messageTraces.AddRange(result.Value);
+                }
+                messages.AddRange(ProcessMessageTraceResults(messageTraces, summary));
             }
 
             return messages;
@@ -275,8 +298,19 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
                     try
                     {
                         WriteVerbose($"Processing historical message trace for: {userId}");
-                        var userMessages = await _exchangeClient.GetHistoricalMessageTraceAsync(userParameters);
-                        messages.AddRange(ProcessMessageTraceResults(userMessages, summary));
+                        var startDate = (DateTime)userParameters["StartDate"];
+                        var endDate = (DateTime)userParameters["EndDate"];
+                        
+                        var userMessageTraces = new List<MessageTrace>();
+                        await foreach (var result in _exchangeClient.GetMessageTraceAsync(startDate, endDate,
+                            userParameters.ContainsKey("SenderAddress") ? userParameters["SenderAddress"]?.ToString() : null,
+                            userParameters.ContainsKey("RecipientAddress") ? userParameters["RecipientAddress"]?.ToString() : null,
+                            userParameters.ContainsKey("MessageId") ? userParameters["MessageId"]?.ToString() : null))
+                        {
+                            if (result.Value != null)
+                                userMessageTraces.AddRange(result.Value);
+                        }
+                        messages.AddRange(ProcessMessageTraceResults(userMessageTraces, summary));
                     }
                     catch (Exception ex)
                     {
@@ -287,14 +321,25 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
             else
             {
                 // Single query
-                var results = await _exchangeClient.GetHistoricalMessageTraceAsync(searchParameters);
-                messages.AddRange(ProcessMessageTraceResults(results, summary));
+                var startDate = (DateTime)searchParameters["StartDate"];
+                var endDate = (DateTime)searchParameters["EndDate"];
+                
+                var messageTraces = new List<MessageTrace>();
+                await foreach (var result in _exchangeClient.GetMessageTraceAsync(startDate, endDate,
+                    searchParameters.ContainsKey("SenderAddress") ? searchParameters["SenderAddress"]?.ToString() : null,
+                    searchParameters.ContainsKey("RecipientAddress") ? searchParameters["RecipientAddress"]?.ToString() : null,
+                    searchParameters.ContainsKey("MessageId") ? searchParameters["MessageId"]?.ToString() : null))
+                {
+                    if (result.Value != null)
+                        messageTraces.AddRange(result.Value);
+                }
+                messages.AddRange(ProcessMessageTraceResults(messageTraces, summary));
             }
 
             return messages;
         }
 
-        private List<MessageTraceEntry> ProcessMessageTraceResults(IEnumerable<dynamic> results, MessageTraceLogSummary summary)
+        private List<MessageTraceEntry> ProcessMessageTraceResults(IEnumerable<MessageTrace> results, MessageTraceLogSummary summary)
         {
             var messages = new List<MessageTraceEntry>();
 
@@ -308,12 +353,12 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
                         SenderAddress = result.SenderAddress,
                         RecipientAddress = result.RecipientAddress,
                         Subject = result.Subject,
-                        Status = result.Status?.ToString(),
+                        Status = result.Status,
                         ToIP = result.ToIP,
                         FromIP = result.FromIP,
-                        Size = result.Size ?? 0,
+                        Size = result.Size,
                         MessageId = result.MessageId,
-                        MessageTraceId = result.MessageTraceId?.ToString()
+                        MessageTraceId = result.MessageTraceId.ToString()
                     };
 
                     messages.Add(entry);

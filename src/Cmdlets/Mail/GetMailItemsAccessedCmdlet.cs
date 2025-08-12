@@ -65,7 +65,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
 
         public GetMailItemsAccessedCmdlet()
         {
-            _exchangeClient = new ExchangeRestClient();
+            _exchangeClient = new ExchangeRestClient(AuthManager);
         }
 
         protected override async Task ProcessRecordAsync()
@@ -158,12 +158,22 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
             }
 
             // Retrieve the actual records
-            searchParams["ResultSize"] = 5000;
-            var records = await _exchangeClient.SearchUnifiedAuditLogAsync(searchParams);
+            var userIds = !string.IsNullOrEmpty(UserIds) ? UserIds.Split(',').Select(u => u.Trim()).ToArray() : null;
+            var records = await _exchangeClient.SearchUnifiedAuditLogAsync(
+                StartDate,
+                EndDate,
+                null, // sessionId
+                new[] { "MailItemsAccessed" }, // operations
+                null, // recordTypes
+                userIds,
+                5000, // resultSize
+                CancellationToken);
 
             var results = new List<MailItemsAccessedSession>();
 
-            foreach (var record in records)
+            if (records?.Value != null)
+            {
+                foreach (var record in records.Value)
             {
                 var auditData = JsonDocument.Parse(record.AuditData);
 
@@ -186,6 +196,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
 
                 summary.OperationCount += session.OperationCount;
                 results.Add(session);
+            }
             }
 
             // Apply additional filtering for IP address if specified
@@ -363,7 +374,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
             var startDate = (DateTime)searchParams["StartDate"];
             var endDate = (DateTime)searchParams["EndDate"];
             var operations = searchParams.ContainsKey("Operations") ? new[] { (string)searchParams["Operations"] } : null;
-            var userIds = !string.IsNullOrEmpty(Sessions) ? new[] { Sessions } : null;
+            var userIds = !string.IsNullOrEmpty(UserIds) ? UserIds.Split(',').Select(u => u.Trim()).ToArray() : null;
 
             var records = await _exchangeClient.SearchUnifiedAuditLogAsync(
                 startDate,

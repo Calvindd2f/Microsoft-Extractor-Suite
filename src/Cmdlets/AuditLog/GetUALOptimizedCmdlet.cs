@@ -218,7 +218,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.AuditLog
                 // Merge output if requested
                 if (MergeOutput)
                 {
-                    MergeOutputFiles();
+                    await MergeOutputFiles();
                 }
             }
             catch (Exception ex)
@@ -572,7 +572,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.AuditLog
             return Path.Combine(_outputDirectory, fileName);
         }
 
-        private void MergeOutputFiles()
+        private async Task MergeOutputFiles()
         {
             try
             {

@@ -255,9 +255,9 @@ namespace Microsoft.ExtractorSuite.Cmdlets.AuditLog
 
                     case "new-inboxrule":
                     case "set-inboxrule":
-                        processedEntry.Properties.Add(new PSNoteProperty("RuleName", (string?)data.Parameters?.FirstOrDefault(p => p.Name == "Name")?.Value));
-                        processedEntry.Properties.Add(new PSNoteProperty("ForwardTo", (string?)data.Parameters?.FirstOrDefault(p => p.Name == "ForwardTo")?.Value));
-                        processedEntry.Properties.Add(new PSNoteProperty("DeleteMessage", (string?)data.Parameters?.FirstOrDefault(p => p.Name == "DeleteMessage")?.Value));
+                        processedEntry.Properties.Add(new PSNoteProperty("RuleName", (string?)data.Parameters?.FirstOrDefault((Func<dynamic, bool>)(p => p.Name == "Name"))?.Value));
+                        processedEntry.Properties.Add(new PSNoteProperty("ForwardTo", (string?)data.Parameters?.FirstOrDefault((Func<dynamic, bool>)(p => p.Name == "ForwardTo"))?.Value));
+                        processedEntry.Properties.Add(new PSNoteProperty("DeleteMessage", (string?)data.Parameters?.FirstOrDefault((Func<dynamic, bool>)(p => p.Name == "DeleteMessage"))?.Value));
                         break;
                 }
 

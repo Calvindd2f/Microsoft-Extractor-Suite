@@ -239,7 +239,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.AuditLog
             WriteVerboseWithTimestamp($"Creating audit log query: {SearchName}");
 
             using var httpClient = new HttpClient();
-            var accessToken = await AuthManager.GetAccessTokenAsync(cancellationToken);
+            var accessToken = await AuthManager.GetAccessTokenAsync(new string[] { "https://graph.microsoft.com/.default" }, cancellationToken);
             httpClient.DefaultRequestHeaders.Authorization = 
                 new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
 
@@ -250,11 +250,11 @@ namespace Microsoft.ExtractorSuite.Cmdlets.AuditLog
 
             if (!response.IsSuccessStatusCode)
             {
-                var error = await response.Content.ReadAsStringAsync(cancellationToken);
+                var error = await response.Content.ReadAsStringAsync();
                 throw new InvalidOperationException($"Failed to create audit log query: {response.StatusCode} - {error}");
             }
 
-            var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
+            var responseContent = await response.Content.ReadAsStringAsync();
             using var doc = JsonDocument.Parse(responseContent);
             
             if (doc.RootElement.TryGetProperty("id", out var idElement))
@@ -277,7 +277,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.AuditLog
             WriteVerboseWithTimestamp("Waiting for query to complete...");
 
             using var httpClient = new HttpClient();
-            var accessToken = await AuthManager.GetAccessTokenAsync(cancellationToken);
+            var accessToken = await AuthManager.GetAccessTokenAsync(new string[] { "https://graph.microsoft.com/.default" }, cancellationToken);
             httpClient.DefaultRequestHeaders.Authorization = 
                 new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
 
@@ -292,11 +292,11 @@ namespace Microsoft.ExtractorSuite.Cmdlets.AuditLog
                 
                 if (!response.IsSuccessStatusCode)
                 {
-                    var error = await response.Content.ReadAsStringAsync(cancellationToken);
+                    var error = await response.Content.ReadAsStringAsync();
                     throw new InvalidOperationException($"Failed to check query status: {response.StatusCode} - {error}");
                 }
 
-                var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
+                var responseContent = await response.Content.ReadAsStringAsync();
                 using var doc = JsonDocument.Parse(responseContent);
                 
                 if (doc.RootElement.TryGetProperty("status", out var statusElement))
@@ -342,7 +342,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.AuditLog
             WriteVerboseWithTimestamp("Starting to retrieve records...");
 
             using var httpClient = new HttpClient();
-            var accessToken = await AuthManager.GetAccessTokenAsync(cancellationToken);
+            var accessToken = await AuthManager.GetAccessTokenAsync(new string[] { "https://graph.microsoft.com/.default" }, cancellationToken);
             httpClient.DefaultRequestHeaders.Authorization = 
                 new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
 
@@ -360,7 +360,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.AuditLog
                     
                     if (!response.IsSuccessStatusCode)
                     {
-                        var error = await response.Content.ReadAsStringAsync(cancellationToken);
+                        var error = await response.Content.ReadAsStringAsync();
                         WriteWarningWithTimestamp($"Failed to retrieve records: {response.StatusCode} - {error}");
                         
                         // Retry logic
@@ -368,7 +368,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.AuditLog
                         continue;
                     }
 
-                    var responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
+                    var responseContent = await response.Content.ReadAsStringAsync();
                     using var doc = JsonDocument.Parse(responseContent);
                     
                     if (doc.RootElement.TryGetProperty("value", out var valueElement))

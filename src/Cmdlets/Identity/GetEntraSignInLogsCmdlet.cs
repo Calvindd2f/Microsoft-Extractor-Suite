@@ -204,45 +204,38 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
 
             try
             {
-                var request = _graphClient.AuditLogs.SignIns
-                    .Request()
-                    .Filter(filter)
-                    .Select("id,createdDateTime,userPrincipalName,userId,userDisplayName,appId,appDisplayName," +
-                           "ipAddress,clientAppUsed,correlationId,conditionalAccessStatus,isInteractive," +
-                           "riskDetail,riskLevelAggregated,riskLevelDuringSignIn,riskState,riskEventTypes," +
-                           "riskEventTypes_v2,status,deviceDetail,location,appliedConditionalAccessPolicies," +
-                           "authenticationMethodsUsed,mfaDetail,tokenIssuerType,resourceDisplayName")
-                    .OrderBy("createdDateTime desc")
-                    .Top(999); // Max page size for Graph API
+                var signInsResponse = await _graphClient.AuditLogs.SignIns
+                    .GetAsync(requestConfiguration =>
+                    {
+                        requestConfiguration.QueryParameters.Filter = filter;
+                        requestConfiguration.QueryParameters.Select = new[]
+                        {
+                            "id", "createdDateTime", "userPrincipalName", "userId", "userDisplayName",
+                            "appId", "appDisplayName", "ipAddress", "clientAppUsed", "correlationId",
+                            "conditionalAccessStatus", "isInteractive", "riskDetail", "riskLevelAggregated",
+                            "riskLevelDuringSignIn", "riskState", "riskEventTypes", "riskEventTypes_v2",
+                            "status", "deviceDetail", "location", "appliedConditionalAccessPolicies",
+                            "authenticationMethodsUsed", "mfaDetail", "tokenIssuerType", "resourceDisplayName"
+                        };
+                        requestConfiguration.QueryParameters.Orderby = new[] { "createdDateTime desc" };
+                        requestConfiguration.QueryParameters.Top = 999;
+                    }, CancellationToken);
 
                 var pageCount = 0;
 
-                do
-                {
-                    var page = await request.GetAsync(CancellationToken);
-                    pageCount++;
-
-                    if (page?.CurrentPage != null)
-                    {
-                        foreach (var signIn in page.CurrentPage)
+                var pageIterator = Microsoft.Graph.PageIterator<Microsoft.Graph.SignIn, Microsoft.Graph.SignInCollectionResponse>
+                    .CreatePageIterator(
+                        _graphClient,
+                        signInsResponse,
+                        (signIn) =>
                         {
                             var log = ConvertToSignInLog(signIn);
                             ProcessSignInLog(log);
                             _allSignIns.Add(log);
-                        }
+                            return !CancellationToken.IsCancellationRequested;
+                        });
 
-                        UpdateProgress(pageCount, _allSignIns.Count);
-                    }
-
-                    request = page?.NextPageRequest;
-
-                    // Adaptive delay to avoid throttling
-                    if (request != null)
-                    {
-                        await Task.Delay(100, CancellationToken);
-                    }
-
-                } while (request != null && !CancellationToken.IsCancellationRequested);
+                await pageIterator.IterateAsync(CancellationToken);
 
                 WriteProgressSafe("Processing Sign-In Logs", "Complete", 100);
             }
@@ -275,13 +268,13 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                 RiskState = graphSignIn.RiskState?.ToString(),
                 RiskEventTypes = graphSignIn.RiskEventTypes?.ToList(),
                 RiskEventTypesV2 = graphSignIn.RiskEventTypes?.ToList(), // Map to v2 as well
-                Status = graphSignIn.Status != null ? new SignInStatus
+                Status = graphSignIn.Status != null ? new Microsoft.ExtractorSuite.Models.Graph.SignInStatus
                 {
                     ErrorCode = graphSignIn.Status.ErrorCode ?? 0,
                     FailureReason = graphSignIn.Status.FailureReason,
                     AdditionalDetails = graphSignIn.Status.AdditionalDetails
                 } : null,
-                DeviceDetail = graphSignIn.DeviceDetail != null ? new DeviceDetail
+                DeviceDetail = graphSignIn.DeviceDetail != null ? new Microsoft.ExtractorSuite.Models.Graph.DeviceDetail
                 {
                     DeviceId = graphSignIn.DeviceDetail.DeviceId,
                     DisplayName = graphSignIn.DeviceDetail.DisplayName,
@@ -291,12 +284,12 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                     IsManaged = graphSignIn.DeviceDetail.IsManaged,
                     TrustType = graphSignIn.DeviceDetail.TrustType
                 } : null,
-                Location = graphSignIn.Location != null ? new SignInLocation
+                Location = graphSignIn.Location != null ? new Microsoft.ExtractorSuite.Models.Graph.SignInLocation
                 {
                     City = graphSignIn.Location.City,
                     State = graphSignIn.Location.State,
                     CountryOrRegion = graphSignIn.Location.CountryOrRegion,
-                    GeoCoordinates = graphSignIn.Location.GeoCoordinates != null ? new GeoCoordinates
+                    GeoCoordinates = graphSignIn.Location.GeoCoordinates != null ? new Microsoft.ExtractorSuite.Models.Graph.GeoCoordinates
                     {
                         Latitude = graphSignIn.Location.GeoCoordinates.Latitude,
                         Longitude = graphSignIn.Location.GeoCoordinates.Longitude

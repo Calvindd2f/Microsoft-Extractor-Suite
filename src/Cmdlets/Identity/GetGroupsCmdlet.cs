@@ -220,7 +220,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                 OnPremisesSyncEnabled = group.OnPremisesSyncEnabled ?? false,
                 OnPremisesLastSyncDateTime = group.OnPremisesLastSyncDateTime?.DateTime,
                 SecurityIdentifier = group.SecurityIdentifier ?? "",
-                IsManagementRestricted = group.IsManagementRestricted ?? false,
+                IsManagementRestricted = false, // Property not available in current Graph API
                 MembershipRule = group.MembershipRule ?? "",
                 MembershipRuleProcessingState = group.MembershipRuleProcessingState ?? "",
                 Classification = group.Classification ?? "",

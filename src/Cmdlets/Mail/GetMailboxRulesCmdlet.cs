@@ -93,7 +93,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
 
             if (Logger?.CurrentLevel == LogLevel.Debug)
             {
-                Logger.LogDebug($"PowerShell Version: {PSVersionTable.PSVersion}");
+                Logger.LogDebug($"PowerShell Version: {Host.Version}");
                 Logger.LogDebug("Input parameters:");
                 Logger.LogDebug($"  UserPrincipalNames: {(UserPrincipalNames != null ? string.Join(", ", UserPrincipalNames) : "All users")}");
                 Logger.LogDebug($"  OutputDir: '{OutputDir}'");

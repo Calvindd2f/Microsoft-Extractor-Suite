@@ -6,6 +6,7 @@ using System.Management.Automation;
 using System.Threading.Tasks;
 using Microsoft.ExtractorSuite.Core;
 using Microsoft.ExtractorSuite.Core.Exchange;
+using Microsoft.ExtractorSuite.Models.Exchange;
 
 namespace Microsoft.ExtractorSuite.Cmdlets.Mail
 {
@@ -42,7 +43,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
 
         public GetRulesCmdlet()
         {
-            _exchangeClient = new ExchangeRestClient();
+            _exchangeClient = new ExchangeRestClient(AuthManager);
         }
 
         protected override async Task ProcessRecordAsync()
@@ -113,13 +114,13 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
         {
             WriteVerbose("=== Starting Transport Rules Collection ===");
 
-            var transportRules = new List<TransportRule>();
+            var transportRules = new List<TransportRuleInfo>();
 
             try
             {
-                var rules = await _exchangeClient.GetTransportRulesAsync();
+                var rules = await _exchangeClient.GetTransportRulesTypedAsync();
 
-                if (rules == null || rules.Count == 0)
+                if (rules == null || rules.Length == 0)
                 {
                     WriteVerbose("No transport rules found");
                     return;
@@ -127,11 +128,11 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
 
                 foreach (var rule in rules)
                 {
-                    var transportRule = new TransportRule
+                    var transportRule = new TransportRuleInfo
                     {
                         Name = rule.Name,
                         Description = rule.Description,
-                        CreatedBy = rule.CreatedBy,
+                        CreatedBy = rule.Identity, // Use Identity instead of CreatedBy
                         WhenChanged = rule.WhenChanged,
                         State = rule.State,
                         Priority = rule.Priority,
@@ -150,7 +151,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
                     {
                         WriteVerbose($"Found a TransportRule:");
                         WriteVerbose($"  Rule Name: {rule.Name}");
-                        WriteVerbose($"  Rule CreatedBy: {rule.CreatedBy}");
+                        WriteVerbose($"  Rule Identity: {rule.Identity}");
                         WriteVerbose($"  When Changed: {rule.WhenChanged}");
                         WriteVerbose($"  Rule State: {rule.State}");
                         WriteVerbose($"  Description: {rule.Description}");
@@ -177,7 +178,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
         {
             WriteVerbose("=== Starting Mailbox Rules Collection ===");
 
-            var mailboxRules = new List<MailboxRule>();
+            var mailboxRules = new List<MailboxRuleInfo>();
             var processedUsers = new HashSet<string>();
 
             try
@@ -192,7 +193,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
 
                         var rules = await _exchangeClient.GetInboxRulesAsync(user);
 
-                        if (rules != null && rules.Count > 0)
+                        if (rules != null && rules.Length > 0)
                         {
                             if (!processedUsers.Contains(user))
                             {
@@ -202,7 +203,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
 
                             foreach (var rule in rules)
                             {
-                                var mailboxRule = new MailboxRule
+                                var mailboxRule = new MailboxRuleInfo
                                 {
                                     UserName = user,
                                     RuleName = rule.Name,
@@ -212,18 +213,18 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
                                     StopProcessingRules = rule.StopProcessingRules,
                                     CopyToFolder = rule.CopyToFolder,
                                     MoveToFolder = rule.MoveToFolder,
-                                    RedirectTo = rule.RedirectTo,
-                                    ForwardTo = rule.ForwardTo,
-                                    ForwardAsAttachmentTo = rule.ForwardAsAttachmentTo,
-                                    ApplyCategory = string.Join(", ", rule.ApplyCategory ?? new string[0]),
+                                    RedirectTo = rule.RedirectTo != null ? string.Join(", ", rule.RedirectTo) : null,
+                                    ForwardTo = rule.ForwardTo != null ? string.Join(", ", rule.ForwardTo) : null,
+                                    ForwardAsAttachmentTo = rule.ForwardAsAttachmentTo != null ? string.Join(", ", rule.ForwardAsAttachmentTo) : null,
+                                    ApplyCategory = rule.ApplyCategory != null ? string.Join(", ", rule.ApplyCategory) : null,
                                     MarkImportance = rule.MarkImportance,
                                     MarkAsRead = rule.MarkAsRead,
                                     DeleteMessage = rule.DeleteMessage,
                                     SoftDeleteMessage = rule.SoftDeleteMessage,
-                                    From = rule.From,
-                                    SubjectContainsWords = string.Join(", ", rule.SubjectContainsWords ?? new string[0]),
-                                    SubjectOrBodyContainsWords = string.Join(", ", rule.SubjectOrBodyContainsWords ?? new string[0]),
-                                    BodyContainsWords = string.Join(", ", rule.BodyContainsWords ?? new string[0]),
+                                    From = rule.From != null ? string.Join(", ", rule.From) : null,
+                                    SubjectContainsWords = rule.SubjectContainsWords != null ? string.Join(", ", rule.SubjectContainsWords) : null,
+                                    SubjectOrBodyContainsWords = rule.SubjectOrBodyContainsWords != null ? string.Join(", ", rule.SubjectOrBodyContainsWords) : null,
+                                    BodyContainsWords = rule.BodyContainsWords != null ? string.Join(", ", rule.BodyContainsWords) : null,
                                     HasAttachment = rule.HasAttachment,
                                     Description = rule.Description,
                                     InError = rule.InError,
@@ -236,10 +237,10 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
                                 if (rule.Enabled)
                                     summary.EnabledMailboxRules++;
 
-                                if (!string.IsNullOrEmpty(rule.ForwardTo))
+                                if (rule.ForwardTo != null && rule.ForwardTo.Length > 0)
                                     summary.ForwardingRules++;
 
-                                if (!string.IsNullOrEmpty(rule.RedirectTo))
+                                if (rule.RedirectTo != null && rule.RedirectTo.Length > 0)
                                     summary.RedirectRules++;
 
                                 if (rule.SoftDeleteMessage)
@@ -253,9 +254,9 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
                                     WriteVerbose($"  RuleEnabled: {rule.Enabled}");
                                     WriteVerbose($"  CopytoFolder: {rule.CopyToFolder}");
                                     WriteVerbose($"  MovetoFolder: {rule.MoveToFolder}");
-                                    WriteVerbose($"  RedirectTo: {rule.RedirectTo}");
-                                    WriteVerbose($"  ForwardTo: {rule.ForwardTo}");
-                                    WriteVerbose($"  ForwardAsAttachmentTo: {rule.ForwardAsAttachmentTo}");
+                                    WriteVerbose($"  RedirectTo: {(rule.RedirectTo != null ? string.Join(", ", rule.RedirectTo) : "None")}");
+                                    WriteVerbose($"  ForwardTo: {(rule.ForwardTo != null ? string.Join(", ", rule.ForwardTo) : "None")}");
+                                    WriteVerbose($"  ForwardAsAttachmentTo: {(rule.ForwardAsAttachmentTo != null ? string.Join(", ", rule.ForwardAsAttachmentTo) : "None")}");
                                     WriteVerbose($"  SoftDeleteMessage: {rule.SoftDeleteMessage}");
                                     WriteVerbose($"  TextDescription: {rule.Description}");
                                 }
@@ -367,7 +368,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
             WriteVerbose("================================");
         }
 
-        private async Task WriteTransportRulesAsync(IEnumerable<TransportRule> rules, string filePath)
+        private async Task WriteTransportRulesAsync(IEnumerable<TransportRuleInfo> rules, string filePath)
         {
             var csv = "Name,Description,CreatedBy,WhenChanged,State,Priority,Mode" + Environment.NewLine;
 
@@ -390,7 +391,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
             using (var writer = new StreamWriter(filePath)) { await writer.WriteAsync(csv); }
         }
 
-        private async Task WriteMailboxRulesAsync(IEnumerable<MailboxRule> rules, string filePath)
+        private async Task WriteMailboxRulesAsync(IEnumerable<MailboxRuleInfo> rules, string filePath)
         {
             var csv = "UserName,RuleName,Enabled,Priority,RuleIdentity,StopProcessingRules,CopyToFolder,MoveToFolder,RedirectTo,ForwardTo,ForwardAsAttachmentTo,ApplyCategory,MarkImportance,MarkAsRead,DeleteMessage,SoftDeleteMessage,From,SubjectContainsWords,SubjectOrBodyContainsWords,BodyContainsWords,HasAttachment,Description,InError,ErrorType" + Environment.NewLine;
 
@@ -447,12 +448,12 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
     // Supporting classes
     public class RulesResult
     {
-        public List<TransportRule> TransportRules { get; set; } = new List<TransportRule>();
-        public List<MailboxRule> MailboxRules { get; set; } = new List<MailboxRule>();
+        public List<TransportRuleInfo> TransportRules { get; set; } = new List<TransportRuleInfo>();
+        public List<MailboxRuleInfo> MailboxRules { get; set; } = new List<MailboxRuleInfo>();
         public RulesSummary Summary { get; set; }
     }
 
-    public class TransportRule
+    public class TransportRuleInfo
     {
         public string Name { get; set; }
         public string Description { get; set; }
@@ -463,7 +464,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
         public string Mode { get; set; }
     }
 
-    public class MailboxRule
+    public class MailboxRuleInfo
     {
         public string UserName { get; set; }
         public string RuleName { get; set; }

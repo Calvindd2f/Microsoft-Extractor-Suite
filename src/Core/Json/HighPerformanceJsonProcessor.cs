@@ -150,7 +150,7 @@ namespace Microsoft.ExtractorSuite.Core.Json
         {
             await using var writer = new Utf8JsonWriter(stream, _writerOptions);
 
-            await writer.WriteStartArrayAsync(cancellationToken);
+            writer.WriteStartArray();
 
             await foreach (var item in items.WithCancellation(cancellationToken))
             {
@@ -163,7 +163,7 @@ namespace Microsoft.ExtractorSuite.Core.Json
                 }
             }
 
-            await writer.WriteEndArrayAsync(cancellationToken);
+            writer.WriteEndArray();
             await writer.FlushAsync(cancellationToken);
         }
 
@@ -199,7 +199,7 @@ namespace Microsoft.ExtractorSuite.Core.Json
             bool asArray = true,
             CancellationToken cancellationToken = default)
         {
-            await using var output = new FileStream(
+            using var output = new FileStream(
                 outputFile,
                 FileMode.Create,
                 FileAccess.Write,
@@ -211,12 +211,12 @@ namespace Microsoft.ExtractorSuite.Core.Json
 
             if (asArray)
             {
-                await writer.WriteStartArrayAsync(cancellationToken);
+                writer.WriteStartArray();
             }
 
             foreach (var inputFile in inputFiles)
             {
-                await using var input = new FileStream(
+                using var input = new FileStream(
                     inputFile,
                     FileMode.Open,
                     FileAccess.Read,
@@ -246,13 +246,14 @@ namespace Microsoft.ExtractorSuite.Core.Json
                     // Write as separate JSON objects (JSONL format)
                     document.RootElement.WriteTo(writer);
                     await writer.FlushAsync(cancellationToken);
-                    await output.WriteAsync(Encoding.UTF8.GetBytes("\n"), cancellationToken);
+                    var newlineBytes = Encoding.UTF8.GetBytes("\n");
+                    await output.WriteAsync(newlineBytes, 0, newlineBytes.Length, cancellationToken);
                 }
             }
 
             if (asArray)
             {
-                await writer.WriteEndArrayAsync(cancellationToken);
+                writer.WriteEndArray();
             }
 
             await writer.FlushAsync(cancellationToken);
@@ -274,7 +275,8 @@ namespace Microsoft.ExtractorSuite.Core.Json
                 await using var writer = new Utf8JsonWriter(output, _writerOptions);
                 document.RootElement.WriteTo(writer);
                 await writer.FlushAsync(cancellationToken);
-                await output.WriteAsync(Encoding.UTF8.GetBytes("\n"), cancellationToken);
+                var newlineBytes = Encoding.UTF8.GetBytes("\n");
+                await output.WriteAsync(newlineBytes, 0, newlineBytes.Length, cancellationToken);
             }
             else
             {
@@ -284,7 +286,8 @@ namespace Microsoft.ExtractorSuite.Core.Json
                     await using var writer = new Utf8JsonWriter(output, _writerOptions);
                     element.WriteTo(writer);
                     await writer.FlushAsync(cancellationToken);
-                    await output.WriteAsync(Encoding.UTF8.GetBytes("\n"), cancellationToken);
+                    var newlineBytes = Encoding.UTF8.GetBytes("\n");
+                    await output.WriteAsync(newlineBytes, 0, newlineBytes.Length, cancellationToken);
                 }
             }
         }
@@ -299,13 +302,16 @@ namespace Microsoft.ExtractorSuite.Core.Json
 
                 try
                 {
-                    var bytesRead = await stream.ReadAsync(memory, cancellationToken);
+                    var buffer = memory.ToArray();
+                    var bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length, cancellationToken);
 
                     if (bytesRead == 0)
                     {
                         break;
                     }
 
+                    // Copy the read data back to memory
+                    buffer.AsMemory(0, bytesRead).CopyTo(memory);
                     writer.Advance(bytesRead);
                 }
                 catch (Exception ex)
@@ -336,7 +342,7 @@ namespace Microsoft.ExtractorSuite.Core.Json
 
                 foreach (var segment in buffer)
                 {
-                    await stream.WriteAsync(segment, cancellationToken);
+                    await stream.WriteAsync(segment.Array, segment.Offset, segment.Count, cancellationToken);
                 }
 
                 reader.AdvanceTo(buffer.End);

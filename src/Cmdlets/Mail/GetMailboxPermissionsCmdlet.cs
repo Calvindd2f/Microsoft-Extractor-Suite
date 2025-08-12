@@ -38,7 +38,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
 
         public GetMailboxPermissionsCmdlet()
         {
-            _exchangeClient = new ExchangeRestClient();
+            _exchangeClient = new ExchangeRestClient(AuthManager);
         }
 
         protected override async Task ProcessRecordAsync()
@@ -165,8 +165,9 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
                 // Get mailbox permissions
                 var mailboxPermissions = await _exchangeClient.GetMailboxPermissionsAsync(userPrincipalName);
 
-                foreach (var permission in mailboxPermissions)
+                foreach (var permissionObj in mailboxPermissions)
                 {
+                    var permission = CastToMailboxPermission(permissionObj);
                     var isSystemAccount = IsSystemAccount(permission.User);
 
                     if (!IncludeSystemPermissions && isSystemAccount)
@@ -198,8 +199,9 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
                 // Get recipient permissions
                 var recipientPermissions = await _exchangeClient.GetRecipientPermissionsAsync(userPrincipalName);
 
-                foreach (var permission in recipientPermissions)
+                foreach (var permissionObj in recipientPermissions)
                 {
+                    var permission = CastToRecipientPermission(permissionObj);
                     var isSystemAccount = IsSystemAccount(permission.Trustee);
 
                     if (!IncludeSystemPermissions && isSystemAccount)
@@ -231,8 +233,9 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
                 // Get send-as permissions
                 var sendAsPermissions = await _exchangeClient.GetSendAsPermissionsAsync(userPrincipalName);
 
-                foreach (var permission in sendAsPermissions)
+                foreach (var permissionObj in sendAsPermissions)
                 {
+                    var permission = CastToSendAsPermission(permissionObj);
                     var isSystemAccount = IsSystemAccount(permission.Trustee);
 
                     if (!IncludeSystemPermissions && isSystemAccount)
@@ -270,6 +273,56 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
             }
 
             return permissions;
+        }
+
+        private MailboxPermission CastToMailboxPermission(object permissionObj)
+        {
+            if (permissionObj is System.Text.Json.JsonElement jsonElement)
+            {
+                return new MailboxPermission
+                {
+                    User = jsonElement.TryGetProperty("User", out var userProp) ? userProp.GetString() : null,
+                    AccessRights = jsonElement.TryGetProperty("AccessRights", out var rightsProp) && rightsProp.ValueKind == System.Text.Json.JsonValueKind.Array
+                        ? rightsProp.EnumerateArray().Select(r => r.GetString()).Where(s => s != null).ToArray()
+                        : new string[0],
+                    IsInherited = jsonElement.TryGetProperty("IsInherited", out var inheritedProp) && inheritedProp.GetBoolean(),
+                    Deny = jsonElement.TryGetProperty("Deny", out var denyProp) && denyProp.GetBoolean(),
+                    InheritanceType = jsonElement.TryGetProperty("InheritanceType", out var typeProp) ? typeProp.GetString() : null
+                };
+            }
+            return new MailboxPermission();
+        }
+
+        private RecipientPermission CastToRecipientPermission(object permissionObj)
+        {
+            if (permissionObj is System.Text.Json.JsonElement jsonElement)
+            {
+                return new RecipientPermission
+                {
+                    Trustee = jsonElement.TryGetProperty("Trustee", out var trusteeProp) ? trusteeProp.GetString() : null,
+                    AccessRights = jsonElement.TryGetProperty("AccessRights", out var rightsProp) && rightsProp.ValueKind == System.Text.Json.JsonValueKind.Array
+                        ? rightsProp.EnumerateArray().Select(r => r.GetString()).Where(s => s != null).ToArray()
+                        : new string[0],
+                    Inherited = jsonElement.TryGetProperty("Inherited", out var inheritedProp) && inheritedProp.GetBoolean(),
+                    InheritanceType = jsonElement.TryGetProperty("InheritanceType", out var typeProp) ? typeProp.GetString() : null
+                };
+            }
+            return new RecipientPermission();
+        }
+
+        private SendAsPermission CastToSendAsPermission(object permissionObj)
+        {
+            if (permissionObj is System.Text.Json.JsonElement jsonElement)
+            {
+                return new SendAsPermission
+                {
+                    Trustee = jsonElement.TryGetProperty("Trustee", out var trusteeProp) ? trusteeProp.GetString() : null,
+                    Inherited = jsonElement.TryGetProperty("Inherited", out var inheritedProp) && inheritedProp.GetBoolean(),
+                    Deny = jsonElement.TryGetProperty("Deny", out var denyProp) && denyProp.GetBoolean(),
+                    InheritanceType = jsonElement.TryGetProperty("InheritanceType", out var typeProp) ? typeProp.GetString() : null
+                };
+            }
+            return new SendAsPermission();
         }
 
         private bool IsSystemAccount(string user)

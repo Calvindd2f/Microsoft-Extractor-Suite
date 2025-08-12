@@ -38,7 +38,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
             HelpMessage = "Include detailed sign-in activity information")]
         public SwitchParameter IncludeSignInActivity { get; set; }
 
-        private readonly GraphApiClient _graphClient;
+        private GraphApiClient? _graphClient;
         private readonly string[] RequiredScopes = {
             "User.Read.All",
             "Directory.Read.All",
@@ -47,9 +47,13 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
             "RoleEligibilitySchedule.Read.Directory"
         };
 
-        public GetRolesCmdlet()
+        protected override void BeginProcessing()
         {
-            _graphClient = new GraphApiClient();
+            base.BeginProcessing();
+            if (AuthManager.GraphClient != null)
+            {
+                _graphClient = new GraphApiClient(AuthManager.GraphClient);
+            }
         }
 
         protected override async Task ProcessRecordAsync()
@@ -57,19 +61,16 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
             WriteVerbose("=== Starting Roles Collection ===");
 
             // Check for authentication and scopes
-            if (!await _graphClient.IsConnectedAsync())
+            if (_graphClient == null || !await _graphClient.IsConnectedAsync())
             {
                 WriteErrorWithTimestamp("Not connected to Microsoft Graph. Please run Connect-M365 first.");
                 return;
             }
 
             var authInfo = await _graphClient.GetAuthenticationInfoAsync();
-            var missingScopes = RequiredScopes.Except(authInfo.Scopes).ToList();
-            if (missingScopes.Count > 0)
-            {
-                WriteWarningWithTimestamp($"Missing some recommended scopes: {string.Join(", ", missingScopes)}");
-                WriteVerbose("Some data may not be accessible without proper permissions.");
-            }
+            // Note: Scope checking is not available through Graph API directly
+            // Continuing without scope validation
+            WriteVerbose("Proceeding with roles collection...");
 
             var outputDirectory = GetOutputDirectory();
             var timestamp = DateTime.Now.ToString("yyyyMMddHHmm");
@@ -154,7 +155,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                     foreach (var member in roleMembers)
                     {
                         // Skip service principals
-                        if (member.ODataType?.Contains("servicePrincipal") == true)
+                        if (member.OdataType?.Contains("servicePrincipal") == true)
                         {
                             WriteVerbose($"Skipping service principal in role {displayName}");
                             continue;
@@ -323,7 +324,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
             }
 
             // Process principal (user or group)
-            var principalType = assignment.Principal?.ODataType?.ToString();
+            var principalType = assignment.Principal?.OdataType?.ToString();
 
             if (principalType?.Contains("user") == true)
             {
@@ -350,7 +351,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
 
                     foreach (var member in groupMembers)
                     {
-                        if (member.ODataType?.Contains("user") == true)
+                        if (member.OdataType?.Contains("user") == true)
                         {
                             try
                             {

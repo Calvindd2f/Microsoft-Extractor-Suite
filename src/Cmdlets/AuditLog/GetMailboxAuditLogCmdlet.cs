@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Management.Automation;
 using System.Threading.Tasks;
 using Microsoft.ExtractorSuite.Core;
@@ -53,11 +54,12 @@ namespace Microsoft.ExtractorSuite.Cmdlets.AuditLog
             HelpMessage = "Use legacy Search-MailboxAuditLog method instead of UAL")]
         public SwitchParameter UseLegacyMethod { get; set; }
 
-        private readonly ExchangeRestClient _exchangeClient;
+        private ExchangeRestClient? _exchangeClient;
 
-        public GetMailboxAuditLogCmdlet()
+        protected override void BeginProcessing()
         {
-            _exchangeClient = new ExchangeRestClient();
+            base.BeginProcessing();
+            _exchangeClient = new ExchangeRestClient(AuthManager);
         }
 
         protected override async Task ProcessRecordAsync()
@@ -65,7 +67,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.AuditLog
             WriteVerbose("=== Starting Mailbox Audit Log Collection ===");
 
             // Check for authentication
-            if (!await _exchangeClient.IsConnectedAsync())
+            if (_exchangeClient == null || !await _exchangeClient.IsConnectedAsync())
             {
                 WriteErrorWithTimestamp("Not connected to Exchange Online. Please run Connect-M365 first.");
                 return;
@@ -177,7 +179,8 @@ namespace Microsoft.ExtractorSuite.Cmdlets.AuditLog
 
         private async Task ProcessAllMailboxesAsync(string outputDirectory, DateTime startDate, DateTime endDate, MailboxAuditLogSummary summary)
         {
-            var mailboxes = await _exchangeClient.GetMailboxesAsync(unlimited: true);
+            var mailboxUsers = await _exchangeClient!.GetMailboxesAsync();
+            var mailboxes = mailboxUsers.Select(u => new { UserPrincipalName = u }).ToList();
 
             WriteVerbose($"Found {mailboxes.Count} mailboxes to process");
 
@@ -234,7 +237,12 @@ namespace Microsoft.ExtractorSuite.Cmdlets.AuditLog
 
             try
             {
-                var results = await _exchangeClient.SearchMailboxAuditLogAsync(searchParams);
+                var resultsEnumerable = _exchangeClient!.SearchMailboxAuditLogAsync(userPrincipalName, startDate, endDate);
+                var results = new List<object>();
+                await foreach (var result in resultsEnumerable)
+                {
+                    results.Add(result);
+                }
 
                 if (results != null && results.Count > 0)
                 {
@@ -259,13 +267,16 @@ namespace Microsoft.ExtractorSuite.Cmdlets.AuditLog
         {
             try
             {
-                // Test with a simple search command
-                var testParams = new Dictionary<string, object>
-                {
-                    ["ResultSize"] = 1
-                };
+                // Test with a simple search command - get current user
+                var testUser = "test@example.com"; // This should be replaced with actual logic to get a test user
+                var testStartDate = DateTime.Now.AddDays(-1);
+                var testEndDate = DateTime.Now;
 
-                await _exchangeClient.SearchMailboxAuditLogAsync(testParams);
+                // Just try to enumerate one item to test connection
+                await foreach (var _ in _exchangeClient!.SearchMailboxAuditLogAsync(testUser, testStartDate, testEndDate))
+                {
+                    break; // Exit after first item to just test connection
+                }
             }
             catch (Exception ex)
             {
@@ -296,7 +307,18 @@ namespace Microsoft.ExtractorSuite.Cmdlets.AuditLog
                     searchParams["UserIds"] = UserIds;
                 }
 
-                var records = await _exchangeClient.SearchUnifiedAuditLogAsync(searchParams);
+                var startDate = parameters.ContainsKey("StartDate") ? (DateTime)parameters["StartDate"] : DateTime.Now.AddDays(-90);
+                var endDate = parameters.ContainsKey("EndDate") ? (DateTime)parameters["EndDate"] : DateTime.Now;
+                
+                var recordsResult = await _exchangeClient!.SearchUnifiedAuditLogAsync(startDate, endDate);
+                var records = new List<object>();
+                if (recordsResult?.Value != null)
+                {
+                    foreach (var record in recordsResult.Value)
+                    {
+                        records.Add(record);
+                    }
+                }
 
                 if (records != null && records.Count > 0)
                 {

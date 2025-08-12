@@ -87,7 +87,6 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Collection
                 try
                 {
                     var user = await graphClient.Users[userId]
-                        .Request()
                         .GetAsync(cancellationToken);
 
                     validUsers.Add(user);
@@ -114,10 +113,9 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Collection
                 try
                 {
                     var ownedObjects = await graphClient.Users[user.Id].OwnedObjects
-                        .Request()
                         .GetAsync(cancellationToken);
 
-                    var pageIterator = PageIterator<DirectoryObject>
+                    var pageIterator = PageIterator<DirectoryObject, DirectoryObjectCollectionResponse>
                         .CreatePageIterator(
                             graphClient,
                             ownedObjects,
@@ -148,10 +146,9 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Collection
                 try
                 {
                     var assignments = await graphClient.Users[user.Id].AppRoleAssignments
-                        .Request()
                         .GetAsync(cancellationToken);
 
-                    var assignmentIterator = PageIterator<AppRoleAssignment>
+                    var assignmentIterator = PageIterator<AppRoleAssignment, AppRoleAssignmentCollectionResponse>
                         .CreatePageIterator(
                             graphClient,
                             assignments,

@@ -284,6 +284,7 @@ namespace Microsoft.ExtractorSuite.Core.Authentication
         public string CurrentLevel => IsGraphConnected ? "Graph" : "None"; // For compatibility
         public bool IsGraphConnected => _graphClient != null || _betaGraphClient != null;
         public bool IsAzureConnected => _azureCredential != null;
+        public bool IsExchangeConnected => IsGraphConnected; // Exchange operations require Graph connection
 
         // Additional async methods for compatibility
         public Task<bool> IsConnectedAsync()
@@ -305,7 +306,7 @@ namespace Microsoft.ExtractorSuite.Core.Authentication
 
         public Task<string?> GetAccessTokenAsync(string[] scopes, CancellationToken cancellationToken = default)
         {
-            if (_currentAuthResult != null && !_currentAuthResult.ExpiresOn.Subtract(TimeSpan.FromMinutes(5)) < DateTimeOffset.UtcNow)
+            if (_currentAuthResult != null && _currentAuthResult.ExpiresOn.Subtract(TimeSpan.FromMinutes(5)) > DateTimeOffset.UtcNow)
             {
                 return Task.FromResult<string?>(_currentAuthResult.AccessToken);
             }

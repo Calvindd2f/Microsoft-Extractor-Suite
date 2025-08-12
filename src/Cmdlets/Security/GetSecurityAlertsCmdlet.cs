@@ -184,11 +184,11 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Security
                 Category = alert.Category ?? string.Empty,
                 Severity = alert.Severity?.ToString(),
                 Status = alert.Status?.ToString(),
-                CreatedDateTime = alert.CreatedDateTime,
-                LastModifiedDateTime = alert.LastModifiedDateTime,
+                CreatedDateTime = alert.CreatedDateTime?.DateTime,
+                LastModifiedDateTime = alert.UpdatedDateTime?.DateTime,
                 AssignedTo = alert.AssignedTo ?? string.Empty,
                 Description = alert.Description ?? string.Empty,
-                Confidence = alert.ProviderAlertId ?? string.Empty, // Map available field
+                Confidence = alert.AdditionalData?.TryGetValue("confidence", out var confidence) == true ? confidence?.ToString() ?? string.Empty : string.Empty,
                 AzureTenantId = alert.TenantId ?? string.Empty,
                 Feedback = alert.Status?.ToString() ?? string.Empty
             };

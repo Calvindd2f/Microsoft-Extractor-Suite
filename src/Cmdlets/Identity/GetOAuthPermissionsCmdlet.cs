@@ -42,11 +42,15 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
             HelpMessage = "Filter by high-risk permissions only")]
         public SwitchParameter HighRiskOnly { get; set; }
 
-        private readonly GraphApiClient _graphClient;
+        private GraphApiClient? _graphClient;
 
-        public GetOAuthPermissionsCmdlet()
+        protected override void BeginProcessing()
         {
-            _graphClient = new GraphApiClient();
+            base.BeginProcessing();
+            if (AuthManager.GraphClient != null)
+            {
+                _graphClient = new GraphApiClient(AuthManager.GraphClient);
+            }
         }
 
         protected override async Task ProcessRecordAsync()
@@ -54,7 +58,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
             WriteVerbose("=== Starting OAuth Permissions Collection ===");
 
             // Check for authentication
-            if (!await _graphClient.IsConnectedAsync())
+            if (_graphClient == null || !await _graphClient.IsConnectedAsync())
             {
                 WriteErrorWithTimestamp("Not connected to Microsoft Graph. Please run Connect-M365 first.");
                 return;
@@ -140,7 +144,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                     {
                         ApplicationId = app.AppId,
                         DisplayName = app.DisplayName,
-                        CreatedDateTime = app.CreatedDateTime,
+                        CreatedDateTime = app.CreatedDateTime?.DateTime,
                         PublisherDomain = app.PublisherDomain,
                         SignInAudience = app.SignInAudience,
                         RequiredResourceAccess = ProcessRequiredResourceAccess(app.RequiredResourceAccess),
@@ -196,7 +200,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                         ServicePrincipalId = sp.Id,
                         AppId = sp.AppId,
                         DisplayName = sp.DisplayName,
-                        CreatedDateTime = sp.CreatedDateTime,
+                        CreatedDateTime = sp.CreatedDateTime?.DateTime,
                         OAuth2Grants = ProcessOAuth2Grants(oauth2Grants),
                         AppRoleAssignments = ProcessAppRoleAssignments(appRoleAssignments),
                         IsHighRisk = DetermineServicePrincipalHighRisk(oauth2Grants, appRoleAssignments)
@@ -379,7 +383,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                     PrincipalId = grant.PrincipalId?.ToString(),
                     ResourceId = grant.ResourceId?.ToString(),
                     Scope = grant.Scope?.ToString(),
-                    CreatedDateTime = grant.CreatedDateTime
+                    CreatedDateTime = grant.CreatedDateTime?.DateTime
                 };
 
                 grantList.Add(info);
@@ -403,7 +407,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                     PrincipalType = assignment.PrincipalType?.ToString(),
                     ResourceDisplayName = assignment.ResourceDisplayName?.ToString(),
                     ResourceId = assignment.ResourceId?.ToString(),
-                    CreatedDateTime = assignment.CreatedDateTime
+                    CreatedDateTime = assignment.CreatedDateTime?.DateTime
                 };
 
                 assignmentList.Add(info);
@@ -421,7 +425,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                 ConsentType = grant.ConsentType?.ToString(),
                 ResourceId = grant.ResourceId?.ToString(),
                 Scope = grant.Scope?.ToString(),
-                CreatedDateTime = grant.CreatedDateTime,
+                CreatedDateTime = grant.CreatedDateTime?.DateTime,
                 IsHighRisk = DetermineUserConsentHighRisk(grant.Scope?.ToString())
             };
         }
