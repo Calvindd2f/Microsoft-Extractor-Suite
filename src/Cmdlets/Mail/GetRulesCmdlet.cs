@@ -96,8 +96,8 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
 
                 var result = new RulesResult
                 {
-                    TransportRules = new List<TransportRule>(),
-                    MailboxRules = new List<MailboxRule>(),
+                    TransportRules = new List<TransportRuleInfo>(),
+                    MailboxRules = new List<MailboxRuleInfo>(),
                     Summary = summary
                 };
 
@@ -306,8 +306,8 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
             else
             {
                 // Get all mailboxes
-                var mailboxes = await _exchangeClient.GetMailboxesAsync(unlimited: true);
-                users.AddRange(mailboxes.Select(m => m.UserPrincipalName));
+                var mailboxes = await _exchangeClient.GetMailboxesAsync();
+                users.AddRange(mailboxes);
             }
 
             return users;

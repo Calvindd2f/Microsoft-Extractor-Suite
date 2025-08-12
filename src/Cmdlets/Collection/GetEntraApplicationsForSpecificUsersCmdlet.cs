@@ -209,8 +209,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Collection
             try
             {
                 var app = await graphClient.Applications[appId]
-                    .Request()
-                    .GetAsync(cancellationToken);
+                    .GetAsync(cancellationToken: cancellationToken);
 
                 processedAppIds.Add(appId);
                 summary.OwnedApps++;
@@ -220,11 +219,12 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Collection
                 try
                 {
                     var servicePrincipals = await graphClient.ServicePrincipals
-                        .Request()
-                        .Filter($"appId eq '{app.AppId}'")
-                        .GetAsync(cancellationToken);
+                        .GetAsync(requestConfiguration =>
+                        {
+                            requestConfiguration.QueryParameters.Filter = $"appId eq '{app.AppId}'";
+                        }, cancellationToken);
 
-                    servicePrincipal = servicePrincipals.FirstOrDefault();
+                    servicePrincipal = servicePrincipals?.Value?.FirstOrDefault();
                 }
                 catch { }
 
@@ -275,8 +275,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Collection
             try
             {
                 var servicePrincipal = await graphClient.ServicePrincipals[resourceId]
-                    .Request()
-                    .GetAsync(cancellationToken);
+                    .GetAsync(cancellationToken: cancellationToken);
 
                 processedAppIds.Add(appKey);
                 summary.AssignedApps++;
@@ -288,11 +287,12 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Collection
                     try
                     {
                         var apps = await graphClient.Applications
-                            .Request()
-                            .Filter($"appId eq '{servicePrincipal.AppId}'")
-                            .GetAsync(cancellationToken);
+                            .GetAsync(requestConfiguration =>
+                            {
+                                requestConfiguration.QueryParameters.Filter = $"appId eq '{servicePrincipal.AppId}'";
+                            }, cancellationToken);
 
-                        app = apps.FirstOrDefault();
+                        app = apps?.Value?.FirstOrDefault();
                     }
                     catch { }
                 }
@@ -304,7 +304,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Collection
                     ApplicationName = servicePrincipal.DisplayName,
                     ApplicationId = servicePrincipal.AppId,
                     ObjectId = app?.Id ?? servicePrincipal.Id,
-                    PublisherName = servicePrincipal.PublisherName,
+                    PublisherName = null, // PublisherName not available in SDK v5
                     ApplicationType = DetermineApplicationType(servicePrincipal),
                     CreatedDateTime = app?.CreatedDateTime?.DateTime,
                     ServicePrincipalEnabled = servicePrincipal.AccountEnabled?.ToString() ?? "false",
@@ -333,8 +333,8 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Collection
             var types = new List<string>();
 
             // Check if it's a Microsoft application
-            if (servicePrincipal.AppOwnerOrganizationId == "f8cdef31-a31e-4b4a-93e4-5f571e91255a" ||
-                servicePrincipal.AppOwnerOrganizationId == "72f988bf-86f1-41af-91ab-2d7cd011db47")
+            if (servicePrincipal.AppOwnerOrganizationId?.ToString() == "f8cdef31-a31e-4b4a-93e4-5f571e91255a" ||
+                servicePrincipal.AppOwnerOrganizationId?.ToString() == "72f988bf-86f1-41af-91ab-2d7cd011db47")
             {
                 types.Add("Microsoft Application");
             }

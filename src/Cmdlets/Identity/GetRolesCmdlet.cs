@@ -133,7 +133,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
             try
             {
                 var allRoles = await _graphClient.GetDirectoryRolesAsync();
-                WriteVerbose($"Found {allRoles.Count} directory roles");
+                WriteVerbose($"Found {allRoles?.Count ?? 0} directory roles");
 
                 foreach (var role in allRoles)
                 {
@@ -142,7 +142,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
 
                     var roleMembers = await _graphClient.GetDirectoryRoleMembersAsync(role.Id);
 
-                    if (roleMembers == null || roleMembers.Count == 0)
+                    if (roleMembers == null || (roleMembers?.Count ?? 0) == 0)
                     {
                         summary.RolesWithoutMembers++;
                         emptyRoles.Add(displayName);
@@ -425,11 +425,11 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                     Department = user.Department,
                     JobTitle = user.JobTitle,
                     AccountEnabled = user.AccountEnabled,
-                    CreatedDateTime = user.CreatedDateTime,
+                    CreatedDateTime = user.CreatedDateTime?.DateTime,
                     SignInActivity = user.SignInActivity != null ? new SignInActivity
                     {
-                        LastSignInDateTime = user.SignInActivity.LastSignInDateTime,
-                        LastNonInteractiveSignInDateTime = user.SignInActivity.LastNonInteractiveSignInDateTime
+                        LastSignInDateTime = user.SignInActivity.LastSignInDateTime?.DateTime,
+                        LastNonInteractiveSignInDateTime = user.SignInActivity.LastNonInteractiveSignInDateTime?.DateTime
                     } : null
                 };
             }

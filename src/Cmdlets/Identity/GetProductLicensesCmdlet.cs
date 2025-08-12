@@ -193,7 +193,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
             else
             {
                 // Get all licensed users
-                users = await _graphClient.GetUsersWithLicensesAsync();
+                users = (await _graphClient.GetUsersWithLicensesAsync()).ToList();
             }
 
             foreach (var user in users)
@@ -318,7 +318,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                                 UserPrincipalName = user.UserPrincipalName,
                                 DisplayName = user.DisplayName,
                                 SkuId = assignedLicense.SkuId?.ToString() ?? string.Empty,
-                                DisabledPlans = assignedLicense.DisabledPlans?.ToList() ?? new List<string>(),
+                                DisabledPlans = assignedLicense.DisabledPlans?.Select(d => d.ToString()).ToList() ?? new List<string>(),
                                 AssignmentSource = DetermineAssignmentSource(assignedLicense),
                                 LastUpdated = DateTime.Now
                             };

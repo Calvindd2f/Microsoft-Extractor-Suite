@@ -165,7 +165,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
             {
                 WriteProgressSafe("Retrieving Transport Rules", "Connecting to Exchange Online...", 0);
 
-                var rules = await _exchangeClient.GetTransportRulesAsync(CancellationToken);
+                var rules = await _exchangeClient.GetTransportRulesTypedAsync(CancellationToken);
 
                 WriteProgressSafe("Retrieving Transport Rules", "Processing rules...", 50);
 

@@ -182,7 +182,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
         {
             try
             {
-                var lines = await File.ReadAllLinesAsync(filePath, cancellationToken);
+                var lines = await Task.Run(() => File.ReadAllLines(filePath), cancellationToken);
                 var messageIds = lines
                     .Where(line => !string.IsNullOrWhiteSpace(line))
                     .Select(line => line.Trim())

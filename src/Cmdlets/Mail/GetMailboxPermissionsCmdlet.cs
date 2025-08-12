@@ -138,7 +138,16 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
                         var mailbox = await _exchangeClient.GetMailboxAsync(userId);
                         if (mailbox != null)
                         {
-                            mailboxes.Add(mailbox);
+                            // Convert MailboxInfo to ExchangeMailbox
+                            mailboxes.Add(new ExchangeMailbox
+                            {
+                                UserPrincipalName = mailbox.UserPrincipalName,
+                                DisplayName = mailbox.DisplayName,
+                                PrimarySmtpAddress = mailbox.Email,
+                                RecipientTypeDetails = mailbox.RecipientTypeDetails,
+                                WhenCreated = mailbox.WhenCreated,
+                                IsMailboxEnabled = true
+                            });
                         }
                     }
                     catch (Exception ex)
@@ -150,7 +159,31 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
             else
             {
                 // Get all mailboxes
-                mailboxes = await _exchangeClient.GetMailboxesAsync(unlimited: true);
+                var mailboxUserPrincipalNames = await _exchangeClient.GetMailboxesAsync();
+                foreach (var upn in mailboxUserPrincipalNames)
+                {
+                    try
+                    {
+                        var mailbox = await _exchangeClient.GetMailboxAsync(upn);
+                        if (mailbox != null)
+                        {
+                            // Convert MailboxInfo to ExchangeMailbox
+                            mailboxes.Add(new ExchangeMailbox
+                            {
+                                UserPrincipalName = mailbox.UserPrincipalName,
+                                DisplayName = mailbox.DisplayName,
+                                PrimarySmtpAddress = mailbox.Email,
+                                RecipientTypeDetails = mailbox.RecipientTypeDetails,
+                                WhenCreated = mailbox.WhenCreated,
+                                IsMailboxEnabled = true
+                            });
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        WriteWarningWithTimestamp($"Could not retrieve mailbox for {upn}: {ex.Message}");
+                    }
+                }
             }
 
             return mailboxes;

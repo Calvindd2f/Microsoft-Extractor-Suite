@@ -189,29 +189,29 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Security
                 // Applications
                 IncludeApplications = JoinStringArray(policy.Conditions?.Applications?.IncludeApplications),
                 ExcludeApplications = JoinStringArray(policy.Conditions?.Applications?.ExcludeApplications),
-                ClientAppTypes = JoinEnumArray(policy.Conditions?.ClientAppTypes),
+                ClientAppTypes = policy.Conditions?.ClientAppTypes != null ? string.Join("; ", policy.Conditions.ClientAppTypes.Select(c => c?.ToString() ?? "")) : "",
                 IncludeUserActions = JoinStringArray(policy.Conditions?.Applications?.IncludeUserActions),
 
                 // Platforms
-                IncludePlatforms = JoinEnumArray(policy.Conditions?.Platforms?.IncludePlatforms),
-                ExcludePlatforms = JoinEnumArray(policy.Conditions?.Platforms?.ExcludePlatforms),
+                IncludePlatforms = policy.Conditions?.Platforms?.IncludePlatforms != null ? string.Join("; ", policy.Conditions.Platforms.IncludePlatforms.Select(p => p?.ToString() ?? "")) : "",
+                ExcludePlatforms = policy.Conditions?.Platforms?.ExcludePlatforms != null ? string.Join("; ", policy.Conditions.Platforms.ExcludePlatforms.Select(p => p?.ToString() ?? "")) : "",
 
                 // Locations
                 IncludeLocations = JoinStringArray(policy.Conditions?.Locations?.IncludeLocations),
                 ExcludeLocations = JoinStringArray(policy.Conditions?.Locations?.ExcludeLocations),
 
                 // Risk Levels
-                UserRiskLevels = JoinEnumArray(policy.Conditions?.UserRiskLevels),
-                SignInRiskLevels = JoinEnumArray(policy.Conditions?.SignInRiskLevels),
-                ServicePrincipalRiskLevels = JoinEnumArray(policy.Conditions?.ServicePrincipalRiskLevels),
+                UserRiskLevels = policy.Conditions?.UserRiskLevels != null ? string.Join("; ", policy.Conditions.UserRiskLevels.Select(r => r?.ToString() ?? "")) : "",
+                SignInRiskLevels = policy.Conditions?.SignInRiskLevels != null ? string.Join("; ", policy.Conditions.SignInRiskLevels.Select(r => r?.ToString() ?? "")) : "",
+                ServicePrincipalRiskLevels = policy.Conditions?.ServicePrincipalRiskLevels != null ? string.Join("; ", policy.Conditions.ServicePrincipalRiskLevels.Select(r => r?.ToString() ?? "")) : "",
 
                 // Device States and Filters
-                IncludeDeviceStates = JoinStringArray(policy.Conditions?.Devices?.IncludeDeviceStates),
-                ExcludeDeviceStates = JoinStringArray(policy.Conditions?.Devices?.ExcludeDeviceStates),
+                IncludeDeviceStates = "", // IncludeDeviceStates removed in SDK v5
+                ExcludeDeviceStates = "", // ExcludeDeviceStates removed in SDK v5
                 DeviceFilter = FormatDeviceFilter(policy.Conditions?.Devices?.DeviceFilter),
 
                 // Grant Controls
-                BuiltInControls = JoinEnumArray(policy.GrantControls?.BuiltInControls),
+                BuiltInControls = policy.GrantControls?.BuiltInControls != null ? string.Join("; ", policy.GrantControls.BuiltInControls.Select(c => c?.ToString() ?? "")) : "",
                 CustomAuthenticationFactors = JoinStringArray(policy.GrantControls?.CustomAuthenticationFactors),
                 GrantOperator = policy.GrantControls?.Operator?.ToString() ?? "",
                 TermsOfUse = JoinStringArray(policy.GrantControls?.TermsOfUse),
@@ -229,7 +229,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Security
 
                 // Compliance and Authentication Context
                 AuthenticationContextClassReferences = JoinStringArray(policy.Conditions?.Applications?.IncludeAuthenticationContextClassReferences),
-                InsiderRiskLevels = JoinEnumArray(policy.Conditions?.InsiderRiskLevels)
+                InsiderRiskLevels = "" // InsiderRiskLevels not available in SDK v5
             };
         }
 

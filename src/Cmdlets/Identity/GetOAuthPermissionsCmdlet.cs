@@ -200,7 +200,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                         ServicePrincipalId = sp.Id,
                         AppId = sp.AppId,
                         DisplayName = sp.DisplayName,
-                        CreatedDateTime = sp.CreatedDateTime?.DateTime,
+                        CreatedDateTime = null, // CreatedDateTime not available in SDK v5
                         OAuth2Grants = ProcessOAuth2Grants(oauth2Grants),
                         AppRoleAssignments = ProcessAppRoleAssignments(appRoleAssignments),
                         IsHighRisk = DetermineServicePrincipalHighRisk(oauth2Grants, appRoleAssignments)

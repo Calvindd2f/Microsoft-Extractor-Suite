@@ -14,6 +14,7 @@ using Microsoft.ExtractorSuite.Core;
 using Microsoft.ExtractorSuite.Core.Logging;
 using Microsoft.ExtractorSuite.Models.Graph;
 using Microsoft.Graph;
+using Microsoft.Graph.Models;
 
 namespace Microsoft.ExtractorSuite.Cmdlets.Identity
 {
@@ -223,11 +224,11 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
 
                 var pageCount = 0;
 
-                var pageIterator = Microsoft.Graph.PageIterator<Microsoft.Graph.SignIn, Microsoft.Graph.SignInCollectionResponse>
+                var pageIterator = PageIterator<Microsoft.Graph.Models.SignIn, Microsoft.Graph.Models.SignInCollectionResponse>
                     .CreatePageIterator(
                         _graphClient,
                         signInsResponse,
-                        (signIn) =>
+                        async (signIn) =>
                         {
                             var log = ConvertToSignInLog(signIn);
                             ProcessSignInLog(log);
@@ -246,7 +247,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
             }
         }
 
-        private SignInLog ConvertToSignInLog(Microsoft.Graph.SignIn graphSignIn)
+        private SignInLog ConvertToSignInLog(Microsoft.Graph.Models.SignIn graphSignIn)
         {
             return new SignInLog
             {
@@ -266,8 +267,8 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                 RiskLevelAggregated = graphSignIn.RiskLevelAggregated?.ToString(),
                 RiskLevelDuringSignIn = graphSignIn.RiskLevelDuringSignIn?.ToString(),
                 RiskState = graphSignIn.RiskState?.ToString(),
-                RiskEventTypes = graphSignIn.RiskEventTypes?.ToList(),
-                RiskEventTypesV2 = graphSignIn.RiskEventTypes?.ToList(), // Map to v2 as well
+                RiskEventTypes = graphSignIn.RiskEventTypesV2?.ToList(),
+                RiskEventTypesV2 = graphSignIn.RiskEventTypesV2?.ToList(), // Map to v2 as well
                 Status = graphSignIn.Status != null ? new Microsoft.ExtractorSuite.Models.Graph.SignInStatus
                 {
                     ErrorCode = graphSignIn.Status.ErrorCode ?? 0,
