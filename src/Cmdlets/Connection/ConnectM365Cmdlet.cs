@@ -27,9 +27,9 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Connection
             {
                 WriteVerboseWithTimestamp("Connecting to Microsoft 365...");
 
-                // Connect to Microsoft Graph
+                // Connect to Microsoft Graph (including Exchange if requested)
                 var graphTask = Task.Run(async () =>
-                    await AuthManager.ConnectGraphAsync(Scopes, TenantId, UseBeta.IsPresent, CancellationToken));
+                    await AuthManager.ConnectGraphAsync(Scopes, TenantId, UseBeta.IsPresent, ExchangeOnline.IsPresent, CancellationToken));
 
                 var graphConnected = RunAsync(graphTask);
 
@@ -45,20 +45,24 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Connection
                 // Connect to Exchange Online if requested
                 if (ExchangeOnline.IsPresent)
                 {
-                    WriteVerboseWithTimestamp("Connecting to Exchange Online...");
+                    WriteVerboseWithTimestamp("Connecting to Exchange Online Management...");
+                    WriteVerboseWithTimestamp("This will use the official Exchange Online Management client ID");
 
                     var exchangeTask = Task.Run(async () =>
-                        await AuthManager.GetExchangeOnlineTokenAsync(CancellationToken));
+                        await AuthManager.ConnectExchangeOnlineAsync(TenantId, CancellationToken));
 
-                    var exchangeToken = RunAsync(exchangeTask);
+                    var exchangeConnected = RunAsync(exchangeTask);
 
-                    if (string.IsNullOrEmpty(exchangeToken))
+                    if (!exchangeConnected)
                     {
-                        WriteWarningWithTimestamp("Failed to connect to Exchange Online");
+                        WriteWarningWithTimestamp("Failed to connect to Exchange Online Management");
+                        WriteWarningWithTimestamp("You may need Exchange Administrator role to use Exchange Admin API");
+                        WriteWarningWithTimestamp("Basic mail operations will still work through Graph API");
                     }
                     else
                     {
-                        WriteVerboseWithTimestamp("Successfully connected to Exchange Online");
+                        WriteVerboseWithTimestamp("Successfully connected to Exchange Online Management");
+                        WriteVerboseWithTimestamp("You can now use Exchange Admin API cmdlets");
                     }
                 }
 

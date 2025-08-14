@@ -39,7 +39,9 @@ namespace Microsoft.ExtractorSuite.Core.Authentication
 
         public override AccessToken GetToken(TokenRequestContext requestContext, CancellationToken cancellationToken)
         {
-            return GetTokenAsync(requestContext, cancellationToken).GetAwaiter().GetResult();
+            // Run on thread pool to avoid STA thread issues
+            return Task.Run(async () => await GetTokenAsync(requestContext, cancellationToken).ConfigureAwait(false))
+                .GetAwaiter().GetResult();
         }
 
         private async Task<AccessToken> GetTokenInternalAsync(TokenRequestContext requestContext, CancellationToken cancellationToken)
@@ -73,9 +75,12 @@ namespace Microsoft.ExtractorSuite.Core.Authentication
         private GraphServiceClient? _betaGraphClient;
         private TokenCredential? _azureCredential;
         private AuthenticationResult? _currentAuthResult;
+        private AuthenticationResult? _exchangeAuthResult;
         private string? _currentTenantId;
 
-        private const string ClientId = "14d82eec-204b-4c2f-b7e8-296a70dab67e"; // Microsoft Graph PowerShell client ID
+        // Use Exchange Online Management app ID for Exchange operations
+        private const string GraphClientId = "14d82eec-204b-4c2f-b7e8-296a70dab67e"; // Microsoft Graph PowerShell client ID
+        private const string ExchangeClientId = "fb78d390-0c51-40cd-8e17-fdbfab77341b"; // Exchange Online Management client ID
         private const string Authority = "https://login.microsoftonline.com/organizations";
 
         public static AuthenticationManager Instance
@@ -104,7 +109,7 @@ namespace Microsoft.ExtractorSuite.Core.Authentication
         private void InitializePublicClient()
         {
             var builder = PublicClientApplicationBuilder
-                .Create(ClientId)
+                .Create(GraphClientId)
                 .WithAuthority(Authority)
                 .WithDefaultRedirectUri();
 
@@ -134,7 +139,7 @@ namespace Microsoft.ExtractorSuite.Core.Authentication
                     schemaName: "com.microsoft.adalcache",
                     collection: "default",
                     secretLabel: "MSALCache",
-                    attribute1: new KeyValuePair<string, string>("MsalClientID", ClientId),
+                    attribute1: new KeyValuePair<string, string>("MsalClientID", GraphClientId),
                     attribute2: new KeyValuePair<string, string>("Microsoft.Developer.IdentityService", "1.0.0.0"));
             }
             else if (System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.OSX))
@@ -147,10 +152,60 @@ namespace Microsoft.ExtractorSuite.Core.Authentication
             cacheHelper.RegisterCache(_publicClientApp.UserTokenCache);
         }
 
+        /// <summary>
+        /// Connect to Exchange Online Management using the official Exchange client ID
+        /// This provides access to Exchange Admin API endpoints
+        /// </summary>
+        public async Task<bool> ConnectExchangeOnlineAsync(
+            string? tenantId = null,
+            CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                _currentTenantId = tenantId ?? "organizations";
+
+                // Create a separate app for Exchange Online Management
+                var exchangeApp = PublicClientApplicationBuilder
+                    .Create(ExchangeClientId)
+                    .WithAuthority($"https://login.microsoftonline.com/{_currentTenantId}")
+                    .WithDefaultRedirectUri()
+                    .Build();
+
+                // Exchange Online Management uses specific scopes
+                var scopes = new[] { "https://outlook.office365.com/.default" };
+
+                var accounts = await exchangeApp.GetAccountsAsync();
+                AuthenticationResult result;
+
+                try
+                {
+                    result = await exchangeApp.AcquireTokenSilent(scopes, accounts.FirstOrDefault())
+                        .ExecuteAsync(cancellationToken);
+                }
+                catch (MsalUiRequiredException)
+                {
+                    // Interactive authentication required
+                    result = await exchangeApp.AcquireTokenInteractive(scopes)
+                        .WithPrompt(Microsoft.Identity.Client.Prompt.SelectAccount)
+                        .ExecuteAsync(cancellationToken);
+                }
+
+                // Store the Exchange token for later use
+                _exchangeAuthResult = result;
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Failed to connect to Exchange Online: {ex.Message}");
+                return false;
+            }
+        }
+
         public async Task<bool> ConnectGraphAsync(
             string[]? scopes = null,
             string? tenantId = null,
             bool useBeta = false,
+            bool includeExchangeOnline = false,
             CancellationToken cancellationToken = default)
         {
             try
@@ -168,8 +223,21 @@ namespace Microsoft.ExtractorSuite.Core.Authentication
                     "IdentityRiskyUser.Read.All",
                     "Policy.Read.All",
                     "Mail.Read",
-                    "MailboxSettings.Read"
+                    "Mail.ReadWrite",
+                    "Mail.Send",
+                    "MailboxSettings.Read",
+                    "MailboxSettings.ReadWrite",
+                    "Calendars.Read",
+                    "Calendars.ReadWrite",
+                    "Reports.Read.All"
                 };
+
+                // If Exchange Online access is requested, also get the Exchange token
+                if (includeExchangeOnline)
+                {
+                    // Exchange Online uses a different resource ID
+                    await GetExchangeOnlineTokenAsync(cancellationToken);
+                }
 
                 var requestedScopes = scopes ?? defaultScopes;
 
@@ -223,7 +291,7 @@ namespace Microsoft.ExtractorSuite.Core.Authentication
                 var options = new InteractiveBrowserCredentialOptions
                 {
                     TenantId = _currentTenantId,
-                    ClientId = ClientId,
+                    ClientId = GraphClientId,
                     RedirectUri = new Uri("http://localhost"),
                     AuthorityHost = AzureAuthorityHosts.AzurePublicCloud
                 };
@@ -250,24 +318,31 @@ namespace Microsoft.ExtractorSuite.Core.Authentication
         {
             try
             {
-                var scopes = new[] { "https://outlook.office365.com/.default" };
-
-                var accounts = await _publicClientApp!.GetAccountsAsync();
-                AuthenticationResult result;
-
-                try
+                // First check if we have a valid Exchange token from ConnectExchangeOnlineAsync
+                if (_exchangeAuthResult != null && _exchangeAuthResult.ExpiresOn > DateTimeOffset.UtcNow)
                 {
-                    result = await _publicClientApp.AcquireTokenSilent(scopes, accounts.FirstOrDefault())
-                        .ExecuteAsync(cancellationToken);
-                }
-                catch (MsalUiRequiredException)
-                {
-                    result = await _publicClientApp.AcquireTokenInteractive(scopes)
-                        .WithAuthority($"https://login.microsoftonline.com/{_currentTenantId ?? "organizations"}")
-                        .ExecuteAsync(cancellationToken);
+                    return _exchangeAuthResult.AccessToken;
                 }
 
-                return result.AccessToken;
+                // If no Exchange token, try to connect to Exchange Online
+                var connected = await ConnectExchangeOnlineAsync(_currentTenantId, cancellationToken);
+                if (connected && _exchangeAuthResult != null)
+                {
+                    return _exchangeAuthResult.AccessToken;
+                }
+
+                // Fall back to Graph token if available (for basic mail operations)
+                if (_currentAuthResult != null && _currentAuthResult.ExpiresOn > DateTimeOffset.UtcNow)
+                {
+                    // Check if the token has Mail permissions for basic operations
+                    if (_currentAuthResult.Scopes.Any(s => s.Contains("Mail.")))
+                    {
+                        Console.WriteLine("Using Graph token for Exchange operations (limited functionality)");
+                        return _currentAuthResult.AccessToken;
+                    }
+                }
+
+                return null;
             }
             catch (Exception ex)
             {
@@ -284,7 +359,7 @@ namespace Microsoft.ExtractorSuite.Core.Authentication
         public string CurrentLevel => IsGraphConnected ? "Graph" : "None"; // For compatibility
         public bool IsGraphConnected => _graphClient != null || _betaGraphClient != null;
         public bool IsAzureConnected => _azureCredential != null;
-        public bool IsExchangeConnected => IsGraphConnected; // Exchange operations require Graph connection
+        public bool IsExchangeConnected => _exchangeAuthResult != null && _exchangeAuthResult.ExpiresOn > DateTimeOffset.UtcNow;
 
         // Additional async methods for compatibility
         public Task<bool> IsConnectedAsync()
@@ -353,11 +428,15 @@ namespace Microsoft.ExtractorSuite.Core.Authentication
             // Clear token cache
             if (_publicClientApp != null)
             {
-                var accounts = _publicClientApp.GetAccountsAsync().GetAwaiter().GetResult();
-                foreach (var account in accounts)
+                // Run on thread pool to avoid STA thread issues
+                Task.Run(async () =>
                 {
-                    _publicClientApp.RemoveAsync(account).GetAwaiter().GetResult();
-                }
+                    var accounts = await _publicClientApp.GetAccountsAsync().ConfigureAwait(false);
+                    foreach (var account in accounts)
+                    {
+                        await _publicClientApp.RemoveAsync(account).ConfigureAwait(false);
+                    }
+                }).GetAwaiter().GetResult();
             }
         }
     }

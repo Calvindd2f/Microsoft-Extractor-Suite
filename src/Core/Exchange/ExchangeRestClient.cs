@@ -119,6 +119,9 @@ namespace Microsoft.ExtractorSuite.Core.Exchange
             };
 
             var url = $"{ExchangeAdminApiUrl}/{_authManager.CurrentTenantId}/ActivityFeed/SearchUnifiedAuditLog";
+            
+            Console.WriteLine($"Calling Exchange API: {url}");
+            Console.WriteLine($"Request body: {JsonSerializer.Serialize(requestBody, _jsonOptions)}");
 
             using var content = new StringContent(
                 JsonSerializer.Serialize(requestBody, _jsonOptions),
@@ -129,8 +132,32 @@ namespace Microsoft.ExtractorSuite.Core.Exchange
                 () => _httpClient.PostAsync(url, content, cancellationToken),
                 cancellationToken);
 
-            var json = await response.Content.ReadAsStringAsync();
-            return JsonSerializer.Deserialize<UnifiedAuditLogResult>(json, _jsonOptions)!;
+            var responseContent = await response.Content.ReadAsStringAsync();
+            
+            // Check if response is JSON
+            if (string.IsNullOrWhiteSpace(responseContent))
+            {
+                throw new InvalidOperationException("Exchange API returned empty response");
+            }
+            
+            if (!responseContent.TrimStart().StartsWith("{") && !responseContent.TrimStart().StartsWith("["))
+            {
+                // Response is not JSON, likely HTML error page
+                throw new InvalidOperationException(
+                    $"Exchange API returned non-JSON response. This usually indicates an authentication or endpoint issue. " +
+                    $"Response preview: {responseContent.Substring(0, Math.Min(500, responseContent.Length))}");
+            }
+            
+            try
+            {
+                return JsonSerializer.Deserialize<UnifiedAuditLogResult>(responseContent, _jsonOptions)!;
+            }
+            catch (JsonException ex)
+            {
+                throw new InvalidOperationException(
+                    $"Failed to parse Exchange API response as JSON. Error: {ex.Message}. " +
+                    $"Response: {responseContent.Substring(0, Math.Min(500, responseContent.Length))}", ex);
+            }
         }
 
         #endregion
@@ -612,31 +639,81 @@ namespace Microsoft.ExtractorSuite.Core.Exchange
             var token = await _authManager.GetExchangeOnlineTokenAsync(cancellationToken);
             if (string.IsNullOrEmpty(token))
             {
-                throw new InvalidOperationException("Failed to obtain Exchange Online access token");
+                throw new InvalidOperationException(
+                    "Failed to obtain Exchange Online access token. " +
+                    "Please ensure you have the necessary Exchange permissions. " +
+                    "Try running Connect-M365 with Exchange scopes or use Graph API alternatives.");
             }
 
             _httpClient.DefaultRequestHeaders.Authorization =
                 new AuthenticationHeaderValue("Bearer", token);
 
-            var response = await _retryPolicy.ExecuteAsync(async () =>
+            try
             {
-                var result = await operation();
-
-                // Handle rate limiting
-                if (result.StatusCode == (HttpStatusCode)429)
+                var response = await _retryPolicy.ExecuteAsync(async () =>
                 {
-                    if (result.Headers.RetryAfter != null)
+                    var result = await operation();
+
+                    // Handle rate limiting
+                    if (result.StatusCode == (HttpStatusCode)429)
                     {
-                        var delay = result.Headers.RetryAfter.Delta ?? TimeSpan.FromSeconds(60);
-                        await Task.Delay(delay, cancellationToken);
+                        if (result.Headers.RetryAfter != null)
+                        {
+                            var delay = result.Headers.RetryAfter.Delta ?? TimeSpan.FromSeconds(60);
+                            await Task.Delay(delay, cancellationToken);
+                        }
                     }
-                }
 
-                result.EnsureSuccessStatusCode();
-                return result;
-            });
+                    // Log the response status for debugging
+                    if (!result.IsSuccessStatusCode)
+                    {
+                        var content = await result.Content.ReadAsStringAsync();
+                        Console.WriteLine($"Exchange API error - Status: {result.StatusCode}");
+                        Console.WriteLine($"Response headers: {string.Join(", ", result.Headers.Select(h => $"{h.Key}={string.Join(",", h.Value)}"))}");
+                        Console.WriteLine($"Response content preview: {content.Substring(0, Math.Min(500, content.Length))}");
+                    }
 
-            return response;
+                    // Handle specific Exchange errors
+                    if (result.StatusCode == HttpStatusCode.Forbidden)
+                    {
+                        var content = await result.Content.ReadAsStringAsync();
+                        throw new UnauthorizedAccessException(
+                            $"Access denied to Exchange Online Management API. " +
+                            $"This may require Exchange Administrator role or specific Exchange permissions. " +
+                            $"Status: {result.StatusCode}, Content: {content.Substring(0, Math.Min(500, content.Length))}");
+                    }
+
+                    if (result.StatusCode == HttpStatusCode.NotFound)
+                    {
+                        var content = await result.Content.ReadAsStringAsync();
+                        throw new InvalidOperationException(
+                            $"Exchange Online Management API endpoint not found. " +
+                            $"The endpoint may not exist or Exchange Online may not be properly configured. " +
+                            $"Status: {result.StatusCode}, URL was: {result.RequestMessage?.RequestUri}");
+                    }
+
+                    if (result.StatusCode == HttpStatusCode.Unauthorized)
+                    {
+                        var content = await result.Content.ReadAsStringAsync();
+                        throw new UnauthorizedAccessException(
+                            $"Authentication failed for Exchange API. " +
+                            $"Token may be expired or invalid. Try reconnecting with Connect-M365 -ExchangeOnline. " +
+                            $"Response: {content.Substring(0, Math.Min(500, content.Length))}");
+                    }
+
+                    result.EnsureSuccessStatusCode();
+                    return result;
+                });
+
+                return response;
+            }
+            catch (HttpRequestException ex)
+            {
+                throw new InvalidOperationException(
+                    $"Failed to connect to Exchange Online API. " +
+                    $"Error: {ex.Message}. " +
+                    $"Please verify Exchange Online connectivity and permissions.", ex);
+            }
         }
 
         private async Task ThrottleRequestAsync(CancellationToken cancellationToken)
