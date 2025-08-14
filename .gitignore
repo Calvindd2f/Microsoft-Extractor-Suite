@@ -165,5 +165,5 @@ src/bin/*
 tests/*
 CONTRIBUTE.md
 .claude/*
-
 build_output.txt
+tests

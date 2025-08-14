@@ -44,6 +44,9 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                     WriteObject(user);
                 }
             }
+            
+            // Process any queued writes from async operations
+            ProcessQueuedWrites();
         }
 
         private async Task<List<UserInfo>> GetUsersAsync(
@@ -119,10 +122,11 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
 
                             if (processedCount % 100 == 0)
                             {
+                                var count = processedCount;
                                 progress.Report(new Core.AsyncOperations.TaskProgress
                                 {
                                     CurrentOperation = $"Processing users",
-                                    ItemsProcessed = processedCount,
+                                    ItemsProcessed = count,
                                     PercentComplete = -1
                                 });
                             }
@@ -132,7 +136,8 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
 
                 await pageIterator.IterateAsync(cancellationToken);
 
-                WriteVerboseWithTimestamp($"Retrieved {users.Count} users");
+                var userCount = users.Count;
+                QueueWrite(() => WriteVerboseWithTimestamp($"Retrieved {userCount} users"));
 
                 // Export to file if output directory specified
                 if (!string.IsNullOrEmpty(OutputDirectory))
@@ -190,7 +195,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                 await csv.WriteRecordsAsync(users);
             }
 
-            WriteVerboseWithTimestamp($"Exported users to {fileName}");
+            QueueWrite(() => WriteVerboseWithTimestamp($"Exported users to {fileName}"));
         }
     }
 

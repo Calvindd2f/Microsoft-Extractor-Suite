@@ -218,7 +218,9 @@ namespace Microsoft.ExtractorSuite.Cmdlets.AuditLog
                 // Merge output if requested
                 if (MergeOutput)
                 {
-                    MergeOutputFiles().GetAwaiter().GetResult();
+                    // Run on thread pool to avoid STA thread issues
+                    Task.Run(async () => await MergeOutputFiles().ConfigureAwait(false))
+                        .GetAwaiter().GetResult();
                 }
             }
             catch (Exception ex)

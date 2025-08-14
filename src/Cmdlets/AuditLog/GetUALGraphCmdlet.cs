@@ -608,7 +608,9 @@ namespace Microsoft.ExtractorSuite.Cmdlets.AuditLog
                 // Flush any remaining CSV records
                 if (Output.Equals("CSV", StringComparison.OrdinalIgnoreCase) && _csvBuffer.Any())
                 {
-                    FlushCsvBufferAsync(CancellationToken.None).Wait();
+                    // Run on thread pool to avoid STA thread issues
+                    Task.Run(async () => await FlushCsvBufferAsync(CancellationToken.None).ConfigureAwait(false))
+                        .GetAwaiter().GetResult();
                 }
 
                 // Close JSON array if needed

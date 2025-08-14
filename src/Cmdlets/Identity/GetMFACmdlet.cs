@@ -104,7 +104,10 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                         {
                             try
                             {
-                                var mfaStatus = GetUserMFAStatusAsync(graphClient, user, cancellationToken).GetAwaiter().GetResult();
+                                // Run on thread pool to avoid STA thread issues
+                                var mfaStatus = Task.Run(async () => 
+                                    await GetUserMFAStatusAsync(graphClient, user, cancellationToken).ConfigureAwait(false))
+                                    .GetAwaiter().GetResult();
                                 mfaStatuses.Add(mfaStatus);
 
                                 processedCount++;
