@@ -53,7 +53,8 @@ namespace Microsoft.ExtractorSuite.Core
         {
             try
             {
-                return task.GetAwaiter().GetResult();
+                // Run on thread pool to avoid STA thread issues
+                return Task.Run(async () => await task.ConfigureAwait(false)).GetAwaiter().GetResult();
             }
             catch (AggregateException ex)
             {
@@ -65,7 +66,8 @@ namespace Microsoft.ExtractorSuite.Core
         {
             try
             {
-                task.GetAwaiter().GetResult();
+                // Run on thread pool to avoid STA thread issues
+                Task.Run(async () => await task.ConfigureAwait(false)).GetAwaiter().GetResult();
             }
             catch (AggregateException ex)
             {

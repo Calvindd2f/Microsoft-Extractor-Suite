@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Management.Automation;
 using System.Threading;
@@ -18,6 +19,8 @@ namespace Microsoft.ExtractorSuite.Core
         private CancellationTokenSource? _cancellationTokenSource;
         private AsyncTaskManager? _taskManager;
         private bool _disposed;
+        private readonly ConcurrentQueue<Action> _pendingWrites = new();
+        private readonly object _writeLock = new();
 
         protected ILogger? Logger { get; private set; }
 
@@ -61,7 +64,26 @@ namespace Microsoft.ExtractorSuite.Core
 
             try
             {
+                // Process the async task while pumping the message queue
                 var task = ProcessRecordAsync();
+                
+                // Pump messages while the task runs to completion
+                while (!task.IsCompleted)
+                {
+                    // Process any queued writes on the main thread
+                    ProcessQueuedWrites();
+                    
+                    // Small delay to prevent CPU spinning
+                    if (!task.Wait(10))
+                    {
+                        // Continue processing
+                    }
+                }
+                
+                // Process any remaining writes
+                ProcessQueuedWrites();
+                
+                // Get the result (will throw if task faulted)
                 task.GetAwaiter().GetResult();
             }
             catch (Exception ex)
@@ -82,6 +104,10 @@ namespace Microsoft.ExtractorSuite.Core
         protected override void EndProcessing()
         {
             base.EndProcessing();
+            
+            // Process any remaining queued writes
+            ProcessQueuedWrites();
+            
             Logger?.LogInfo($"Completed cmdlet: {this.MyInvocation.MyCommand.Name}");
             Dispose();
         }
@@ -125,40 +151,44 @@ namespace Microsoft.ExtractorSuite.Core
             Func<IProgress<TaskProgress>, CancellationToken, Task<T>> operation,
             string operationName)
         {
-            // Create a dedicated thread for the async operation to avoid deadlocks
             T result = default(T)!;
             Exception? exception = null;
+            var completedEvent = new ManualResetEventSlim(false);
 
-            var thread = new System.Threading.Thread(() =>
+            // Create progress handler that queues writes
+            var progress = new Progress<TaskProgress>(p =>
+            {
+                if (!NoProgress.IsPresent)
+                {
+                    QueueWrite(() => WriteProgressSafe(operationName, p.CurrentOperation ?? "Processing...", p.PercentComplete));
+                }
+            });
+
+            // Start the async operation
+            Task.Run(async () =>
             {
                 try
                 {
-                    // Create a new SynchronizationContext for this thread
-                    SynchronizationContext.SetSynchronizationContext(new SynchronizationContext());
-
-                    var progress = new Progress<TaskProgress>(p =>
-                    {
-                        if (!NoProgress.IsPresent)
-                        {
-                            WriteProgressSafe(operationName, p.CurrentOperation ?? "Processing...", p.PercentComplete);
-                        }
-                    });
-
-                    var task = operation(progress, CancellationToken);
-                    result = task.GetAwaiter().GetResult();
+                    result = await operation(progress, CancellationToken).ConfigureAwait(false);
                 }
                 catch (Exception ex)
                 {
                     exception = ex;
                 }
-            })
-            {
-                IsBackground = false,
-                Name = $"AsyncOperation_{operationName}"
-            };
+                finally
+                {
+                    completedEvent.Set();
+                }
+            });
 
-            thread.Start();
-            thread.Join();
+            // Process queued writes while waiting for completion
+            while (!completedEvent.Wait(10))
+            {
+                ProcessQueuedWrites();
+            }
+
+            // Process any remaining queued writes
+            ProcessQueuedWrites();
 
             if (exception != null)
             {
@@ -195,8 +225,9 @@ namespace Microsoft.ExtractorSuite.Core
                 // Process item if handler provided
                 processItem?.Invoke(item);
 
-                // Write to pipeline
-                WriteObject(item);
+                // Queue write to pipeline
+                var capturedItem = item;
+                QueueWrite(() => WriteObject(capturedItem));
 
                 count++;
 
@@ -205,13 +236,19 @@ namespace Microsoft.ExtractorSuite.Core
                 {
                     if (!NoProgress.IsPresent)
                     {
-                        WriteVerboseWithTimestamp($"{operationName}: Processed {count} items");
+                        var capturedCount = count;
+                        QueueWrite(() => WriteVerboseWithTimestamp($"{operationName}: Processed {capturedCount} items"));
                     }
                     lastProgressUpdate = DateTime.UtcNow;
                 }
+
+                // Process queued writes periodically
+                ProcessQueuedWrites();
             }
 
-            WriteVerboseWithTimestamp($"{operationName}: Completed. Total items: {count}");
+            var finalCount = count;
+            QueueWrite(() => WriteVerboseWithTimestamp($"{operationName}: Completed. Total items: {finalCount}"));
+            ProcessQueuedWrites();
         }
 
         /// <summary>
@@ -235,15 +272,70 @@ namespace Microsoft.ExtractorSuite.Core
             }
         }
 
+        /// <summary>
+        /// Queue a write operation to be executed on the main thread
+        /// </summary>
+        protected void QueueWrite(Action writeAction)
+        {
+            _pendingWrites.Enqueue(writeAction);
+        }
+
+        /// <summary>
+        /// Process all queued write operations on the main thread
+        /// </summary>
+        protected void ProcessQueuedWrites()
+        {
+            while (_pendingWrites.TryDequeue(out var action))
+            {
+                try
+                {
+                    action();
+                }
+                catch (Exception ex)
+                {
+                    // Log but don't throw to avoid breaking the pipeline
+                    Logger?.WriteErrorWithTimestamp($"Error processing queued write: {ex.Message}", ex);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Thread-safe method to write an object to the pipeline
+        /// </summary>
+        protected void WriteObjectThreadSafe(object obj)
+        {
+            if (IsOnPipelineThread())
+            {
+                WriteObject(obj);
+            }
+            else
+            {
+                QueueWrite(() => WriteObject(obj));
+            }
+        }
+
+        /// <summary>
+        /// Check if we're on the PowerShell pipeline thread
+        /// </summary>
+        private bool IsOnPipelineThread()
+        {
+            // PowerShell doesn't expose the pipeline thread ID directly,
+            // so we track it based on whether we're in ProcessRecord/BeginProcessing/EndProcessing
+            return Thread.CurrentThread.ManagedThreadId == System.Threading.Thread.CurrentThread.ManagedThreadId
+                && SynchronizationContext.Current == null;
+        }
+
         protected void WriteVerboseWithTimestamp(string message)
         {
-            WriteVerbose($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] {message}");
+            // Always queue writes to ensure thread safety
+            QueueWrite(() => WriteVerbose($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] {message}"));
             Logger?.LogDebug(message);
         }
 
         protected void WriteWarningWithTimestamp(string message)
         {
-            WriteWarning($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] {message}");
+            // Always queue writes to ensure thread safety
+            QueueWrite(() => WriteWarning($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] {message}"));
             Logger?.WriteWarningWithTimestamp(message);
         }
 
@@ -255,7 +347,8 @@ namespace Microsoft.ExtractorSuite.Core
                 ErrorCategory.InvalidOperation,
                 null);
 
-            WriteError(errorRecord);
+            // Always queue writes to ensure thread safety
+            QueueWrite(() => WriteError(errorRecord));
             Logger?.WriteErrorWithTimestamp(message, exception);
         }
 
