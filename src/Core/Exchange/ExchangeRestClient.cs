@@ -94,33 +94,28 @@ namespace Microsoft.ExtractorSuite.Core.Exchange
 
         #region Unified Audit Log via REST API
 
-        public async Task<UnifiedAuditLogResult> SearchUnifiedAuditLogAsync(
-            DateTime startDate,
-            DateTime endDate,
-            string? sessionId = null,
-            string[]? operations = null,
-            string[]? recordTypes = null,
-            string[]? userIds = null,
-            int resultSize = 5000,
+        /// <summary>
+        /// Invoke Exchange Online PowerShell cmdlets via the beta admin API
+        /// </summary>
+        public async Task<InvokeCommandResult> InvokeCommandAsync(
+            string cmdlet,
+            Dictionary<string, object>? parameters = null,
             CancellationToken cancellationToken = default)
         {
             await ThrottleRequestAsync(cancellationToken);
 
             var requestBody = new
             {
-                StartDate = startDate.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss"),
-                EndDate = endDate.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss"),
-                SessionId = sessionId ?? Guid.NewGuid().ToString(),
-                SessionCommand = sessionId == null ? "ReturnNextPreviewPage" : "ReturnNextPreviewPage",
-                ResultSize = resultSize,
-                Operations = operations,
-                RecordTypes = recordTypes,
-                UserIds = userIds
+                CmdletInput = new
+                {
+                    Cmdlet = cmdlet,
+                    Parameters = parameters ?? new Dictionary<string, object>()
+                }
             };
 
-            var url = $"{ExchangeAdminApiUrl}/{_authManager.CurrentTenantId}/ActivityFeed/SearchUnifiedAuditLog";
-            
-            Console.WriteLine($"Calling Exchange API: {url}");
+            var url = $"{ExchangeAdminApiUrl}/{_authManager.CurrentTenantId}/InvokeCommand";
+
+            Console.WriteLine($"Invoking Exchange cmdlet: {cmdlet}");
             Console.WriteLine($"Request body: {JsonSerializer.Serialize(requestBody, _jsonOptions)}");
 
             using var content = new StringContent(
@@ -133,13 +128,13 @@ namespace Microsoft.ExtractorSuite.Core.Exchange
                 cancellationToken);
 
             var responseContent = await response.Content.ReadAsStringAsync();
-            
+
             // Check if response is JSON
             if (string.IsNullOrWhiteSpace(responseContent))
             {
                 throw new InvalidOperationException("Exchange API returned empty response");
             }
-            
+
             if (!responseContent.TrimStart().StartsWith("{") && !responseContent.TrimStart().StartsWith("["))
             {
                 // Response is not JSON, likely HTML error page
@@ -147,10 +142,10 @@ namespace Microsoft.ExtractorSuite.Core.Exchange
                     $"Exchange API returned non-JSON response. This usually indicates an authentication or endpoint issue. " +
                     $"Response preview: {responseContent.Substring(0, Math.Min(500, responseContent.Length))}");
             }
-            
+
             try
             {
-                return JsonSerializer.Deserialize<UnifiedAuditLogResult>(responseContent, _jsonOptions)!;
+                return JsonSerializer.Deserialize<InvokeCommandResult>(responseContent, _jsonOptions)!;
             }
             catch (JsonException ex)
             {
@@ -158,6 +153,143 @@ namespace Microsoft.ExtractorSuite.Core.Exchange
                     $"Failed to parse Exchange API response as JSON. Error: {ex.Message}. " +
                     $"Response: {responseContent.Substring(0, Math.Min(500, responseContent.Length))}", ex);
             }
+        }
+
+        /// <summary>
+        /// Search Unified Audit Log using the InvokeCommand endpoint
+        /// </summary>
+        public async Task<UnifiedAuditLogResult> SearchUnifiedAuditLogAsync(
+            DateTime startDate,
+            DateTime endDate,
+            string? sessionId = null,
+            string[]? operations = null,
+            string[]? recordTypes = null,
+            string[]? userIds = null,
+            int resultSize = 5000,
+            CancellationToken cancellationToken = default)
+        {
+            var parameters = new Dictionary<string, object>
+            {
+                ["StartDate"] = startDate.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ"),
+                ["EndDate"] = endDate.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ"),
+                ["ResultSize"] = resultSize
+            };
+
+            if (!string.IsNullOrEmpty(sessionId))
+                parameters["SessionId"] = sessionId;
+
+            if (operations != null && operations.Length > 0)
+                parameters["Operations"] = operations;
+
+            if (recordTypes != null && recordTypes.Length > 0)
+                parameters["RecordTypes"] = recordTypes;
+
+            if (userIds != null && userIds.Length > 0)
+                parameters["UserIds"] = userIds;
+
+            var result = await InvokeCommandAsync("Search-UnifiedAuditLog", parameters, cancellationToken);
+
+            // Parse the result and convert to UnifiedAuditLogResult
+            if (result.Results != null && result.Results.Length > 0)
+            {
+                var firstResult = result.Results[0];
+                if (firstResult.Output != null)
+                {
+                    try
+                    {
+                        // The output should contain the actual audit log data
+                        var outputJson = firstResult.Output.ToString();
+                        if (!string.IsNullOrEmpty(outputJson))
+                        {
+                            return JsonSerializer.Deserialize<UnifiedAuditLogResult>(outputJson, _jsonOptions)!;
+                        }
+                    }
+                    catch (JsonException ex)
+                    {
+                        Console.WriteLine($"Warning: Failed to parse Search-UnifiedAuditLog output: {ex.Message}");
+                    }
+                }
+            }
+
+            // Fallback: return empty result
+            return new UnifiedAuditLogResult
+            {
+                Value = Array.Empty<UnifiedAuditLogRecord>(),
+                ResultCount = 0,
+                HasMoreData = false
+            };
+        }
+
+        /// <summary>
+        /// Search Unified Audit Log with session support for pagination
+        /// </summary>
+        public async Task<UnifiedAuditLogResult> SearchUnifiedAuditLogWithSessionAsync(
+            DateTime startDate,
+            DateTime endDate,
+            string? sessionId = null,
+            string[]? operations = null,
+            string[]? recordTypes = null,
+            string[]? userIds = null,
+            int resultSize = 5000,
+            CancellationToken cancellationToken = default)
+        {
+            var parameters = new Dictionary<string, object>
+            {
+                ["StartDate"] = startDate.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ"),
+                ["EndDate"] = endDate.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ"),
+                ["ResultSize"] = resultSize
+            };
+
+            if (!string.IsNullOrEmpty(sessionId))
+            {
+                parameters["SessionId"] = sessionId;
+                parameters["SessionCommand"] = "ReturnNextPreviewPage";
+            }
+            else
+            {
+                parameters["SessionCommand"] = "ReturnNextPreviewPage";
+            }
+
+            if (operations != null && operations.Length > 0)
+                parameters["Operations"] = operations;
+
+            if (recordTypes != null && recordTypes.Length > 0)
+                parameters["RecordTypes"] = recordTypes;
+
+            if (userIds != null && userIds.Length > 0)
+                parameters["UserIds"] = userIds;
+
+            var result = await InvokeCommandAsync("Search-UnifiedAuditLog", parameters, cancellationToken);
+
+            // Parse the result and convert to UnifiedAuditLogResult
+            if (result.Results != null && result.Results.Length > 0)
+            {
+                var firstResult = result.Results[0];
+                if (firstResult.Output != null)
+                {
+                    try
+                    {
+                        // The output should contain the actual audit log data
+                        var outputJson = firstResult.Output.ToString();
+                        if (!string.IsNullOrEmpty(outputJson))
+                        {
+                            return JsonSerializer.Deserialize<UnifiedAuditLogResult>(outputJson, _jsonOptions)!;
+                        }
+                    }
+                    catch (JsonException ex)
+                    {
+                        Console.WriteLine($"Warning: Failed to parse Search-UnifiedAuditLog output: {ex.Message}");
+                    }
+                }
+            }
+
+            // Fallback: return empty result
+            return new UnifiedAuditLogResult
+            {
+                Value = Array.Empty<UnifiedAuditLogRecord>(),
+                ResultCount = 0,
+                HasMoreData = false
+            };
         }
 
         #endregion
@@ -180,34 +312,58 @@ namespace Microsoft.ExtractorSuite.Core.Exchange
             {
                 await ThrottleRequestAsync(cancellationToken);
 
-                var queryParams = new Dictionary<string, string>
+                var parameters = new Dictionary<string, object>
                 {
-                    ["StartDate"] = startDate.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss"),
-                    ["EndDate"] = endDate.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss"),
-                    ["$top"] = pageSize.ToString(),
-                    ["Page"] = page.ToString()
+                    ["StartDate"] = startDate.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ"),
+                    ["EndDate"] = endDate.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ"),
+                    ["PageSize"] = pageSize,
+                    ["Page"] = page
                 };
 
                 if (!string.IsNullOrEmpty(senderAddress))
-                    queryParams["SenderAddress"] = senderAddress;
+                    parameters["SenderAddress"] = senderAddress;
                 if (!string.IsNullOrEmpty(recipientAddress))
-                    queryParams["RecipientAddress"] = recipientAddress;
+                    parameters["RecipientAddress"] = recipientAddress;
                 if (!string.IsNullOrEmpty(messageId))
-                    queryParams["MessageId"] = messageId;
+                    parameters["MessageId"] = messageId;
 
-                var url = BuildUrl($"{ExchangeAdminApiUrl}/{_authManager.CurrentTenantId}/MessageTrace", queryParams);
+                var result = await InvokeCommandAsync("Get-MessageTrace", parameters, cancellationToken);
 
-                var response = await ExecuteWithRetryAsync(
-                    () => _httpClient.GetAsync(url, cancellationToken),
-                    cancellationToken);
+                // Parse the result and convert to MessageTraceResult
+                MessageTraceResult? messageTraceResult = null;
+                if (result.Results != null && result.Results.Length > 0)
+                {
+                    var firstResult = result.Results[0];
+                    if (firstResult.Output != null)
+                    {
+                        try
+                        {
+                            var outputJson = firstResult.Output.ToString();
+                            if (!string.IsNullOrEmpty(outputJson))
+                            {
+                                messageTraceResult = JsonSerializer.Deserialize<MessageTraceResult>(outputJson, _jsonOptions);
+                            }
+                        }
+                        catch (JsonException ex)
+                        {
+                            Console.WriteLine($"Warning: Failed to parse Get-MessageTrace output: {ex.Message}");
+                        }
+                    }
+                }
 
-                var json = await response.Content.ReadAsStringAsync();
-                var result = JsonSerializer.Deserialize<MessageTraceResult>(json, _jsonOptions)!;
+                // Fallback to empty result if parsing failed
+                if (messageTraceResult == null)
+                {
+                    messageTraceResult = new MessageTraceResult
+                    {
+                        Value = Array.Empty<MessageTrace>()
+                    };
+                }
 
-                hasMoreData = result.Value?.Length == pageSize;
+                hasMoreData = messageTraceResult.Value?.Length == pageSize;
                 page++;
 
-                yield return result;
+                yield return messageTraceResult;
 
             } while (hasMoreData && !cancellationToken.IsCancellationRequested);
         }
@@ -266,41 +422,65 @@ namespace Microsoft.ExtractorSuite.Core.Exchange
             {
                 await ThrottleRequestAsync(cancellationToken);
 
-                var requestBody = new
+                var parameters = new Dictionary<string, object>
                 {
-                    Identity = userPrincipalName,
-                    StartDate = startDate.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss"),
-                    EndDate = endDate.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss"),
-                    Operations = operations,
-                    ResultSize = 10000,
-                    SessionId = sessionId,
-                    ResultSetId = resultSetId
+                    ["Identity"] = userPrincipalName,
+                    ["StartDate"] = startDate.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ"),
+                    ["EndDate"] = endDate.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ"),
+                    ["ResultSize"] = 10000,
+                    ["SessionId"] = sessionId
                 };
 
-                var url = $"{ExchangeAdminApiUrl}/{_authManager.CurrentTenantId}/MailboxAuditLog";
+                if (operations != null && operations.Length > 0)
+                    parameters["Operations"] = operations;
 
-                using var content = new StringContent(
-                    JsonSerializer.Serialize(requestBody, _jsonOptions),
-                    Encoding.UTF8,
-                    "application/json");
+                if (!string.IsNullOrEmpty(resultSetId))
+                    parameters["ResultSetId"] = resultSetId;
 
-                var response = await ExecuteWithRetryAsync(
-                    () => _httpClient.PostAsync(url, content, cancellationToken),
-                    cancellationToken);
+                var result = await InvokeCommandAsync("Search-MailboxAuditLog", parameters, cancellationToken);
 
-                var json = await response.Content.ReadAsStringAsync();
-                var result = JsonSerializer.Deserialize<MailboxAuditLogResult>(json, _jsonOptions)!;
-
-                if (result.Records != null)
+                // Parse the result and convert to MailboxAuditLogResult
+                MailboxAuditLogResult? mailboxAuditLogResult = null;
+                if (result.Results != null && result.Results.Length > 0)
                 {
-                    foreach (var record in result.Records)
+                    var firstResult = result.Results[0];
+                    if (firstResult.Output != null)
+                    {
+                        try
+                        {
+                            var outputJson = firstResult.Output.ToString();
+                            if (!string.IsNullOrEmpty(outputJson))
+                            {
+                                mailboxAuditLogResult = JsonSerializer.Deserialize<MailboxAuditLogResult>(outputJson, _jsonOptions);
+                            }
+                        }
+                        catch (JsonException ex)
+                        {
+                            Console.WriteLine($"Warning: Failed to parse Search-MailboxAuditLog output: {ex.Message}");
+                        }
+                    }
+                }
+
+                // Fallback to empty result if parsing failed
+                if (mailboxAuditLogResult == null)
+                {
+                    mailboxAuditLogResult = new MailboxAuditLogResult
+                    {
+                        Records = Array.Empty<MailboxAuditLogRecord>(),
+                        HasMoreData = false
+                    };
+                }
+
+                if (mailboxAuditLogResult.Records != null)
+                {
+                    foreach (var record in mailboxAuditLogResult.Records)
                     {
                         yield return record;
                     }
                 }
 
-                resultSetId = result.ResultSetId;
-                hasMoreData = result.HasMoreData;
+                resultSetId = mailboxAuditLogResult.ResultSetId;
+                hasMoreData = mailboxAuditLogResult.HasMoreData;
 
             } while (hasMoreData && !cancellationToken.IsCancellationRequested);
         }
@@ -313,16 +493,32 @@ namespace Microsoft.ExtractorSuite.Core.Exchange
         {
             await ThrottleRequestAsync(cancellationToken);
 
-            var url = $"{ExchangeAdminApiUrl}/{_authManager.CurrentTenantId}/TransportRule";
+            var result = await InvokeCommandAsync("Get-TransportRule", cancellationToken: cancellationToken);
 
-            var response = await ExecuteWithRetryAsync(
-                () => _httpClient.GetAsync(url, cancellationToken),
-                cancellationToken);
+            // Parse the result and convert to TransportRule[]
+            if (result.Results != null && result.Results.Length > 0)
+            {
+                var firstResult = result.Results[0];
+                if (firstResult.Output != null)
+                {
+                    try
+                    {
+                        var outputJson = firstResult.Output.ToString();
+                        if (!string.IsNullOrEmpty(outputJson))
+                        {
+                            var transportRuleResult = JsonSerializer.Deserialize<TransportRuleResult>(outputJson, _jsonOptions);
+                            return transportRuleResult?.Value ?? Array.Empty<TransportRule>();
+                        }
+                    }
+                    catch (JsonException ex)
+                    {
+                        Console.WriteLine($"Warning: Failed to parse Get-TransportRule output: {ex.Message}");
+                    }
+                }
+            }
 
-            var json = await response.Content.ReadAsStringAsync();
-            var result = JsonSerializer.Deserialize<TransportRuleResult>(json, _jsonOptions)!;
-
-            return result.Value ?? Array.Empty<TransportRule>();
+            // Fallback to empty result if parsing failed
+            return Array.Empty<TransportRule>();
         }
 
         #endregion
@@ -335,16 +531,37 @@ namespace Microsoft.ExtractorSuite.Core.Exchange
         {
             await ThrottleRequestAsync(cancellationToken);
 
-            var url = $"{ExchangeAdminApiUrl}/{_authManager.CurrentTenantId}/InboxRule?Mailbox={Uri.EscapeDataString(userPrincipalName)}";
+            var parameters = new Dictionary<string, object>
+            {
+                ["Mailbox"] = userPrincipalName
+            };
 
-            var response = await ExecuteWithRetryAsync(
-                () => _httpClient.GetAsync(url, cancellationToken),
-                cancellationToken);
+            var result = await InvokeCommandAsync("Get-InboxRule", parameters, cancellationToken);
 
-            var json = await response.Content.ReadAsStringAsync();
-            var result = JsonSerializer.Deserialize<InboxRuleResult>(json, _jsonOptions)!;
+            // Parse the result and convert to InboxRule[]
+            if (result.Results != null && result.Results.Length > 0)
+            {
+                var firstResult = result.Results[0];
+                if (firstResult.Output != null)
+                {
+                    try
+                    {
+                        var outputJson = firstResult.Output.ToString();
+                        if (!string.IsNullOrEmpty(outputJson))
+                        {
+                            var inboxRuleResult = JsonSerializer.Deserialize<InboxRuleResult>(outputJson, _jsonOptions);
+                            return inboxRuleResult?.Value ?? Array.Empty<InboxRule>();
+                        }
+                    }
+                    catch (JsonException ex)
+                    {
+                        Console.WriteLine($"Warning: Failed to parse Get-InboxRule output: {ex.Message}");
+                    }
+                }
+            }
 
-            return result.Value ?? Array.Empty<InboxRule>();
+            // Fallback to empty result if parsing failed
+            return Array.Empty<InboxRule>();
         }
 
         public async IAsyncEnumerable<InboxRule> GetAllMailboxInboxRulesAsync(
@@ -415,21 +632,56 @@ namespace Microsoft.ExtractorSuite.Core.Exchange
         {
             await ThrottleRequestAsync(cancellationToken);
 
-            var graphClient = _authManager.GraphClient
-                ?? throw new InvalidOperationException("Graph client not initialized");
+            var result = await InvokeCommandAsync("Get-Mailbox", cancellationToken: cancellationToken);
 
             var users = new List<string>();
-            
-            var response = await graphClient.Users
-                .GetAsync(requestConfiguration => {
-                    requestConfiguration.QueryParameters.Select = new string[] { "userPrincipalName", "mail", "assignedLicenses" };
-                    requestConfiguration.QueryParameters.Filter = "assignedLicenses/any()"; // Only licensed users
-                    requestConfiguration.QueryParameters.Top = 999;
-                }, cancellationToken);
 
-            if (response?.Value != null)
+            // Parse the result and extract user principal names
+            if (result.Results != null && result.Results.Length > 0)
             {
-                users.AddRange(response.Value.Select(u => u.UserPrincipalName ?? u.Mail).Where(u => !string.IsNullOrEmpty(u)));
+                var firstResult = result.Results[0];
+                if (firstResult.Output != null)
+                {
+                    try
+                    {
+                        var outputJson = firstResult.Output.ToString();
+                        if (!string.IsNullOrEmpty(outputJson))
+                        {
+                            var mailboxes = JsonSerializer.Deserialize<ExchangeMailbox[]>(outputJson, _jsonOptions);
+                            if (mailboxes != null)
+                            {
+                                users.AddRange(mailboxes.Select(m => m.UserPrincipalName).Where(u => !string.IsNullOrEmpty(u)));
+                            }
+                        }
+                    }
+                    catch (JsonException ex)
+                    {
+                        Console.WriteLine($"Warning: Failed to parse Get-Mailbox output: {ex.Message}");
+
+                        // Fallback to Graph API if InvokeCommand fails
+                        try
+                        {
+                            var graphClient = _authManager.GraphClient
+                                ?? throw new InvalidOperationException("Graph client not initialized");
+
+                            var response = await graphClient.Users
+                                .GetAsync(requestConfiguration => {
+                                    requestConfiguration.QueryParameters.Select = new string[] { "userPrincipalName", "mail", "assignedLicenses" };
+                                    requestConfiguration.QueryParameters.Filter = "assignedLicenses/any()"; // Only licensed users
+                                    requestConfiguration.QueryParameters.Top = 999;
+                                }, cancellationToken);
+
+                            if (response?.Value != null)
+                            {
+                                users.AddRange(response.Value.Select(u => u.UserPrincipalName ?? u.Mail).Where(u => !string.IsNullOrEmpty(u)));
+                            }
+                        }
+                        catch (Exception graphEx)
+                        {
+                            Console.WriteLine($"Fallback to Graph API also failed: {graphEx.Message}");
+                        }
+                    }
+                }
             }
 
             return users.ToArray();
@@ -454,16 +706,37 @@ namespace Microsoft.ExtractorSuite.Core.Exchange
         {
             await ThrottleRequestAsync(cancellationToken);
 
-            var url = $"{ExchangeAdminApiUrl}/{_authManager.CurrentTenantId}/MailboxPermission?Identity={Uri.EscapeDataString(mailbox)}";
+            var parameters = new Dictionary<string, object>
+            {
+                ["Identity"] = mailbox
+            };
 
-            var response = await ExecuteWithRetryAsync(
-                () => _httpClient.GetAsync(url, cancellationToken),
-                cancellationToken);
+            var result = await InvokeCommandAsync("Get-MailboxPermission", parameters, cancellationToken);
 
-            var json = await response.Content.ReadAsStringAsync();
-            var result = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(json, _jsonOptions);
-            
-            return result?["value"].EnumerateArray().Select(x => (object)x).ToArray() ?? Array.Empty<object>();
+            // Parse the result and return as object array
+            if (result.Results != null && result.Results.Length > 0)
+            {
+                var firstResult = result.Results[0];
+                if (firstResult.Output != null)
+                {
+                    try
+                    {
+                        var outputJson = firstResult.Output.ToString();
+                        if (!string.IsNullOrEmpty(outputJson))
+                        {
+                            var parsedResult = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(outputJson, _jsonOptions);
+                            return parsedResult?["value"].EnumerateArray().Select(x => (object)x).ToArray() ?? Array.Empty<object>();
+                        }
+                    }
+                    catch (JsonException ex)
+                    {
+                        Console.WriteLine($"Warning: Failed to parse Get-MailboxPermission output: {ex.Message}");
+                    }
+                }
+            }
+
+            // Fallback to empty result if parsing failed
+            return Array.Empty<object>();
         }
 
         /// <summary>
@@ -473,16 +746,37 @@ namespace Microsoft.ExtractorSuite.Core.Exchange
         {
             await ThrottleRequestAsync(cancellationToken);
 
-            var url = $"{ExchangeAdminApiUrl}/{_authManager.CurrentTenantId}/RecipientPermission?Identity={Uri.EscapeDataString(recipient)}";
+            var parameters = new Dictionary<string, object>
+            {
+                ["Identity"] = recipient
+            };
 
-            var response = await ExecuteWithRetryAsync(
-                () => _httpClient.GetAsync(url, cancellationToken),
-                cancellationToken);
+            var result = await InvokeCommandAsync("Get-RecipientPermission", parameters, cancellationToken);
 
-            var json = await response.Content.ReadAsStringAsync();
-            var result = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(json, _jsonOptions);
-            
-            return result?["value"].EnumerateArray().Select(x => (object)x).ToArray() ?? Array.Empty<object>();
+            // Parse the result and return as object array
+            if (result.Results != null && result.Results.Length > 0)
+            {
+                var firstResult = result.Results[0];
+                if (firstResult.Output != null)
+                {
+                    try
+                    {
+                        var outputJson = firstResult.Output.ToString();
+                        if (!string.IsNullOrEmpty(outputJson))
+                        {
+                            var parsedResult = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(outputJson, _jsonOptions);
+                            return parsedResult?["value"].EnumerateArray().Select(x => (object)x).ToArray() ?? Array.Empty<object>();
+                        }
+                    }
+                    catch (JsonException ex)
+                    {
+                        Console.WriteLine($"Warning: Failed to parse Get-RecipientPermission output: {ex.Message}");
+                    }
+                }
+            }
+
+            // Fallback to empty result if parsing failed
+            return Array.Empty<object>();
         }
 
         /// <summary>
@@ -492,16 +786,37 @@ namespace Microsoft.ExtractorSuite.Core.Exchange
         {
             await ThrottleRequestAsync(cancellationToken);
 
-            var url = $"{ExchangeAdminApiUrl}/{_authManager.CurrentTenantId}/SendAsPermission?Identity={Uri.EscapeDataString(mailbox)}";
+            var parameters = new Dictionary<string, object>
+            {
+                ["Identity"] = mailbox
+            };
 
-            var response = await ExecuteWithRetryAsync(
-                () => _httpClient.GetAsync(url, cancellationToken),
-                cancellationToken);
+            var result = await InvokeCommandAsync("Get-SendAsPermission", parameters, cancellationToken);
 
-            var json = await response.Content.ReadAsStringAsync();
-            var result = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(json, _jsonOptions);
-            
-            return result?["value"].EnumerateArray().Select(x => (object)x).ToArray() ?? Array.Empty<object>();
+            // Parse the result and return as object array
+            if (result.Results != null && result.Results.Length > 0)
+            {
+                var firstResult = result.Results[0];
+                if (firstResult.Output != null)
+                {
+                    try
+                    {
+                        var outputJson = firstResult.Output.ToString();
+                        if (!string.IsNullOrEmpty(outputJson))
+                        {
+                            var parsedResult = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(outputJson, _jsonOptions);
+                            return parsedResult?["value"].EnumerateArray().Select(x => (object)x).ToArray() ?? Array.Empty<object>();
+                        }
+                    }
+                    catch (JsonException ex)
+                    {
+                        Console.WriteLine($"Warning: Failed to parse Get-SendAsPermission output: {ex.Message}");
+                    }
+                }
+            }
+
+            // Fallback to empty result if parsing failed
+            return Array.Empty<object>();
         }
 
         /// <summary>
@@ -555,33 +870,43 @@ namespace Microsoft.ExtractorSuite.Core.Exchange
         {
             await ThrottleRequestAsync(cancellationToken);
 
-            var requestBody = new
+            var parameters = new Dictionary<string, object>
             {
-                StartDate = startDate.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss"),
-                EndDate = endDate.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss"),
-                Operations = operations,
-                ResultSize = 5000
+                ["StartDate"] = startDate.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ"),
+                ["EndDate"] = endDate.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ"),
+                ["ResultSize"] = 5000
             };
 
-            var url = $"{ExchangeAdminApiUrl}/{_authManager.CurrentTenantId}/AdminAuditLogSearch";
+            if (operations != null && operations.Length > 0)
+                parameters["Operations"] = operations;
 
-            using var content = new StringContent(
-                JsonSerializer.Serialize(requestBody, _jsonOptions),
-                Encoding.UTF8,
-                "application/json");
+            var result = await InvokeCommandAsync("Search-AdminAuditLog", parameters, cancellationToken);
 
-            var response = await ExecuteWithRetryAsync(
-                () => _httpClient.PostAsync(url, content, cancellationToken),
-                cancellationToken);
-
-            var json = await response.Content.ReadAsStringAsync();
-            var result = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(json, _jsonOptions);
-
-            if (result?["value"].EnumerateArray() != null)
+            // Parse the result and yield entries
+            if (result.Results != null && result.Results.Length > 0)
             {
-                foreach (var entry in result["value"].EnumerateArray())
+                var firstResult = result.Results[0];
+                if (firstResult.Output != null)
                 {
-                    yield return entry;
+                    try
+                    {
+                        var outputJson = firstResult.Output.ToString();
+                        if (!string.IsNullOrEmpty(outputJson))
+                        {
+                            var parsedResult = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(outputJson, _jsonOptions);
+                            if (parsedResult?["value"].EnumerateArray() != null)
+                            {
+                                foreach (var entry in parsedResult["value"].EnumerateArray())
+                                {
+                                    yield return entry;
+                                }
+                            }
+                        }
+                    }
+                    catch (JsonException ex)
+                    {
+                        Console.WriteLine($"Warning: Failed to parse Search-AdminAuditLog output: {ex.Message}");
+                    }
                 }
             }
         }
@@ -763,6 +1088,126 @@ namespace Microsoft.ExtractorSuite.Core.Exchange
 
             return $"{baseUrl}?{query}";
         }
+
+        #region Additional Exchange Operations via InvokeCommand
+
+        /// <summary>
+        /// Get distribution groups
+        /// </summary>
+        public async Task<object[]> GetDistributionGroupsAsync(CancellationToken cancellationToken = default)
+        {
+            await ThrottleRequestAsync(cancellationToken);
+
+            var result = await InvokeCommandAsync("Get-DistributionGroup", cancellationToken: cancellationToken);
+
+            // Parse the result and return as object array
+            if (result.Results != null && result.Results.Length > 0)
+            {
+                var firstResult = result.Results[0];
+                if (firstResult.Output != null)
+                {
+                    try
+                    {
+                        var outputJson = firstResult.Output.ToString();
+                        if (!string.IsNullOrEmpty(outputJson))
+                        {
+                            var parsedResult = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(outputJson, _jsonOptions);
+                            return parsedResult?["value"].EnumerateArray().Select(x => (object)x).ToArray() ?? Array.Empty<object>();
+                        }
+                    }
+                    catch (JsonException ex)
+                    {
+                        Console.WriteLine($"Warning: Failed to parse Get-DistributionGroup output: {ex.Message}");
+                    }
+                }
+            }
+
+            // Fallback to empty result if parsing failed
+            return Array.Empty<object>();
+        }
+
+        /// <summary>
+        /// Get mail flow rules
+        /// </summary>
+        public async Task<object[]> GetMailFlowRulesAsync(CancellationToken cancellationToken = default)
+        {
+            await ThrottleRequestAsync(cancellationToken);
+
+            var result = await InvokeCommandAsync("Get-MailFlowRule", cancellationToken: cancellationToken);
+
+            // Parse the result and return as object array
+            if (result.Results != null && result.Results.Length > 0)
+            {
+                var firstResult = result.Results[0];
+                if (firstResult.Output != null)
+                {
+                    try
+                    {
+                        var outputJson = firstResult.Output.ToString();
+                        if (!string.IsNullOrEmpty(outputJson))
+                        {
+                            var parsedResult = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(outputJson, _jsonOptions);
+                            return parsedResult?["value"].EnumerateArray().Select(x => (object)x).ToArray() ?? Array.Empty<object>();
+                        }
+                    }
+                    catch (JsonException ex)
+                    {
+                        Console.WriteLine($"Warning: Failed to parse Get-MailFlowRule output: {ex.Message}");
+                    }
+                }
+            }
+
+            // Fallback to empty result if parsing failed
+            return Array.Empty<object>();
+        }
+
+        /// <summary>
+        /// Get retention policies
+        /// </summary>
+        public async Task<object[]> GetRetentionPoliciesAsync(CancellationToken cancellationToken = default)
+        {
+            await ThrottleRequestAsync(cancellationToken);
+
+            var result = await InvokeCommandAsync("Get-RetentionPolicy", cancellationToken: cancellationToken);
+
+            // Parse the result and return as object array
+            if (result.Results != null && result.Results.Length > 0)
+            {
+                var firstResult = result.Results[0];
+                if (firstResult.Output != null)
+                {
+                    try
+                    {
+                        var outputJson = firstResult.Output.ToString();
+                        if (!string.IsNullOrEmpty(outputJson))
+                        {
+                            var parsedResult = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(outputJson, _jsonOptions);
+                            return parsedResult?["value"].EnumerateArray().Select(x => (object)x).ToArray() ?? Array.Empty<object>();
+                        }
+                    }
+                    catch (JsonException ex)
+                    {
+                        Console.WriteLine($"Warning: Failed to parse Get-RetentionPolicy output: {ex.Message}");
+                    }
+                }
+            }
+
+            // Fallback to empty result if parsing failed
+            return Array.Empty<object>();
+        }
+
+        /// <summary>
+        /// Generic method to invoke any Exchange Online PowerShell cmdlet
+        /// </summary>
+        public async Task<InvokeCommandResult> InvokeExchangeCmdletAsync(
+            string cmdlet,
+            Dictionary<string, object>? parameters = null,
+            CancellationToken cancellationToken = default)
+        {
+            return await InvokeCommandAsync(cmdlet, parameters, cancellationToken);
+        }
+
+        #endregion
 
         public void Dispose()
         {

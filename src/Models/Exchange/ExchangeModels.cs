@@ -359,4 +359,71 @@ namespace Microsoft.ExtractorSuite.Models.Exchange
         [JsonPropertyName("MailboxOwnerId")]
         public string? MailboxOwnerId { get; set; }
     }
+
+    #region InvokeCommand Models
+
+    /// <summary>
+    /// Result from invoking Exchange Online PowerShell cmdlets via the beta admin API
+    /// </summary>
+    public class InvokeCommandResult
+    {
+        [JsonPropertyName("Results")]
+        public InvokeCommandResultItem[]? Results { get; set; }
+
+        [JsonPropertyName("Errors")]
+        public InvokeCommandError[]? Errors { get; set; }
+
+        [JsonPropertyName("Warnings")]
+        public string[]? Warnings { get; set; }
+
+        [JsonPropertyName("HasErrors")]
+        public bool HasErrors { get; set; }
+
+        [JsonPropertyName("HasWarnings")]
+        public bool HasWarnings { get; set; }
+    }
+
+    /// <summary>
+    /// Individual result item from a cmdlet execution
+    /// </summary>
+    public class InvokeCommandResultItem
+    {
+        [JsonPropertyName("ObjectId")]
+        public string? ObjectId { get; set; }
+
+        [JsonPropertyName("Output")]
+        public object? Output { get; set; }
+
+        [JsonPropertyName("ErrorDetails")]
+        public string? ErrorDetails { get; set; }
+
+        [JsonPropertyName("HasErrors")]
+        public bool HasErrors { get; set; }
+
+        [JsonPropertyName("HasWarnings")]
+        public bool HasWarnings { get; set; }
+
+        [JsonPropertyName("Warnings")]
+        public string[]? Warnings { get; set; }
+    }
+
+    /// <summary>
+    /// Error information from cmdlet execution
+    /// </summary>
+    public class InvokeCommandError
+    {
+        [JsonPropertyName("ErrorCode")]
+        public string? ErrorCode { get; set; }
+
+        [JsonPropertyName("ErrorDescription")]
+        public string? ErrorDescription { get; set; }
+
+        [JsonPropertyName("ErrorType")]
+        public string? ErrorType { get; set; }
+
+        [JsonPropertyName("RecommendedAction")]
+        public string? RecommendedAction { get; set; }
+    }
+
+    #endregion
 }
