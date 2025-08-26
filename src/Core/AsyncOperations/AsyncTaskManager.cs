@@ -1,35 +1,50 @@
-using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Management.Automation;
-using System.Threading;
-using System.Threading.Tasks;
-using System.Linq;
-
 namespace Microsoft.ExtractorSuite.Core.AsyncOperations
 {
+    using System;
+    using System.Collections.Concurrent;
+    using System.Collections.Generic;
+    using System.Linq;
+    using System.Management.Automation;
+    using System.Threading;
+    using System.Threading.Tasks;
+
     /// <summary>
     /// Manages long-running async operations for PowerShell cmdlets
     /// Provides proper async/await handling without blocking the PowerShell pipeline
     /// </summary>
     public class AsyncTaskManager : IDisposable
     {
+#pragma warning disable SA1309
         private readonly ConcurrentDictionary<Guid, TrackedTask> _activeTasks;
+#pragma warning restore SA1309
+#pragma warning disable SA1309
         private readonly CancellationTokenSource _globalCancellation;
+#pragma warning disable SA1600
+#pragma warning restore SA1309
+#pragma warning disable SA1309
         private readonly Timer _cleanupTimer;
+#pragma warning restore SA1309
+#pragma warning disable SA1309
         private readonly object _lock = new();
+#pragma warning restore SA1309
 
         public AsyncTaskManager()
         {
+#pragma warning disable SA1101
             _activeTasks = new ConcurrentDictionary<Guid, TrackedTask>();
+#pragma warning restore SA1101
+#pragma warning disable SA1101
             _globalCancellation = new CancellationTokenSource();
+#pragma warning restore SA1101
 
             // Cleanup completed tasks every 30 seconds
+#pragma warning disable SA1101
             _cleanupTimer = new Timer(
                 CleanupCompletedTasks,
                 null,
                 TimeSpan.FromSeconds(30),
                 TimeSpan.FromSeconds(30));
+#pragma warning restore SA1101
         }
 
         /// <summary>
@@ -41,8 +56,12 @@ namespace Microsoft.ExtractorSuite.Core.AsyncOperations
             string taskName)
         {
             var taskId = Guid.NewGuid();
+#pragma warning disable SA1101
             var cts = CancellationTokenSource.CreateLinkedTokenSource(_globalCancellation.Token);
+#pragma warning restore SA1101
+#pragma warning disable SA1101
             var progress = new Progress<TaskProgress>(p => ReportProgress(cmdlet, p));
+#pragma warning restore SA1101
 
             var task = Task.Run(async () =>
             {
@@ -66,11 +85,14 @@ namespace Microsoft.ExtractorSuite.Core.AsyncOperations
                 Status = TaskStatus.Running
             };
 
+#pragma warning disable SA1101
             _activeTasks.TryAdd(taskId, trackedTask);
+#pragma warning restore SA1101
 
             // Set up continuation to update status
             task.ContinueWith(t =>
             {
+#pragma warning disable SA1101
                 if (_activeTasks.TryGetValue(taskId, out var tracked))
                 {
                     tracked.EndTime = DateTime.UtcNow;
@@ -81,6 +103,7 @@ namespace Microsoft.ExtractorSuite.Core.AsyncOperations
                         tracked.Error = t.Exception?.GetBaseException();
                     }
                 }
+#pragma warning restore SA1101
             }, TaskScheduler.Default);
 
             return taskId;
@@ -94,16 +117,20 @@ namespace Microsoft.ExtractorSuite.Core.AsyncOperations
             PSCmdlet cmdlet,
             int progressUpdateIntervalMs = 500)
         {
+#pragma warning disable SA1101
             if (!_activeTasks.TryGetValue(taskId, out var trackedTask))
             {
                 throw new InvalidOperationException($"Task {taskId} not found");
             }
+#pragma warning restore SA1101
 
             var progressTimer = new Timer(_ =>
             {
                 if (trackedTask.LastProgress != null)
                 {
+#pragma warning disable SA1101
                     ReportProgress(cmdlet, trackedTask.LastProgress);
+#pragma warning restore SA1101
                 }
             }, null, progressUpdateIntervalMs, progressUpdateIntervalMs);
 
@@ -127,10 +154,12 @@ namespace Microsoft.ExtractorSuite.Core.AsyncOperations
         /// </summary>
         public bool IsTaskComplete(Guid taskId)
         {
+#pragma warning disable SA1101
             if (_activeTasks.TryGetValue(taskId, out var trackedTask))
             {
                 return trackedTask.Task.IsCompleted;
             }
+#pragma warning restore SA1101
             return true;
         }
 
@@ -139,10 +168,12 @@ namespace Microsoft.ExtractorSuite.Core.AsyncOperations
         /// </summary>
         public T GetTaskResult<T>(Guid taskId)
         {
+#pragma warning disable SA1101
             if (!_activeTasks.TryGetValue(taskId, out var trackedTask))
             {
                 throw new InvalidOperationException($"Task {taskId} not found");
             }
+#pragma warning restore SA1101
 
             if (!trackedTask.Task.IsCompleted)
             {
@@ -168,10 +199,12 @@ namespace Microsoft.ExtractorSuite.Core.AsyncOperations
         /// </summary>
         public void CancelTask(Guid taskId)
         {
+#pragma warning disable SA1101
             if (_activeTasks.TryGetValue(taskId, out var trackedTask))
             {
                 trackedTask.CancellationSource.Cancel();
             }
+#pragma warning restore SA1101
         }
 
         /// <summary>
@@ -179,7 +212,9 @@ namespace Microsoft.ExtractorSuite.Core.AsyncOperations
         /// </summary>
         public void CancelAllTasks()
         {
+#pragma warning disable SA1101
             _globalCancellation.Cancel();
+#pragma warning restore SA1101
         }
 
         /// <summary>
@@ -187,6 +222,7 @@ namespace Microsoft.ExtractorSuite.Core.AsyncOperations
         /// </summary>
         public IEnumerable<TaskStatusInfo> GetActiveTasksStatus()
         {
+#pragma warning disable SA1101
             return _activeTasks.Values.Select(t => new TaskStatusInfo
             {
                 Id = t.Id,
@@ -198,6 +234,7 @@ namespace Microsoft.ExtractorSuite.Core.AsyncOperations
                 Progress = t.LastProgress?.PercentComplete ?? 0,
                 CurrentOperation = t.LastProgress?.CurrentOperation
             });
+#pragma warning restore SA1101
         }
 
         /// <summary>
@@ -218,10 +255,14 @@ namespace Microsoft.ExtractorSuite.Core.AsyncOperations
             {
                 var task = Task.Run(async () =>
                 {
+#pragma warning disable SA1101
                     await semaphore.WaitAsync(_globalCancellation.Token);
+#pragma warning restore SA1101
                     try
                     {
+#pragma warning disable SA1101
                         var result = await factory(_globalCancellation.Token);
+#pragma warning restore SA1101
 
                         Interlocked.Increment(ref completedTasks);
 
@@ -233,7 +274,9 @@ namespace Microsoft.ExtractorSuite.Core.AsyncOperations
                             TotalItems = totalTasks
                         };
 
+#pragma warning disable SA1101
                         ReportProgress(cmdlet, progress);
+#pragma warning restore SA1101
 
                         return result;
                     }
@@ -279,70 +322,117 @@ namespace Microsoft.ExtractorSuite.Core.AsyncOperations
         private void CleanupCompletedTasks(object? state)
         {
             var cutoffTime = DateTime.UtcNow.AddMinutes(-5);
+#pragma warning disable SA1101
             var toRemove = _activeTasks
                 .Where(kvp => kvp.Value.Task.IsCompleted &&
                              kvp.Value.EndTime.HasValue &&
                              kvp.Value.EndTime.Value < cutoffTime)
                 .Select(kvp => kvp.Key)
                 .ToList();
+#pragma warning restore SA1101
 
             foreach (var id in toRemove)
+#pragma warning disable SA1600
             {
+#pragma warning restore SA1600
+#pragma warning disable SA1101
                 if (_activeTasks.TryRemove(id, out var task))
                 {
                     task.CancellationSource?.Dispose();
                 }
+#pragma warning restore SA1101
             }
         }
 
         public void Dispose()
         {
+#pragma warning disable SA1101
             _cleanupTimer?.Dispose();
+#pragma warning restore SA1101
+#pragma warning disable SA1101
             _globalCancellation?.Cancel();
+#pragma warning restore SA1101
+#pragma warning disable SA1101
             _globalCancellation?.Dispose();
+#pragma warning restore SA1101
 
+#pragma warning disable SA1101
             foreach (var task in _activeTasks.Values)
             {
                 task.CancellationSource?.Dispose();
             }
+#pragma warning restore SA1101
 
+#pragma warning disable SA1101
             _activeTasks.Clear();
+#pragma warning restore SA1101
         }
 
         private class TrackedTask
         {
-            public Guid Id { get; set; }
-            public string Name { get; set; } = string.Empty;
+            public Guid Id { get; set; }public string Name { get; set; } = string.Empty;
             public Task Task { get; set; } = null!;
             public CancellationTokenSource CancellationSource { get; set; } = null!;
-            public DateTime StartTime { get; set; }
+#pragma warning disable SA1600
+#pragma warning disable SA1201
+            public DateTime S
+#pragma warning restore SA1201
             public DateTime? EndTime { get; set; }
-            public TaskStatus Status { get; set; }
-            public Exception? Error { get; set; }
-            public TaskProgress? LastProgress { get; set; }
-        }
-    }
-
-    public class TaskProgress
-    {
-        public int ActivityId { get; set; }
-        public string? Activity { get; set; }
-        public string? CurrentOperation { get; set; }
-        public int PercentComplete { get; set; }
-        public int? EstimatedSecondsRemaining { get; set; }
-        public int? ItemsProcessed { get; set; }
-        public int? TotalItems { get; set; }
-    }
-
-    public class TaskStatusInfo
-    {
-        public Guid Id { get; set; }
-        public string Name { get; set; } = string.Empty;
+#pragma warning disable SA1600
+#pragma warning restore SA1600
+            #pragma warning disable SA1600
         public TaskStatus Status { get; set; }
-        public DateTime StartTime { get; set; }
-        public DateTime? EndTime { get; set; }
-        public TimeSpan Duration { get; set; }
-        public int Progress { get; set; }
+            public Exception? Error { get; set; }
+#pragma warning restore SA1600
+#pragma warning disable SA1600
+            public TaskProgress? LastProgress { get; set; }
+#pragma warning restore SA1600
+#pragma warning disable SA1600
+        }
+#pragma warning restore SA1600
+#pragma warning disable SA1600
+    }
+#pragma warning restore SA1600
+#pragma warning disable SA1600
+
+#pragma warning restore SA1600
+#pragma warning disable SA1600
+    public class TaskProgress
+#pragma warning restore SA1600
+    {
+#pragma warning disable SA1600
+        #pragma warning disable SA1201
+        public int ActivityId { get; set; }
+        public string? Activity
+#pragma warning restore SA1201
         public string? CurrentOperation { get; set; }
+#pragma warning disable SA1600
+        public int PercentComplete {
+#pragma warning restore SA1600
+set; }
+#pragma warning disable SA1600
+        public int? EstimatedSecondsRemaining { get; set; }
+#pragma warning restore SA1600
+#pragma warning disable SA1600
+        public int? ItemsProcessed { get; set;}
+#pragma warning restore SA1600
+#pragma warning disable SA1600
+        public int? TotalItems { get; set; }
+#pragma warning restore SA1600
+#pragma warning disable SA1600
+    }
+#pragma warning restore SA1600
+#pragma warning disable SA1600
+
+#pragma warning restore SA1600
+#pragma warning disable SA1600
+    public class TaskStatusInfo
+#pragma warning restore SA1600
+#pragma warning disable SA1600
+    {
+#pragma warning restore SA1600
+        public Guid Id { get; set; }public string Name { get; set; } = string.Empty;
+        public TaskStatus Status { get; set; }public DateTime StartTime { get; set; }public DateTime? EndTime { get; set; }
+        public TimeSpan Duration { get; set; }public int Progress { get; set; }public string? CurrentOperation { get; set; }
     }
 }

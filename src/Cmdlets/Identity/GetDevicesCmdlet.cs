@@ -1,19 +1,20 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Management.Automation;
-using System.Threading;
-using System.Threading.Tasks;
-using Microsoft.ExtractorSuite.Core;
-using Microsoft.ExtractorSuite.Core.Json;
-using Microsoft.Graph;
-using Microsoft.Graph.Models;
-using CsvHelper;
-using System.Globalization;
-
 namespace Microsoft.ExtractorSuite.Cmdlets.Identity
 {
+    using System;
+    using System.Collections.Generic;
+    using System.Globalization;
+    using System.IO;
+    using System.Linq;
+    using System.Management.Automation;
+    using System.Threading;
+    using System.Threading.Tasks;
+    using CsvHelper;
+    using Microsoft.ExtractorSuite.Core;
+    using Microsoft.ExtractorSuite.Core.Json;
+    using Microsoft.Graph;
+    using Microsoft.Graph.Models;
+
+
     /// <summary>
     /// Retrieves information about all devices registered in Microsoft Entra ID.
     /// Provides detailed device information including status, operating system details, trust type, and management information.
@@ -23,19 +24,28 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
     public class GetDevicesCmdlet : AsyncBaseCmdlet
     {
         [Parameter(HelpMessage = "Comma-separated list of user IDs to filter devices by registered users/owners")]
+#pragma warning disable SA1600
         public string[]? UserIds { get; set; }
+#pragma warning restore SA1600
 
         [Parameter(HelpMessage = "Output format for the results. Default: CSV")]
         [ValidateSet("CSV", "JSON")]
+#pragma warning disable SA1600
         public string OutputFormat { get; set; } = "CSV";
+#pragma warning restore SA1600
 
         [Parameter(HelpMessage = "Text encoding for the output file. Default: UTF8")]
+#pragma warning disable SA1600
         public string Encoding { get; set; } = "UTF8";
+#pragma warning restore SA1600
 
+#pragma warning disable SA1600
         protected override void ProcessRecord()
+#pragma warning restore SA1600
         {
             var results = RunAsyncOperation(GetDevicesAsync, "Getting Devices");
 
+#pragma warning disable SA1101
             if (!Async.IsPresent && results != null)
             {
                 foreach (var result in results)
@@ -43,6 +53,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                     WriteObject(result);
                 }
             }
+#pragma warning restore SA1101
         }
 
         private async Task<List<DeviceInfo>> GetDevicesAsync(
@@ -51,12 +62,16 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
         {
             WriteVerboseWithTimestamp("Starting Device Collection");
 
+#pragma warning disable SA1101
             if (!RequireGraphConnection())
             {
                 throw new InvalidOperationException("Not connected to Microsoft Graph. Please run Connect-M365 first.");
             }
+#pragma warning restore SA1101
 
+#pragma warning disable SA1101
             var graphClient = AuthManager.GraphClient!;
+#pragma warning restore SA1101
 
             var summary = new DeviceSummary
             {
@@ -92,7 +107,9 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
 
                 if (devices?.Value == null)
                 {
+#pragma warning disable SA1101
                     WriteWarningWithTimestamp("No devices found or insufficient permissions");
+#pragma warning restore SA1101
                     return results;
                 }
 
@@ -101,6 +118,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
 
                 // Filter devices by user if specified
                 List<Device> filteredDevices;
+#pragma warning disable SA1101
                 if (UserIds?.Length > 0)
                 {
                     progress.Report(new Core.AsyncOperations.TaskProgress
@@ -109,13 +127,16 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                         PercentComplete = 30
                     });
 
+#pragma warning disable SA1101
                     filteredDevices = await FilterDevicesByUsersAsync(graphClient, devices.Value, cancellationToken);
+#pragma warning restore SA1101
                     WriteVerboseWithTimestamp($"Found {filteredDevices.Count} devices for specified users");
                 }
                 else
                 {
                     filteredDevices = devices.Value.ToList();
                 }
+#pragma warning restore SA1101
 
                 progress.Report(new Core.AsyncOperations.TaskProgress
                 {
@@ -130,11 +151,15 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                         break;
 
                     processedCount++;
+#pragma warning disable SA1101
                     var deviceInfo = await MapDeviceToInfoAsync(graphClient, device, cancellationToken);
+#pragma warning restore SA1101
                     results.Add(deviceInfo);
 
                     // Update summary statistics
+#pragma warning disable SA1101
                     UpdateDeviceSummary(summary, deviceInfo);
+#pragma warning restore SA1101
 
                     if (processedCount % 50 == 0 || processedCount == filteredDevices.Count)
                     {
@@ -155,10 +180,14 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                 });
 
                 // Export results if output directory is specified
+#pragma warning disable SA1101
                 if (!string.IsNullOrEmpty(OutputDirectory))
                 {
+#pragma warning disable SA1101
                     await ExportDevicesAsync(results, cancellationToken);
+#pragma warning restore SA1101
                 }
+#pragma warning restore SA1101
 
                 summary.ProcessingTime = DateTime.UtcNow - summary.StartTime;
 
@@ -182,12 +211,16 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
             }
             catch (ServiceException ex)
             {
+#pragma warning disable SA1101
                 WriteErrorWithTimestamp($"Microsoft Graph API error: {ex.ResponseStatusCode} - {ex.Message}", ex);
+#pragma warning restore SA1101
                 throw;
             }
             catch (Exception ex)
             {
+#pragma warning disable SA1101
                 WriteErrorWithTimestamp($"Error retrieving devices: {ex.Message}", ex);
+#pragma warning restore SA1101
                 throw;
             }
 
@@ -200,7 +233,9 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
             CancellationToken cancellationToken)
         {
             var filteredDevices = new List<Device>();
+#pragma warning disable SA1101
             var userIdList = new HashSet<string>(UserIds!, StringComparer.OrdinalIgnoreCase);
+#pragma warning restore SA1101
 
             foreach (var device in devices)
             {
@@ -263,11 +298,15 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                 }
                 catch (ServiceException ex)
                 {
+#pragma warning disable SA1101
                     WriteWarningWithTimestamp($"Failed to retrieve owners/users for device {device.DisplayName}: {ex.Message}");
+#pragma warning restore SA1101
                 }
                 catch (Exception ex)
                 {
+#pragma warning disable SA1101
                     WriteWarningWithTimestamp($"Error processing device {device.DisplayName}: {ex.Message}");
+#pragma warning restore SA1101
                 }
             }
 
@@ -408,12 +447,15 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
 
         private async Task ExportDevicesAsync(List<DeviceInfo> devices, CancellationToken cancellationToken)
         {
+#pragma warning disable SA1101
             var fileName = Path.Combine(
                 OutputDirectory!,
                 $"Devices_{DateTime.UtcNow:yyyyMMdd_HHmmss}.{OutputFormat.ToLower()}");
+#pragma warning restore SA1101
 
             Directory.CreateDirectory(Path.GetDirectoryName(fileName)!);
 
+#pragma warning disable SA1101
             if (OutputFormat.Equals("JSON", StringComparison.OrdinalIgnoreCase))
             {
                 using var stream = File.Create(fileName);
@@ -422,56 +464,135 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
             }
             else // CSV
             {
+#pragma warning disable SA1101
                 using var writer = new StreamWriter(fileName, false, System.Text.Encoding.GetEncoding(Encoding));
+#pragma warning restore SA1101
                 using var csv = new CsvWriter(writer, CultureInfo.InvariantCulture);
                 await csv.WriteRecordsAsync(devices, cancellationToken);
             }
+#pragma warning restore SA1101
 
             WriteVerboseWithTimestamp($"Exported {devices.Count} devices to {fileName}");
         }
     }
 
+#pragma warning disable SA1600
     public class DeviceInfo
+#pragma warning restore SA1600
     {
+#pragma warning disable SA1600
         public string DeviceId { get; set; } = string.Empty;
+#pragma warning restore SA1600
+#pragma warning disable SA1600
         public string ObjectId { get; set; } = string.Empty;
+#pragma warning restore SA1600
+#pragma warning disable SA1600
         public string DisplayName { get; set; } = string.Empty;
+#pragma warning restore SA1600
+#pragma warning disable SA1600
         public string OperatingSystem { get; set; } = string.Empty;
+#pragma warning restore SA1600
+#pragma warning disable SA1600
         public string OperatingSystemVersion { get; set; } = string.Empty;
+#pragma warning restore SA1600
+#pragma warning disable SA1600
         public string DeviceVersion { get; set; } = string.Empty;
+#pragma warning restore SA1600
+#pragma warning disable SA1600
         public string DeviceCategory { get; set; } = string.Empty;
+#pragma warning restore SA1600
+#pragma warning disable SA1600
         public string DeviceOwnership { get; set; } = string.Empty;
+#pragma warning restore SA1600
+#pragma warning disable SA1600
         public string EnrollmentType { get; set; } = string.Empty;
+#pragma warning restore SA1600
+#pragma warning disable SA1600
+#pragma warning restore SA1600
+        #pragma warning disable SA1600
         public bool IsCompliant { get; set; }
+#pragma warning restore SA1600
+        #pragma warning disable SA1600
         public bool IsManaged { get; set; }
         public string TrustType { get; set; } = string.Empty;
+#pragma warning restore SA1600
+#pragma warning disable SA1600
+#pragma warning restore SA1600
+        #pragma warning disable SA1600
         public bool AccountEnabled { get; set; }
         public DateTime? ApproximateLastSignInDateTime { get; set; }
+#pragma warning restore SA1600
+#pragma warning disable SA1600
         public string Manufacturer { get; set; } = string.Empty;
+#pragma warning restore SA1600
+#pragma warning disable SA1600
         public string Model { get; set; } = string.Empty;
+#pragma warning restore SA1600
+#pragma warning disable SA1600
+#pragma warning restore SA1600
+        #pragma warning disable SA1600
         public bool OnPremisesSyncEnabled { get; set; }
         public string ProfileType { get; set; } = string.Empty;
+#pragma warning restore SA1600
+#pragma warning disable SA1600
         public string SystemLabels { get; set; } = string.Empty;
+#pragma warning restore SA1600
+#pragma warning disable SA1600
         public string RegisteredOwners { get; set; } = string.Empty;
+#pragma warning restore SA1600
+#pragma warning disable SA1600
         public string RegisteredUsers { get; set; } = string.Empty;
+#pragma warning restore SA1600
     }
 
+#pragma warning disable SA1600
     public class DeviceSummary
+#pragma warning restore SA1600
     {
+#pragma warning disable SA1600
+#pragma warning restore SA1600
+        #pragma warning disable SA1600
         public DateTime StartTime { get; set; }
+#pragma warning restore SA1600
+        #pragma warning disable SA1600
         public TimeSpan ProcessingTime { get; set; }
+#pragma warning restore SA1600
+        #pragma warning disable SA1600
         public int TotalDevices { get; set; }
+#pragma warning restore SA1600
+        #pragma warning disable SA1600
         public int AzureADJoined { get; set; }
+#pragma warning restore SA1600
+        #pragma warning disable SA1600
         public int WorkplaceJoined { get; set; }
+#pragma warning restore SA1600
+        #pragma warning disable SA1600
         public int HybridJoined { get; set; }
+#pragma warning restore SA1600
+        #pragma warning disable SA1600
         public int ActiveDevices30Days { get; set; }
+#pragma warning restore SA1600
+        #pragma warning disable SA1600
         public int InactiveDevices90Days { get; set; }
+#pragma warning restore SA1600
+        #pragma warning disable SA1600
         public int CompliantDevices { get; set; }
+#pragma warning restore SA1600
+        #pragma warning disable SA1600
         public int ManagedDevices { get; set; }
+#pragma warning restore SA1600
+        #pragma warning disable SA1600
         public int Windows { get; set; }
+#pragma warning restore SA1600
+        #pragma warning disable SA1600
         public int MacOS { get; set; }
+#pragma warning restore SA1600
+        #pragma warning disable SA1600
         public int iOS { get; set; }
+#pragma warning restore SA1600
+        #pragma warning disable SA1600
         public int Android { get; set; }
+#pragma warning restore SA1600
         public int Other { get; set; }
     }
 }

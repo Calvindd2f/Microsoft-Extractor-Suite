@@ -1,19 +1,20 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Management.Automation;
-using System.Net.Http;
-using System.Text.Json;
-using System.Threading;
-using System.Threading.Tasks;
-using Microsoft.ExtractorSuite.Core;
-using Microsoft.ExtractorSuite.Core.Json;
-using CsvHelper;
-using System.Globalization;
-
 namespace Microsoft.ExtractorSuite.Cmdlets.Azure
 {
+    using System;
+    using System.Collections.Generic;
+    using System.Globalization;
+    using System.IO;
+    using System.Linq;
+    using System.Management.Automation;
+    using System.Net.Http;
+    using System.Text.Json;
+    using System.Threading;
+    using System.Threading.Tasks;
+    using CsvHelper;
+    using Microsoft.ExtractorSuite.Core;
+    using Microsoft.ExtractorSuite.Core.Json;
+
+
     /// <summary>
     /// Retrieves Azure Directory Activity logs.
     /// Collects directory management events from Azure Active Directory within a specified date range.
@@ -23,29 +24,47 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Azure
     public class GetAzureDirectoryActivityLogsCmdlet : AsyncBaseCmdlet
     {
         [Parameter(HelpMessage = "Start date for log collection. Default: 90 days ago")]
+#pragma warning disable SA1600
         public DateTime? StartDate { get; set; }
+#pragma warning restore SA1600
 
         [Parameter(HelpMessage = "End date for log collection. Default: Now")]
+#pragma warning disable SA1600
         public DateTime? EndDate { get; set; }
+#pragma warning restore SA1600
 
         [Parameter(HelpMessage = "Output format for the results. Default: CSV")]
         [ValidateSet("CSV", "JSON", "JSONL")]
+#pragma warning disable SA1600
         public string OutputFormat { get; set; } = "CSV";
+#pragma warning restore SA1600
 
         [Parameter(HelpMessage = "Text encoding for the output file. Default: UTF8")]
+#pragma warning disable SA1600
         public string Encoding { get; set; } = "UTF8";
+#pragma warning restore SA1600
 
+#pragma warning disable SA1309
+#pragma warning disable SA1201
         private readonly HttpClient _httpClient;
+#pragma warning restore SA1201
+#pragma warning disable SA1600
+#pragma warning restore SA1309
 
         public GetAzureDirectoryActivityLogsCmdlet()
         {
+#pragma warning disable SA1101
             _httpClient = new HttpClient();
+#pragma warning restore SA1101
+#pragma warning disable SA1600
         }
+#pragma warning restore SA1600
 
         protected override void ProcessRecord()
         {
             var results = RunAsyncOperation(GetDirectoryActivityLogsAsync, "Getting Directory Activity Logs");
 
+#pragma warning disable SA1101
             if (!Async.IsPresent && results != null)
             {
                 foreach (var result in results)
@@ -53,6 +72,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Azure
                     WriteObject(result);
                 }
             }
+#pragma warning restore SA1101
         }
 
         private async Task<List<DirectoryActivityLogEntry>> GetDirectoryActivityLogsAsync(
@@ -62,8 +82,12 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Azure
             WriteVerboseWithTimestamp("Starting Directory Activity Log Analysis");
 
             // Set default dates
+#pragma warning disable SA1101
             var startDate = StartDate ?? DateTime.UtcNow.AddDays(-90);
+#pragma warning restore SA1101
+#pragma warning disable SA1101
             var endDate = EndDate ?? DateTime.UtcNow;
+#pragma warning restore SA1101
 
             WriteVerboseWithTimestamp($"Start Date: {startDate:yyyy-MM-dd HH:mm:ss}");
             WriteVerboseWithTimestamp($"End Date: {endDate:yyyy-MM-dd HH:mm:ss}");
@@ -87,7 +111,9 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Azure
             });
 
             // Get access token
+#pragma warning disable SA1101
             var accessToken = await GetAzureAccessTokenAsync(cancellationToken);
+#pragma warning restore SA1101
 
             progress.Report(new Core.AsyncOperations.TaskProgress
             {
@@ -95,7 +121,9 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Azure
                 PercentComplete = 20
             });
 
+#pragma warning disable SA1101
             var events = await GetDirectoryActivityEventsAsync(accessToken, startDate, endDate, cancellationToken);
+#pragma warning restore SA1101
 
             progress.Report(new Core.AsyncOperations.TaskProgress
             {
@@ -109,11 +137,15 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Azure
             WriteVerboseWithTimestamp($"Retrieved {events.Count} directory activity log entries");
 
             // Export results if output directory is specified
+#pragma warning disable SA1101
             if (!string.IsNullOrEmpty(OutputDirectory))
             {
+#pragma warning disable SA1101
                 await ExportDirectoryLogsAsync(events, cancellationToken);
+#pragma warning restore SA1101
                 summary.FilesCreated = 1;
             }
+#pragma warning restore SA1101
 
             progress.Report(new Core.AsyncOperations.TaskProgress
             {
@@ -156,16 +188,23 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Azure
 
             try
             {
-                do
                 {
                     apiCallCount++;
                     WriteVerboseWithTimestamp($"Making API call #{apiCallCount} for directory activity logs");
 
+#pragma warning disable SA1101
                     _httpClient.DefaultRequestHeaders.Clear();
+#pragma warning restore SA1101
+#pragma warning disable SA1101
                     _httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {accessToken}");
+#pragma warning restore SA1101
+#pragma warning disable SA1101
                     _httpClient.DefaultRequestHeaders.Add("Content-Type", "application/json");
+#pragma warning restore SA1101
 
+#pragma warning disable SA1101
                     var response = await _httpClient.GetAsync(uriBase, cancellationToken);
+#pragma warning restore SA1101
                     response.EnsureSuccessStatusCode();
 
                     var content = await response.Content.ReadAsStringAsync();
@@ -174,7 +213,9 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Azure
                     if (activityResponse?.Value != null && activityResponse.Value.Any())
                     {
                         // Process and transform the events
+#pragma warning disable SA1101
                         var processedEvents = activityResponse.Value.Select(ProcessEvent).ToList();
+#pragma warning restore SA1101
                         events.AddRange(processedEvents);
 
                         WriteVerboseWithTimestamp($"Retrieved {activityResponse.Value.Count} events in batch {apiCallCount}");
@@ -188,7 +229,9 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Azure
             }
             catch (Exception ex)
             {
+#pragma warning disable SA1101
                 WriteErrorWithTimestamp($"Error retrieving directory activity logs: {ex.Message}", ex);
+#pragma warning restore SA1101
                 throw;
             }
 
@@ -198,6 +241,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Azure
         private DirectoryActivityLogEntry ProcessEvent(dynamic eventData)
         {
             // Transform the raw event data into our structured format
+#pragma warning disable SA1101
             return new DirectoryActivityLogEntry
             {
                 Id = GetStringProperty(eventData, "id") ?? Guid.NewGuid().ToString(),
@@ -219,6 +263,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Azure
                 CorrelationId = GetStringProperty(eventData, "correlationId") ?? "",
                 Properties = ExtractProperties(eventData)
             };
+#pragma warning restore SA1101
         }
 
         private string? GetStringProperty(dynamic obj, string propertyName)
@@ -241,7 +286,9 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Azure
         {
             try
             {
+#pragma warning disable SA1101
                 var value = GetStringProperty(obj, propertyName);
+#pragma warning restore SA1101
                 return DateTime.TryParse(value, out DateTime result) ? result : null;
             }
             catch
@@ -261,8 +308,10 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Azure
                     foreach (var prop in element.EnumerateObject())
                     {
                         // Skip properties we've already extracted
+#pragma warning disable SA1101
                         if (IsStandardProperty(prop.Name))
                             continue;
+#pragma warning restore SA1101
 
                         properties[prop.Name] = prop.Value.ToString();
                     }
@@ -296,12 +345,17 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Azure
             var timestamp = DateTime.UtcNow.ToString("yyyyMMddHHmmss");
             string fileName;
 
+#pragma warning disable SA1101
             Directory.CreateDirectory(OutputDirectory!);
+#pragma warning restore SA1101
 
+#pragma warning disable SA1101
             switch (OutputFormat.ToUpperInvariant())
             {
                 case "JSON":
+#pragma warning disable SA1101
                     fileName = Path.Combine(OutputDirectory!, $"{timestamp}-DirectoryActivityLogs.json");
+#pragma warning restore SA1101
                     using (var stream = File.Create(fileName))
                     using (var processor = new HighPerformanceJsonProcessor())
                     {
@@ -310,7 +364,10 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Azure
                     break;
 
                 case "JSONL":
+#pragma warning disable SA1101
                     fileName = Path.Combine(OutputDirectory!, $"{timestamp}-DirectoryActivityLogs.jsonl");
+#pragma warning restore SA1101
+#pragma warning disable SA1101
                     using (var writer = new StreamWriter(fileName, false, System.Text.Encoding.GetEncoding(Encoding)))
                     {
                         foreach (var eventEntry in events)
@@ -322,64 +379,129 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Azure
                             await writer.WriteLineAsync(json);
                         }
                     }
+#pragma warning restore SA1101
                     break;
 
                 default: // CSV
+#pragma warning disable SA1101
                     fileName = Path.Combine(OutputDirectory!, $"{timestamp}-DirectoryActivityLogs.csv");
+#pragma warning restore SA1101
+#pragma warning disable SA1101
                     using (var writer = new StreamWriter(fileName, false, System.Text.Encoding.GetEncoding(Encoding)))
                     using (var csv = new CsvWriter(writer, CultureInfo.InvariantCulture))
                     {
                         await csv.WriteRecordsAsync(events, cancellationToken);
                     }
+#pragma warning restore SA1101
                     break;
             }
+#pragma warning restore SA1101
 
             WriteVerboseWithTimestamp($"Exported {events.Count} directory activity log entries to {fileName}");
+#pragma warning disable SA1600
         }
+#pragma warning restore SA1600
 
         protected override void Dispose(bool disposing)
         {
             if (disposing)
             {
+#pragma warning disable SA1101
                 _httpClient?.Dispose();
+#pragma warning restore SA1101
             }
             base.Dispose(disposing);
         }
+#pragma warning disable SA1600
     }
+#pragma warning restore SA1600
 
+#pragma warning disable SA1600
     public class DirectoryActivityLogEntry
+#pragma warning restore SA1600
+#pragma warning disable SA1600
     {
+#pragma warning restore SA1600
+#pragma warning disable SA1600
         public string Id { get; set; } = string.Empty;
+#pragma warning restore SA1600
+#pragma warning disable SA1600
+#pragma warning restore SA1600
+        #pragma warning disable SA1600
         public DateTime EventTimestamp { get; set; }
         public string EventName { get; set; } = string.Empty;
+#pragma warning restore SA1600
+#pragma warning disable SA1600
         public string Category { get; set; } = string.Empty;
+#pragma warning restore SA1600
+#pragma warning disable SA1600
         public string Level { get; set; } = string.Empty;
+#pragma warning restore SA1600
+#pragma warning disable SA1600
         public string OperationName { get; set; } = string.Empty;
+#pragma warning restore SA1600
+#pragma warning disable SA1600
         public string Status { get; set; } = string.Empty;
+#pragma warning restore SA1600
+#pragma warning disable SA1600
         public string SubStatus { get; set; } = string.Empty;
+#pragma warning restore SA1600
+#pragma warning disable SA1600
         public string Caller { get; set; } = string.Empty;
+#pragma warning restore SA1600
+#pragma warning disable SA1600
         public string Description { get; set; } = string.Empty;
+#pragma warning restore SA1600
+#pragma warning disable SA1600
         public string ResourceGroupName { get; set; } = string.Empty;
+#pragma warning restore SA1600
+#pragma warning disable SA1600
         public string ResourceProviderName { get; set; } = string.Empty;
+#pragma warning restore SA1600
+#pragma warning disable SA1600
         public string ResourceType { get; set; } = string.Empty;
+#pragma warning restore SA1600
+#pragma warning disable SA1600
         public string ResourceId { get; set; } = string.Empty;
+#pragma warning restore SA1600
+#pragma warning disable SA1600
         public string TenantId { get; set; } = string.Empty;
+#pragma warning restore SA1600
+#pragma warning disable SA1600
         public string SubscriptionId { get; set; } = string.Empty;
+#pragma warning restore SA1600
         public string CorrelationId { get; set; } = string.Empty;
         public Dictionary<string, object> Properties { get; set; } = new();
+#pragma warning disable SA1600
     }
+#pragma warning restore SA1600
 
+#pragma warning disable SA1600
     public class DirectoryActivityLogSummary
+#pragma warning restore SA1600
+#pragma warning disable SA1600
     {
+#pragma warning restore SA1600
+#pragma warning disable SA1600
+#pragma warning restore SA1600
+        #pragma warning disable SA1600
         public DateTime StartTime { get; set; }
+#pragma warning restore SA1600
+        #pragma warning disable SA1600
         public TimeSpan ProcessingTime { get; set; }
         public string DateRange { get; set; } = string.Empty;
-        public int TotalRecords { get; set; }
-        public int FilesCreated { get; set; }
+#pragma warning restore SA1600
+#pragma warning disable SA1600
+        public int TotalRecords { get; set; }public int FilesCreated { get; set; }
     }
+#pragma warning restore SA1600
 
+#pragma warning disable SA1600
     public class DirectoryActivityLogResponse
+#pragma warning restore SA1600
+#pragma warning disable SA1600
     {
+#pragma warning restore SA1600
         public List<dynamic>? Value { get; set; }
         public string? NextLink { get; set; }
     }

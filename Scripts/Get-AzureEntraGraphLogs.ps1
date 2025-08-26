@@ -27,7 +27,7 @@ function Get-GraphEntraSignInLogs {
     Standard: Normal operational logging
 	Debug: Verbose logging for debugging purposes
     Default: Standard
-	
+
 
     .PARAMETER OutputDir
     outputDir is the parameter specifying the output directory.
@@ -76,313 +76,309 @@ function Get-GraphEntraSignInLogs {
 	.EXAMPLE
     Get-GraphEntraSignInLogs -Output SOF-ELK -MergeOutput
     Get the Entra ID SignIn Log in a format compatible with the SOF-ELK platform and merge all data into a single file.
-#>
+    #>
     [CmdletBinding()]
     param(
         [string]$startDate,
-		[string]$endDate,
-		[ValidateSet("JSON", "SOF-ELK")] 
-		[string]$Output = "JSON",
+        [string]$endDate,
+        [ValidateSet("JSON", "SOF-ELK")]
+        [string]$Output = "JSON",
         [string]$OutputDir,
-		[string[]]$UserIds,
-		[switch]$MergeOutput,
+        [string[]]$UserIds,
+        [switch]$MergeOutput,
         [string]$Encoding = "UTF8",
         [ValidateSet('None', 'Minimal', 'Standard', 'Debug')]
         [string]$LogLevel = 'Standard',
-		[Parameter()]
-		[ValidateSet('All', 'interactiveUser', 'nonInteractiveUser', 'servicePrincipal', 'managedIdentity')]
-		[string[]]$EventTypes = @('All')
-	)
+        [Parameter()]
+        [ValidateSet('All', 'interactiveUser', 'nonInteractiveUser', 'servicePrincipal', 'managedIdentity')]
+        [string[]]$EventTypes = @('All')
+    )
 
-	Set-LogLevel -Level ([LogLevel]::$LogLevel)
-	$isDebugEnabled = $script:LogLevel -eq [LogLevel]::Debug
-    $summary = @{
-        TotalRecords = 0
-        StartTime = Get-Date
-        ProcessingTime = $null
-        TotalFiles = 0
-    }
+    begin {
+        Set-LogLevel -Level ([LogLevel]::$LogLevel)
+        $isDebugEnabled = $script:LogLevel -eq [LogLevel]::Debug
+        $summary = @{
+            TotalRecords   = 0
+            StartTime      = Get-Date
+            ProcessingTime = $null
+            TotalFiles     = 0
+        }
 
-	if ($isDebugEnabled) {
-        Write-LogFile -Message "[DEBUG] PowerShell Version: $($PSVersionTable.PSVersion)" -Level Debug
-        Write-LogFile -Message "[DEBUG] Input parameters:" -Level Debug
-        Write-LogFile -Message "[DEBUG]   StartDate: $startDate" -Level Debug
-        Write-LogFile -Message "[DEBUG]   EndDate: $endDate" -Level Debug
-        Write-LogFile -Message "[DEBUG]   Output: $Output" -Level Debug
-        Write-LogFile -Message "[DEBUG]   OutputDir: $OutputDir" -Level Debug
-        Write-LogFile -Message "[DEBUG]   UserIds: $UserIds" -Level Debug
-        Write-LogFile -Message "[DEBUG]   MergeOutput: $($MergeOutput.IsPresent)" -Level Debug
-        Write-LogFile -Message "[DEBUG]   Encoding: $Encoding" -Level Debug
-        Write-LogFile -Message "[DEBUG]   LogLevel: $LogLevel" -Level Debug
-        Write-LogFile -Message "[DEBUG]   EventTypes: $($EventTypes -join ', ')" -Level Debug
-        
-        $graphModule = Get-Module -Name Microsoft.Graph* -ErrorAction SilentlyContinue
-        if ($graphModule) {
-            Write-LogFile -Message "[DEBUG] Microsoft Graph Modules loaded:" -Level Debug
-            foreach ($module in $graphModule) {
-                Write-LogFile -Message "[DEBUG]   - $($module.Name) v$($module.Version)" -Level Debug
+        if ($isDebugEnabled) {
+            Write-LogFile -Message "[DEBUG] PowerShell Version: $($PSVersionTable.PSVersion)" -Level Debug
+            Write-LogFile -Message "[DEBUG] Input parameters:" -Level Debug
+            Write-LogFile -Message "[DEBUG]   StartDate: $startDate" -Level Debug
+            Write-LogFile -Message "[DEBUG]   EndDate: $endDate" -Level Debug
+            Write-LogFile -Message "[DEBUG]   Output: $Output" -Level Debug
+            Write-LogFile -Message "[DEBUG]   OutputDir: $OutputDir" -Level Debug
+            Write-LogFile -Message "[DEBUG]   UserIds: $UserIds" -Level Debug
+            Write-LogFile -Message "[DEBUG]   MergeOutput: $($MergeOutput.IsPresent)" -Level Debug
+            Write-LogFile -Message "[DEBUG]   Encoding: $Encoding" -Level Debug
+            Write-LogFile -Message "[DEBUG]   LogLevel: $LogLevel" -Level Debug
+            Write-LogFile -Message "[DEBUG]   EventTypes: $($EventTypes -join ', ')" -Level Debug
+
+            $graphModule = Get-Module -Name Microsoft.Graph* -ErrorAction SilentlyContinue
+            if ($graphModule) {
+                Write-LogFile -Message "[DEBUG] Microsoft Graph Modules loaded:" -Level Debug
+                foreach ($module in $graphModule) {
+                    Write-LogFile -Message "[DEBUG]   - $($module.Name) v$($module.Version)" -Level Debug
+                }
             }
-        } else {
-            Write-LogFile -Message "[DEBUG] No Microsoft Graph modules loaded" -Level Debug
+            else {
+                Write-LogFile -Message "[DEBUG] No Microsoft Graph modules loaded" -Level Debug
+            }
+        }
+
+        Write-LogFile -Message "=== Starting Sign-in Log Collection ===" -Color "Cyan" -Level Standard
+        $requiredScopes = @("AuditLog.Read.All", "Directory.Read.All")
+        $graphAuth = Get-GraphAuthType -RequiredScopes $RequiredScopes
+
+        if ($isDebugEnabled) {
+            Write-LogFile -Message "[DEBUG] Graph authentication details:" -Level Debug
+            Write-LogFile -Message "[DEBUG]   Required scopes: $($requiredScopes -join ', ')" -Level Debug
+            Write-LogFile -Message "[DEBUG]   Authentication type: $($graphAuth.AuthType)" -Level Debug
+            Write-LogFile -Message "[DEBUG]   Current scopes: $($graphAuth.Scopes -join ', ')" -Level Debug
+            if ($graphAuth.MissingScopes.Count -gt 0) {
+                Write-LogFile -Message "[DEBUG]   Missing scopes: $($graphAuth.MissingScopes -join ', ')" -Level Debug
+            }
+            else {
+                Write-LogFile -Message "[DEBUG]   Missing scopes: None" -Level Debug
+            }
+        }
+
+        $date = [datetime]::Now.ToString('yyyyMMdd')
+        UpsertOutputDirectory($OutputDir)
+
+        $StartDate = StartDateAz -Quiet
+        $EndDate = EndDate -Quiet
+
+        Write-LogFile -Message "Start Date: $StartDate" -Level Standard
+        Write-LogFile -Message "End Date: $EndDate" -Level Standard
+        Write-LogFile -Message "Output Format: $Output" -Level Standard
+        Write-LogFile -Message "Output Directory: $OutputDir" -Level Standard
+        if ($UserIds) {
+            Write-LogFile -Message "Filtering for User: $UserIds" -Level Standard
+        }
+        Write-LogFile -Message "----------------------------------------`n" -Level Standard
+
+        $eventTypeMapping = @{
+            'interactiveUser'    = @{
+                displayName = 'interactiveUser'
+                filename    = 'interactiveUser'
+                filterQuery = "(signInEventTypes/any(t: t eq 'interactiveUser'))"
+            }
+            'nonInteractiveUser' = @{
+                displayName = 'nonInteractiveUser'
+                filename    = 'nonInteractiveUser'
+                filterQuery = "(signInEventTypes/any(t: t eq 'nonInteractiveUser'))"
+            }
+            'combinedUser'       = @{
+                displayName = 'interactiveUser & nonInteractiveUser'
+                filename    = 'interactiveUser-nonInteractiveUser'
+                filterQuery = "(signInEventTypes/any(t: t eq 'interactiveUser' or t eq 'nonInteractiveUser'))"
+            }
+            'servicePrincipal'   = @{
+                displayName = 'servicePrincipal'
+                filename    = 'servicePrincipal'
+                filterQuery = "(signInEventTypes/any(t: t eq 'servicePrincipal'))"
+            }
+            'managedIdentity'    = @{
+                displayName = 'managedIdentity'
+                filename    = 'managedIdentity'
+                filterQuery = "(signInEventTypes/any(t: t eq 'managedIdentity'))"
+            }
+        }
+
+        $eventTypesToProcess = @()
+        if ($EventTypes -contains 'All') {
+            if ($UserIds -and $UserIds.Count -gt 0) {
+                $eventTypesToProcess = @('combinedUser')
+                Write-LogFile -Message "[INFO] Filtering by users - skipping servicePrincipal and managedIdentity (will be empty)" -Level Standard -Color "Yellow"
+            }
+            else {
+                $eventTypesToProcess = @('combinedUser', 'servicePrincipal', 'managedIdentity')
+            }
+        }
+        elseif ($EventTypes -contains 'interactiveUser' -and $EventTypes -contains 'nonInteractiveUser') {
+            $remainingTypes = $EventTypes | Where-Object { $_ -ne 'interactiveUser' -and $_ -ne 'nonInteractiveUser' }
+            $eventTypesToProcess = @('combinedUser') + $remainingTypes
+        }
+        else {
+            $eventTypesToProcess = $EventTypes
+        }
+
+        foreach ($eventType in $eventTypesToProcess) {
+            $currentEventType = $eventTypeMapping[$eventType]
+            Write-LogFile -Message "[INFO] Acquiring the $($currentEventType.displayName) sign-in logs" -Level Standard -Color "Cyan"
+
+            if ($isDebugEnabled) {
+                Write-LogFile -Message "[DEBUG] Event type configuration:" -Level Debug
+                Write-LogFile -Message "[DEBUG]   Display name: $($currentEventType.displayName)" -Level Debug
+                Write-LogFile -Message "[DEBUG]   Filename pattern: $($currentEventType.filename)" -Level Debug
+                Write-LogFile -Message "[DEBUG]   Filter query: $($currentEventType.filterQuery)" -Level Debug
+            }
+
+            $eventTypeDir = Join-Path -Path $OutputDir -ChildPath $currentEventType.displayName
+            if (!(Test-Path $eventTypeDir)) {
+                New-Item -ItemType Directory -Force -Path $eventTypeDir > $null
+            }
+
+            $filterQuery = "createdDateTime ge $StartDate and createdDateTime le $EndDate"
+
+            if ($UserIds -and $UserIds.Count -gt 0) {
+                $userFilters = $UserIds | ForEach-Object { "startsWith(userPrincipalName, '$_')" }
+                $filterQuery += " and (" + ($userFilters -join " or ") + ")"
+            }
+
+            $filterQuery += " and $($currentEventType.filterQuery)"
+            $encodedFilterQuery = [System.Web.HttpUtility]::UrlEncode($filterQuery)
+            $apiUrl = "https://graph.microsoft.com/beta/auditLogs/signIns?`$filter=$encodedFilterQuery"
+
+            if ($isDebugEnabled) {
+                Write-LogFile -Message "[DEBUG] API configuration:" -Level Debug
+                Write-LogFile -Message "[DEBUG]   Base URL: https://graph.microsoft.com/beta/auditLogs/signIns" -Level Debug
+                Write-LogFile -Message "[DEBUG]   Filter query (decoded): $filterQuery" -Level Debug
+                Write-LogFile -Message "[DEBUG]   Full API URL: $apiUrl" -Level Debug
+            }
+
+            $eventTypeSummary = @{
+                EventType   = $currentEventType.displayName
+                RecordCount = 0
+                Files       = 0
+            }
         }
     }
 
-	Write-LogFile -Message "=== Starting Sign-in Log Collection ===" -Color "Cyan" -Level Standard
-	$requiredScopes = @("AuditLog.Read.All", "Directory.Read.All")
-    $graphAuth = Get-GraphAuthType -RequiredScopes $RequiredScopes
+    process {
+        try {
+            Do {
+                $retryCount = 0
+                $maxRetries = 3
+                $success = $false
+                $tokenRetryCount = 0
+                $maxTokenRetries = 5
 
-	if ($isDebugEnabled) {
-        Write-LogFile -Message "[DEBUG] Graph authentication details:" -Level Debug
-        Write-LogFile -Message "[DEBUG]   Required scopes: $($requiredScopes -join ', ')" -Level Debug
-        Write-LogFile -Message "[DEBUG]   Authentication type: $($graphAuth.AuthType)" -Level Debug
-        Write-LogFile -Message "[DEBUG]   Current scopes: $($graphAuth.Scopes -join ', ')" -Level Debug
-        if ($graphAuth.MissingScopes.Count -gt 0) {
-            Write-LogFile -Message "[DEBUG]   Missing scopes: $($graphAuth.MissingScopes -join ', ')" -Level Debug
-        } else {
-            Write-LogFile -Message "[DEBUG]   Missing scopes: None" -Level Debug
-        }
-    }
+                while (-not $success -and $retryCount -lt $maxRetries) {
+                    try {
+                        $response = Invoke-MgGraphRequest -Uri $apiUrl -Method Get -ContentType "application/json; odata.metadata=minimal; odata.streaming=true;" -OutputType Json
+                        $responseJson = $response | ConvertFrom-Json
+                        $success = $true
+                    }
+                    catch {
+                        if (($_.Exception.Message -like "*Skip token is null*" -or
+                                $_.Exception.Message -like "*token*expired*" -or
+                                $_.Exception.Message -like "*Bad Request*") -and
+                            $tokenRetryCount -lt $maxTokenRetries) {
 
-	$date = [datetime]::Now.ToString('yyyyMMdd') 
-	if ($OutputDir -eq "" ){
-		$OutputDir = "Output\EntraID\$($date)-SignInLogs"
-		if (!(test-path $OutputDir)) {
-			New-Item -ItemType Directory -Force -path $OutputDir > $null
-		}
-	}
-	else {
-        if (!(Test-Path -Path $OutputDir)) {
-            Write-LogFile -Message "[Error] Custom directory invalid: $OutputDir" -Level Minimal -Color "Red"
-            return
-        }
-    }
+                            $tokenRetryCount++
+                            Write-LogFile -Message "[WARNING] Token expired or invalid. Reconnecting and retrying... Attempt $tokenRetryCount of $maxTokenRetries" -Level Standard -Color "Yellow"
 
-	StartDateAz -Quiet
-    EndDate -Quiet
-
-	$StartDate = $script:StartDate.ToString('yyyy-MM-ddTHH:mm:ssZ')
-    $EndDate = $script:EndDate.ToString('yyyy-MM-ddTHH:mm:ssZ')
-
-	Write-LogFile -Message "Start Date: $StartDate" -Level Standard
-    Write-LogFile -Message "End Date: $EndDate" -Level Standard
-    Write-LogFile -Message "Output Format: $Output" -Level Standard
-    Write-LogFile -Message "Output Directory: $OutputDir" -Level Standard
-    if ($UserIds) {
-        Write-LogFile -Message "Filtering for User: $UserIds" -Level Standard
-    }
-    Write-LogFile -Message "----------------------------------------`n" -Level Standard
-
-	$eventTypeMapping = @{
-		'interactiveUser' = @{
-			displayName = 'interactiveUser'
-			filename = 'interactiveUser'
-			filterQuery = "(signInEventTypes/any(t: t eq 'interactiveUser'))"
-		}
-		'nonInteractiveUser' = @{
-			displayName = 'nonInteractiveUser'
-			filename = 'nonInteractiveUser'
-			filterQuery = "(signInEventTypes/any(t: t eq 'nonInteractiveUser'))"
-		}
-		'combinedUser' = @{
-			displayName = 'interactiveUser & nonInteractiveUser'
-			filename = 'interactiveUser-nonInteractiveUser'
-			filterQuery = "(signInEventTypes/any(t: t eq 'interactiveUser' or t eq 'nonInteractiveUser'))"
-		}
-		'servicePrincipal' = @{
-			displayName = 'servicePrincipal'
-			filename = 'servicePrincipal'
-			filterQuery = "(signInEventTypes/any(t: t eq 'servicePrincipal'))"
-		}
-		'managedIdentity' = @{
-			displayName = 'managedIdentity'
-			filename = 'managedIdentity'
-			filterQuery = "(signInEventTypes/any(t: t eq 'managedIdentity'))"
-		}
-	}
-
-	$eventTypesToProcess = @()
-if ($EventTypes -contains 'All') {
-    if ($UserIds -and $UserIds.Count -gt 0) {
-        $eventTypesToProcess = @('combinedUser')
-        Write-LogFile -Message "[INFO] Filtering by users - skipping servicePrincipal and managedIdentity (will be empty)" -Level Standard -Color "Yellow"
-    } else {
-        $eventTypesToProcess = @('combinedUser', 'servicePrincipal', 'managedIdentity')
-    }
-} elseif ($EventTypes -contains 'interactiveUser' -and $EventTypes -contains 'nonInteractiveUser') {
-    $remainingTypes = $EventTypes | Where-Object { $_ -ne 'interactiveUser' -and $_ -ne 'nonInteractiveUser' }
-    $eventTypesToProcess = @('combinedUser') + $remainingTypes
-}
-else {
-    $eventTypesToProcess = $EventTypes
-}
-
-	foreach ($eventType in $eventTypesToProcess) {
-		$currentEventType = $eventTypeMapping[$eventType]
-		Write-LogFile -Message "[INFO] Acquiring the $($currentEventType.displayName) sign-in logs" -Level Standard -Color "Cyan"
-
-		if ($isDebugEnabled) {
-            Write-LogFile -Message "[DEBUG] Event type configuration:" -Level Debug
-            Write-LogFile -Message "[DEBUG]   Display name: $($currentEventType.displayName)" -Level Debug
-            Write-LogFile -Message "[DEBUG]   Filename pattern: $($currentEventType.filename)" -Level Debug
-            Write-LogFile -Message "[DEBUG]   Filter query: $($currentEventType.filterQuery)" -Level Debug
-        }
-
-		$eventTypeDir = Join-Path -Path $OutputDir -ChildPath $currentEventType.displayName
-		if (!(Test-Path $eventTypeDir)) {
-			New-Item -ItemType Directory -Force -Path $eventTypeDir > $null
-		}
-        
-        $filterQuery = "createdDateTime ge $StartDate and createdDateTime le $EndDate"
-
-		if ($UserIds -and $UserIds.Count -gt 0) {
-			$userFilters = $UserIds | ForEach-Object { "startsWith(userPrincipalName, '$_')" }
-			$filterQuery += " and (" + ($userFilters -join " or ") + ")"
-		}
-        
-		$filterQuery += " and $($currentEventType.filterQuery)"
-        $encodedFilterQuery = [System.Web.HttpUtility]::UrlEncode($filterQuery)
-        $apiUrl = "https://graph.microsoft.com/beta/auditLogs/signIns?`$filter=$encodedFilterQuery"
-        
-		if ($isDebugEnabled) {
-            Write-LogFile -Message "[DEBUG] API configuration:" -Level Debug
-            Write-LogFile -Message "[DEBUG]   Base URL: https://graph.microsoft.com/beta/auditLogs/signIns" -Level Debug
-            Write-LogFile -Message "[DEBUG]   Filter query (decoded): $filterQuery" -Level Debug
-            Write-LogFile -Message "[DEBUG]   Full API URL: $apiUrl" -Level Debug
-        }
-
-        $eventTypeSummary = @{
-            EventType = $currentEventType.displayName
-            RecordCount = 0
-            Files = 0
-        }
-
-		try {
-			Do {
-				$retryCount = 0
-				$maxRetries = 3
-				$success = $false
-				$tokenRetryCount = 0
-    			$maxTokenRetries = 5  
-
-				while (-not $success -and $retryCount -lt $maxRetries) {
-					try {
-						$response = Invoke-MgGraphRequest -Uri $apiUrl -Method Get -ContentType "application/json; odata.metadata=minimal; odata.streaming=true;" -OutputType Json
-						$responseJson = $response | ConvertFrom-Json 
-						$success = $true
-					}
-					catch {
-						if (($_.Exception.Message -like "*Skip token is null*" -or 
-							$_.Exception.Message -like "*token*expired*" -or
-							$_.Exception.Message -like "*Bad Request*") -and 
-							$tokenRetryCount -lt $maxTokenRetries) {
-							
-							$tokenRetryCount++
-							Write-LogFile -Message "[WARNING] Token expired or invalid. Reconnecting and retrying... Attempt $tokenRetryCount of $maxTokenRetries" -Level Standard -Color "Yellow"
-
-							if ($isDebugEnabled) {
+                            if ($isDebugEnabled) {
                                 Write-LogFile -Message "[DEBUG] Token error details:" -Level Debug
                                 Write-LogFile -Message "[DEBUG]   Error message: $($_.Exception.Message)" -Level Debug
                                 Write-LogFile -Message "[DEBUG]   Token retry count: $tokenRetryCount" -Level Debug
                             }
-							
-							# Re-authenticate to refresh the token
-							$graphAuth = Get-GraphAuthType -RequiredScopes $RequiredScopes -Force
-							Start-Sleep -Seconds 20
-							continue
-						}
-						
-						$retryCount++
-						if ($retryCount -lt $maxRetries) {
-							Write-LogFile -Message "[WARNING] Failed to acquire logs. Retrying... Attempt $retryCount of $maxRetries" -Level Standard -Color "Yellow"
-							Start-Sleep -Seconds 15
-							if ($isDebugEnabled) {
+
+                            # Re-authenticate to refresh the token
+                            $graphAuth = Get-GraphAuthType -RequiredScopes $RequiredScopes -Force
+                            Start-Sleep -Seconds 20
+                            continue
+                        }
+
+                        $retryCount++
+                        if ($retryCount -lt $maxRetries) {
+                            Write-LogFile -Message "[WARNING] Failed to acquire logs. Retrying... Attempt $retryCount of $maxRetries" -Level Standard -Color "Yellow"
+                            Start-Sleep -Seconds 15
+                            if ($isDebugEnabled) {
                                 Write-LogFile -Message "[DEBUG] API call error details:" -Level Debug
                                 Write-LogFile -Message "[DEBUG]   Exception type: $($_.Exception.GetType().Name)" -Level Debug
                                 Write-LogFile -Message "[DEBUG]   Full error: $($_.Exception.ToString())" -Level Debug
                                 Write-LogFile -Message "[DEBUG]   Stack trace: $($_.ScriptStackTrace)" -Level Debug
                             }
-						}
-						else {
-							Write-LogFile -Message "[ERROR] Failed to acquire logs after $maxRetries attempts. Error: $($_.Exception.Message)" -Level Minimal -Color "Red"
-							throw
-						}
-					}
-				}
-			
-				if ($responseJson.value) {
-					$date = [datetime]::Now.ToString('yyyyMMddHHmmss') 
-					$filePath = Join-Path -Path $eventTypeDir -ChildPath "$($date)-$($currentEventType.filename)-SignInLogs.json"
+                        }
+                        else {
+                            Write-LogFile -Message "[ERROR] Failed to acquire logs after $maxRetries attempts. Error: $($_.Exception.Message)" -Level Minimal -Color "Red"
+                            throw
+                        }
+                    }
+                }
 
-					if ($isDebugEnabled) {
+                if ($responseJson.value) {
+                    $date = [datetime]::Now.ToString('yyyyMMddHHmmss')
+                    $filePath = Join-Path -Path $eventTypeDir -ChildPath "$($date)-$($currentEventType.filename)-SignInLogs.json"
+
+                    if ($isDebugEnabled) {
                         Write-LogFile -Message "[DEBUG] Processing response data:" -Level Debug
                         Write-LogFile -Message "[DEBUG]   Records in batch: $($responseJson.value.Count)" -Level Debug
                         Write-LogFile -Message "[DEBUG]   Output file: $filePath" -Level Debug
                     }
 
-					if ($Output -eq "JSON" ) {
-						$responseJson.value | ConvertTo-Json -Depth 100 | Out-File -FilePath $filePath -Append -Encoding $Encoding	
-					} 
-					elseif ($Output -eq "SOF-ELK"){
-						# UTF8 is fixed, as it is required by SOF-ELK
-						foreach ($item in $responseJson.value) {
-							$item | ConvertTo-Json -Depth 100 -Compress | Out-File -FilePath $filePath -Append -Encoding UTF8	
-						}
-					}
+                    if ($Output -eq "JSON" ) {
+                        $responseJson.value | ConvertTo-Json -Depth 100 | Out-File -FilePath $filePath -Append -Encoding $Encoding
+                    }
+                    elseif ($Output -eq "SOF-ELK") {
+                        # UTF8 is fixed, as it is required by SOF-ELK
+                        foreach ($item in $responseJson.value) {
+                            $item | ConvertTo-Json -Depth 100 -Compress | Out-File -FilePath $filePath -Append -Encoding UTF8
+                        }
+                    }
 
-					$currentBatchCount = ($responseJson.value | Measure-Object).Count
-					$summary.TotalRecords += $currentBatchCount
-					$summary.TotalFiles++
-					$eventTypeSummary.RecordCount += $currentBatchCount
+                    $currentBatchCount = ($responseJson.value | Measure-Object).Count
+                    $summary.TotalRecords += $currentBatchCount
+                    $summary.TotalFiles++
+                    $eventTypeSummary.RecordCount += $currentBatchCount
                     $eventTypeSummary.Files++
 
-					$dates = $responseJson.value | ForEach-Object {
-						[DateTime]::Parse($_.CreatedDateTime, [System.Globalization.CultureInfo]::InvariantCulture)
-					} | Sort-Object
-					
-					$from =  $dates | Select-Object -First 1
-					$to = ($dates | Select-Object -Last 1)
-					Write-LogFile -Message "[INFO] Retrieved $currentBatchCount records between $from and $to" -Level Standard -Color "Green"
-				}
-				$apiUrl = $responseJson.'@odata.nextLink'
-			} While ($apiUrl)
+                    $dates = $responseJson.value | ForEach-Object {
+                        [DateTime]::Parse($_.CreatedDateTime, [System.Globalization.CultureInfo]::InvariantCulture)
+                    } | Sort-Object
 
-			if ($MergeOutput.IsPresent) {
-				Write-LogFile -Message "[INFO] Merging output files for $eventType" -Level Standard
-				if ($Output -eq "JSON") {
-					Merge-OutputFiles -OutputDir $eventTypeDir -OutputType "JSON" -MergedFileName "SignInLogs-$($currentEventType.filename)-Combined.json"
-				}
-				elseif ($Output -eq "SOF-ELK") {
-					Merge-OutputFiles -OutputDir $eventTypeDir -OutputType "SOF-ELK" -MergedFileName "SignInLogs-$eventType-Combined.json"
-				}
-			}
+                    $from = $dates | Select-Object -First 1
+                    $to = ($dates | Select-Object -Last 1)
+                    Write-LogFile -Message "[INFO] Retrieved $currentBatchCount records between $from and $to" -Level Standard -Color "Green"
+                }
+                $apiUrl = $responseJson.'@odata.nextLink'
+            } While ($apiUrl)
 
-			Write-LogFile -Message "`nSummary for $($currentEventType.displayName):" -Color "Cyan" -Level Standard
+            if ($MergeOutput.IsPresent) {
+                Write-LogFile -Message "[INFO] Merging output files for $eventType" -Level Standard
+                if ($Output -eq "JSON") {
+                    Merge-OutputFiles -OutputDir $eventTypeDir -OutputType "JSON" -MergedFileName "SignInLogs-$($currentEventType.filename)-Combined.json"
+                }
+                elseif ($Output -eq "SOF-ELK") {
+                    Merge-OutputFiles -OutputDir $eventTypeDir -OutputType "SOF-ELK" -MergedFileName "SignInLogs-$eventType-Combined.json"
+                }
+            }
+
+            Write-LogFile -Message "`nSummary for $($currentEventType.displayName):" -Color "Cyan" -Level Standard
             Write-LogFile -Message "  Records: $($eventTypeSummary.RecordCount)" -Level Standard
             Write-LogFile -Message "  Files: $($eventTypeSummary.Files)`n" -Level Standard
-		}
-		
-		catch {
-			Write-LogFile -Message "[ERROR] An error occurred: $($_.Exception.Message)" -Level Minimal -Color "Red"
-			if ($isDebugEnabled) {
+        }
+
+        catch {
+            Write-LogFile -Message "[ERROR] An error occurred: $($_.Exception.Message)" -Level Minimal -Color "Red"
+            if ($isDebugEnabled) {
                 Write-LogFile -Message "[DEBUG] Event type processing error:" -Level Debug
                 Write-LogFile -Message "[DEBUG]   Exception type: $($_.Exception.GetType().Name)" -Level Debug
                 Write-LogFile -Message "[DEBUG]   Full error: $($_.Exception.ToString())" -Level Debug
                 Write-LogFile -Message "[DEBUG]   Stack trace: $($_.ScriptStackTrace)" -Level Debug
             }
-			throw
-		}
-	}
+            throw
+        }
+    }
 
-	$summary.ProcessingTime = (Get-Date) - $summary.StartTime
+    end {
+    $summary.ProcessingTime = (Get-Date) - $summary.StartTime
     Write-LogFile -Message "`nOverall Collection Summary:" -Color "Cyan" -Level Standard
     Write-LogFile -Message "  Total Records: $($summary.TotalRecords)" -Level Standard
     Write-LogFile -Message "  Files Created: $($summary.TotalFiles)" -Level Standard
     Write-LogFile -Message "  Output Directory: $OutputDir" -Level Standard
     Write-LogFile -Message "  Processing Time: $($summary.ProcessingTime.ToString('mm\:ss'))" -Level Standard -Color "Green"
+    }
 }
 
 function Get-GraphEntraAuditLogs {
-	<#
+    <#
 	.SYNOPSIS
 	Get directory audit logs.
 
@@ -444,51 +440,82 @@ function Get-GraphEntraAuditLogs {
 	Get-GraphEntraAuditLogs -After 2025-04-12
 	Get directory audit logs after 2025-04-12.
 	#>
-	[CmdletBinding()]
-	param(
-		[string]$startDate,
-		[string]$endDate,
-		[string]$OutputDir,
-		[ValidateSet("JSON", "SOF-ELK")] 
-		[string]$Output = "JSON",
-		[string]$Encoding = "UTF8",
-		[switch]$MergeOutput,
-		[string[]]$UserIds,
+    [CmdletBinding()]
+    param(
+        [string]$startDate,
+        [string]$endDate,
+        [string]$OutputDir,
+        [ValidateSet("JSON", "SOF-ELK")]
+        [string]$Output = "JSON",
+        [string]$Encoding = "UTF8",
+        [switch]$MergeOutput,
+        [string[]]$UserIds,
         [switch]$All,
         [ValidateSet('None', 'Minimal', 'Standard', 'Debug')]
         [string]$LogLevel = 'Standard'
-	)
+    )
 
-	Set-LogLevel -Level ([LogLevel]::$LogLevel)
-	$isDebugEnabled = $script:LogLevel -eq [LogLevel]::Debug
-    $summary = @{
-        TotalRecords = 0
-        StartTime = Get-Date
+    Set-LogLevel -Level ([LogLevel]::$LogLevel)
+    $isDebugEnabled = $script:LogLevel -eq [LogLevel]::Debug
+
+    # Use ordered hashtable for better performance and consistent ordering
+    $summary = [ordered]@{
+        TotalRecords   = 0
+        StartTime      = Get-Date
         ProcessingTime = $null
-        TotalFiles = 0
+        TotalFiles     = 0
     }
 
-	if ($isDebugEnabled) {
-        Write-LogFile -Message "[DEBUG] PowerShell Version: $($PSVersionTable.PSVersion)" -Level Debug
-        Write-LogFile -Message "[DEBUG] Input parameters:" -Level Debug
-        Write-LogFile -Message "[DEBUG]   StartDate: $startDate" -Level Debug
-        Write-LogFile -Message "[DEBUG]   EndDate: $endDate" -Level Debug
-        Write-LogFile -Message "[DEBUG]   Output: $Output" -Level Debug
-        Write-LogFile -Message "[DEBUG]   OutputDir: $OutputDir" -Level Debug
-        Write-LogFile -Message "[DEBUG]   UserIds: $UserIds" -Level Debug
-        Write-LogFile -Message "[DEBUG]   All: $($All.IsPresent)" -Level Debug
-        Write-LogFile -Message "[DEBUG]   MergeOutput: $($MergeOutput.IsPresent)" -Level Debug
-        Write-LogFile -Message "[DEBUG]   Encoding: $Encoding" -Level Debug
-        Write-LogFile -Message "[DEBUG]   LogLevel: $LogLevel" -Level Debug
-        
+    if ($isDebugEnabled) {
+        # Use splatting to reduce cognitive complexity and improve readability
+        $debugParams = @{
+            Message = "[DEBUG] PowerShell Version: $($PSVersionTable.PSVersion)"
+            Level   = 'Debug'
+        }
+        Write-LogFile @debugParams
+
+        $debugParams.Message = "[DEBUG] Input parameters:"
+        Write-LogFile @debugParams
+
+        $debugParams.Message = "[DEBUG]   StartDate: $startDate"
+        Write-LogFile @debugParams
+
+        $debugParams.Message = "[DEBUG]   EndDate: $endDate"
+        Write-LogFile @debugParams
+
+        $debugParams.Message = "[DEBUG]   Output: $Output"
+        Write-LogFile @debugParams
+
+        $debugParams.Message = "[DEBUG]   OutputDir: $OutputDir"
+        Write-LogFile @debugParams
+
+        $debugParams.Message = "[DEBUG]   UserIds: $UserIds"
+        Write-LogFile @debugParams
+
+        $debugParams.Message = "[DEBUG]   All: $($All.IsPresent)"
+        Write-LogFile @debugParams
+
+        $debugParams.Message = "[DEBUG]   MergeOutput: $($MergeOutput.IsPresent)"
+        Write-LogFile @debugParams
+
+        $debugParams.Message = "[DEBUG]   Encoding: $Encoding"
+        Write-LogFile @debugParams
+
+        $debugParams.Message = "[DEBUG]   LogLevel: $LogLevel"
+        Write-LogFile @debugParams
+
         $graphModule = Get-Module -Name Microsoft.Graph* -ErrorAction SilentlyContinue
         if ($graphModule) {
-            Write-LogFile -Message "[DEBUG] Microsoft Graph Modules loaded:" -Level Debug
+            $debugParams.Message = "[DEBUG] Microsoft Graph Modules loaded:"
+            Write-LogFile @debugParams
             foreach ($module in $graphModule) {
-                Write-LogFile -Message "[DEBUG]   - $($module.Name) v$($module.Version)" -Level Debug
+                $debugParams.Message = "[DEBUG]   - $($module.Name) v$($module.Version)"
+                Write-LogFile @debugParams
             }
-        } else {
-            Write-LogFile -Message "[DEBUG] No Microsoft Graph modules loaded" -Level Debug
+        }
+        else {
+            $debugParams.Message = "[DEBUG] No Microsoft Graph modules loaded"
+            Write-LogFile @debugParams
         }
     }
 
@@ -496,40 +523,50 @@ function Get-GraphEntraAuditLogs {
     $requiredScopes = @("AuditLog.Read.All", "Directory.Read.All")
     $graphAuth = Get-GraphAuthType -RequiredScopes $RequiredScopes
 
-	if ($isDebugEnabled) {
-        Write-LogFile -Message "[DEBUG] Graph authentication details:" -Level Debug
-        Write-LogFile -Message "[DEBUG]   Required scopes: $($requiredScopes -join ', ')" -Level Debug
-        Write-LogFile -Message "[DEBUG]   Authentication type: $($graphAuth.AuthType)" -Level Debug
-        Write-LogFile -Message "[DEBUG]   Current scopes: $($graphAuth.Scopes -join ', ')" -Level Debug
+    if ($isDebugEnabled) {
+        $debugParams.Message = "[DEBUG] Graph authentication details:"
+        Write-LogFile @debugParams
+
+        $debugParams.Message = "[DEBUG]   Required scopes: $($requiredScopes -join ', ')"
+        Write-LogFile @debugParams
+
+        $debugParams.Message = "[DEBUG]   Authentication type: $($graphAuth.AuthType)"
+        Write-LogFile @debugParams
+
+        $debugParams.Message = "[DEBUG]   Current scopes: $($graphAuth.Scopes -join ', ')"
+        Write-LogFile @debugParams
+
         if ($graphAuth.MissingScopes.Count -gt 0) {
-            Write-LogFile -Message "[DEBUG]   Missing scopes: $($graphAuth.MissingScopes -join ', ')" -Level Debug
-        } else {
-            Write-LogFile -Message "[DEBUG]   Missing scopes: None" -Level Debug
+            $debugParams.Message = "[DEBUG]   Missing scopes: $($graphAuth.MissingScopes -join ', ')"
+        }
+        else {
+            $debugParams.Message = "[DEBUG]   Missing scopes: None"
+        }
+        Write-LogFile @debugParams
+    }
+
+    $date = [datetime]::Now.ToString('yyyyMMdd')
+    if ($OutputDir -eq "" ) {
+        $OutputDir = "Output\EntraID\$($date)-Auditlogs"
+        if (!(Test-Path $OutputDir)) {
+            [void](New-Item -ItemType Directory -Force -Path $OutputDir)
+            Write-LogFile -Message "[INFO] Creating the following directory: $OutputDir"
         }
     }
-	
-	$date = [datetime]::Now.ToString('yyyyMMdd') 
-	if ($OutputDir -eq "" ){
-		$OutputDir = "Output\EntraID\$($date)-Auditlogs"
-		if (!(test-path $OutputDir)) {
-			New-Item -ItemType Directory -Force -Path $OutputDir > $null
-			write-logFile -Message "[INFO] Creating the following directory: $OutputDir"
-		}
-	}
-	else {
+    else {
         if (!(Test-Path -Path $OutputDir)) {
             Write-LogFile -Message "[Error] Custom directory invalid: $OutputDir" -Level Minimal -Color "Red"
             return
         }
     }
 
-	StartDateAz -Quiet
+    StartDateAz -Quiet
     EndDate -Quiet
 
-	$StartDate = $script:StartDate.ToString('yyyy-MM-ddTHH:mm:ssZ')
-	$EndDate = $script:EndDate.ToString('yyyy-MM-ddTHH:mm:ssZ')
+    $StartDate = $script:StartDate.ToString('yyyy-MM-ddTHH:mm:ssZ')
+    $EndDate = $script:EndDate.ToString('yyyy-MM-ddTHH:mm:ssZ')
 
-	Write-LogFile -Message "Start Date: $StartDate" -Level Standard
+    Write-LogFile -Message "Start Date: $StartDate" -Level Standard
     Write-LogFile -Message "End Date: $EndDate" -Level Standard
     Write-LogFile -Message "Output Format: $Output" -Level Standard
     Write-LogFile -Message "Output Directory: $OutputDir" -Level Standard
@@ -538,74 +575,94 @@ function Get-GraphEntraAuditLogs {
     }
     Write-LogFile -Message "----------------------------------------`n" -Level Standard
 
-	$filterQuery = "activityDateTime ge $StartDate and activityDateTime le $EndDate"
-	if ($UserIds -and $UserIds.Count -gt 0) {
-		$userFilters = $UserIds | ForEach-Object { "startsWith(initiatedBy/user/userPrincipalName, '$_')" }
-		$filterQuery += " and (" + ($userFilters -join " or ") + ")"
-		
-		if ($All.IsPresent) {
-			$targetFilters = $UserIds | ForEach-Object { "targetResources/any(tr: tr/userPrincipalName eq '$_')" }
-			$filterQuery = "($filterQuery) or (" + ($targetFilters -join " or ") + ")"
-		}
-	}
-	else {
+    # Build filter query efficiently
+    $filterQuery = "activityDateTime ge $StartDate and activityDateTime le $EndDate"
+    if ($UserIds -and $UserIds.Count -gt 0) {
+        $userFilters = $UserIds | ForEach-Object { "startsWith(initiatedBy/user/userPrincipalName, '$_')" }
+        $filterQuery += " and (" + ($userFilters -join " or ") + ")"
+
+        if ($All.IsPresent) {
+            $targetFilters = $UserIds | ForEach-Object { "targetResources/any(tr: tr/userPrincipalName eq '$_')" }
+            $filterQuery = "($filterQuery) or (" + ($targetFilters -join " or ") + ")"
+        }
+    }
+    else {
         if ($All.IsPresent) {
             Write-LogFile -Message "[WARNING] '-All' switch has no effect without specifying UserIds"
         }
     }
 
-	$encodedFilterQuery = [System.Web.HttpUtility]::UrlEncode($filterQuery)
-	$apiUrl = "https://graph.microsoft.com/v1.0/auditLogs/directoryAudits?`$filter=$encodedFilterQuery"
+    $encodedFilterQuery = [System.Web.HttpUtility]::UrlEncode($filterQuery)
+    $apiUrl = "https://graph.microsoft.com/v1.0/auditLogs/directoryAudits?`$filter=$encodedFilterQuery"
 
-	if ($isDebugEnabled) {
-        Write-LogFile -Message "[DEBUG] API configuration:" -Level Debug
-        Write-LogFile -Message "[DEBUG]   Base URL: https://graph.microsoft.com/v1.0/auditLogs/directoryAudits" -Level Debug
-        Write-LogFile -Message "[DEBUG]   Filter query (decoded): $filterQuery" -Level Debug
-        Write-LogFile -Message "[DEBUG]   Full API URL: $apiUrl" -Level Debug
+    if ($isDebugEnabled) {
+        $debugParams.Message = "[DEBUG] API configuration:"
+        Write-LogFile @debugParams
+
+        $debugParams.Message = "[DEBUG]   Base URL: https://graph.microsoft.com/v1.0/auditLogs/directoryAudits"
+        Write-LogFile @debugParams
+
+        $debugParams.Message = "[DEBUG]   Filter query (decoded): $filterQuery"
+        Write-LogFile @debugParams
+
+        $debugParams.Message = "[DEBUG]   Full API URL: $apiUrl"
+        Write-LogFile @debugParams
     }
 
-	try {
-		Do {
-			$retryCount = 0
+    try {
+        Do {
+            $retryCount = 0
             $maxRetries = 3
             $success = $false
 
-			while (-not $success -and $retryCount -lt $maxRetries) {
-				try { 
-					$response = Invoke-MgGraphRequest -Uri $apiUrl -Method Get -ContentType "application/json; odata.metadata=minimal; odata.streaming=true;" -OutputType Json
-					$responseJson = $response | ConvertFrom-Json 
-					$success = $true
-				}
-				catch {
-					$retryCount++
-					if ($retryCount -lt $maxRetries) {
-						Write-LogFile -Message "[WARNING] Failed to acquire logs. Retrying... Attempt $retryCount of $maxRetries" -Level Standard -Color "Yellow"
-						if ($isDebugEnabled) {
-                            Write-LogFile -Message "[DEBUG] API call error details:" -Level Debug
-                            Write-LogFile -Message "[DEBUG]   Exception type: $($_.Exception.GetType().Name)" -Level Debug
-                            Write-LogFile -Message "[DEBUG]   Full error: $($_.Exception.ToString())" -Level Debug
-                            Write-LogFile -Message "[DEBUG]   Stack trace: $($_.ScriptStackTrace)" -Level Debug
+            while (-not $success -and $retryCount -lt $maxRetries) {
+                try {
+                    $response = Invoke-MgGraphRequest -Uri $apiUrl -Method Get -ContentType "application/json; odata.metadata=minimal; odata.streaming=true;" -OutputType Json
+                    $responseJson = $response | ConvertFrom-Json
+                    $success = $true
+                }
+                catch {
+                    $retryCount++
+                    if ($retryCount -lt $maxRetries) {
+                        Write-LogFile -Message "[WARNING] Failed to acquire logs. Retrying... Attempt $retryCount of $maxRetries" -Level Standard -Color "Yellow"
+                        if ($isDebugEnabled) {
+                            $debugParams.Message = "[DEBUG] API call error details:"
+                            Write-LogFile @debugParams
+
+                            $debugParams.Message = "[DEBUG]   Exception type: $($_.Exception.GetType().Name)"
+                            Write-LogFile @debugParams
+
+                            $debugParams.Message = "[DEBUG]   Full error: $($_.Exception.ToString())"
+                            Write-LogFile @debugParams
+
+                            $debugParams.Message = "[DEBUG]   Stack trace: $($_.ScriptStackTrace)"
+                            Write-LogFile @debugParams
                         }
-						Start-Sleep -Seconds 15
-					}
-					else {
-						Write-LogFile -Message "[ERROR] Failed to acquire logs after $maxRetries attempts. Error: $($_.Exception.Message)" -Level Minimal -Color "Red"
-						throw
-					}
-				}
-			}
+                        Start-Sleep -Seconds 15
+                    }
+                    else {
+                        Write-LogFile -Message "[ERROR] Failed to acquire logs after $maxRetries attempts. Error: $($_.Exception.Message)" -Level Minimal -Color "Red"
+                        throw
+                    }
+                }
+            }
 
-			if ($responseJson.value) {
-				$date = [datetime]::Now.ToString('yyyyMMddHHmmss') 
-				$filePath = Join-Path -Path $OutputDir -ChildPath "$($date)-AuditLogs.json"
+            if ($responseJson.value) {
+                $date = [datetime]::Now.ToString('yyyyMMddHHmmss')
+                $filePath = Join-Path -Path $OutputDir -ChildPath "$($date)-AuditLogs.json"
 
-				if ($isDebugEnabled) {
-                    Write-LogFile -Message "[DEBUG] Processing response data:" -Level Debug
-                    Write-LogFile -Message "[DEBUG]   Records in batch: $($responseJson.value.Count)" -Level Debug
-                    Write-LogFile -Message "[DEBUG]   Output file: $filePath" -Level Debug
+                if ($isDebugEnabled) {
+                    $debugParams.Message = "[DEBUG] Processing response data:"
+                    Write-LogFile @debugParams
+
+                    $debugParams.Message = "[DEBUG]   Records in batch: $($responseJson.value.Count)"
+                    Write-LogFile @debugParams
+
+                    $debugParams.Message = "[DEBUG]   Output file: $filePath"
+                    Write-LogFile @debugParams
                 }
 
-				if ($Output -eq "JSON") {
+                if ($Output -eq "JSON") {
                     $responseJson.value | ConvertTo-Json -Depth 100 | Out-File -FilePath $filePath -Append -Encoding $Encoding
                 }
                 elseif ($Output -eq "SOF-ELK") {
@@ -615,46 +672,56 @@ function Get-GraphEntraAuditLogs {
                     }
                 }
 
-				$currentBatchCount = ($responseJson.value | Measure-Object).Count
+                $currentBatchCount = ($responseJson.value | Measure-Object).Count
                 $summary.TotalRecords += $currentBatchCount
                 $summary.TotalFiles++
-				
-				$dates = $responseJson.value | ForEach-Object {
-					[DateTime]::Parse($_.activityDateTime, [System.Globalization.CultureInfo]::InvariantCulture)
-				} | Sort-Object
 
-                $from =  $dates | Select-Object -First 1
-                $fromstr =  $from.ToString('yyyy-MM-ddTHH:mmZ')
+                # Optimize date parsing with pre-allocated array
+                $dates = $responseJson.value | ForEach-Object {
+                    [DateTime]::Parse($_.activityDateTime, [System.Globalization.CultureInfo]::InvariantCulture)
+                } | Sort-Object
+
+                $from = $dates | Select-Object -First 1
+                $fromstr = $from.ToString('yyyy-MM-ddTHH:mmZ')
                 $to = ($dates | Select-Object -Last 1).ToString('yyyy-MM-ddTHH:mmZ')
-				Write-LogFile -Message "[INFO] Retrieved $currentBatchCount records between $fromstr and $to" -Level Standard -Color "Green"
-			}
-			$apiUrl = $responseJson.'@odata.nextLink'
-		} While ($apiUrl)
+                Write-LogFile -Message "[INFO] Retrieved $currentBatchCount records between $fromstr and $to" -Level Standard -Color "Green"
+            }
+            $apiUrl = $responseJson.'@odata.nextLink'
+        } While ($apiUrl)
 
-		if ($Output -eq "JSON" -and ($MergeOutput.IsPresent)) {
-			Merge-OutputFiles -OutputDir $OutputDir -OutputType "JSON" -MergedFileName "AuditLogs-Combined.json"
-		}
-		elseif ($Output -eq "SOF-ELK" -and ($MergeOutput.IsPresent)) {
-			Merge-OutputFiles -OutputDir $OutputDir -OutputType "SOF-ELK" -MergedFileName "AuditLogs-Combined.json"
-		}
+        if ($Output -eq "JSON" -and ($MergeOutput.IsPresent)) {
+            Merge-OutputFiles -OutputDir $OutputDir -OutputType "JSON" -MergedFileName "AuditLogs-Combined.json"
+        }
+        elseif ($Output -eq "SOF-ELK" -and ($MergeOutput.IsPresent)) {
+            Merge-OutputFiles -OutputDir $OutputDir -OutputType "SOF-ELK" -MergedFileName "AuditLogs-Combined.json"
+        }
 
-		$summary.ProcessingTime = (Get-Date) - $summary.StartTime
+        $summary.ProcessingTime = (Get-Date) - $summary.StartTime
         Write-LogFile -Message "`nCollection Summary:" -Color "Cyan" -Level Standard
         Write-LogFile -Message "  Total Records: $($summary.TotalRecords)" -Level Standard
         Write-LogFile -Message "  Files Created: $($summary.TotalFiles)" -Level Standard
         Write-LogFile -Message "  Output Directory: $OutputDir" -Level Standard
         Write-LogFile -Message "  Processing Time: $($summary.ProcessingTime.ToString('mm\:ss'))" -Level Standard -Color "Green"
     }
-	catch {
-		Write-logFile -Message "[ERROR] An error occurred: $($_.Exception.Message)" -Color "Red" -Level Minimal
-		if ($isDebugEnabled) {
-            Write-LogFile -Message "[DEBUG] Fatal error details:" -Level Debug
-            Write-LogFile -Message "[DEBUG]   Exception type: $($_.Exception.GetType().Name)" -Level Debug
-            Write-LogFile -Message "[DEBUG]   Full error: $($_.Exception.ToString())" -Level Debug
-            Write-LogFile -Message "[DEBUG]   Stack trace: $($_.ScriptStackTrace)" -Level Debug
-            Write-LogFile -Message "[DEBUG]   Records collected before error: $($summary.TotalRecords)" -Level Debug
+    catch {
+        Write-LogFile -Message "[ERROR] An error occurred: $($_.Exception.Message)" -Color "Red" -Level Minimal
+        if ($isDebugEnabled) {
+            $debugParams.Message = "[DEBUG] Fatal error details:"
+            Write-LogFile @debugParams
+
+            $debugParams.Message = "[DEBUG]   Exception type: $($_.Exception.GetType().Name)"
+            Write-LogFile @debugParams
+
+            $debugParams.Message = "[DEBUG]   Full error: $($_.Exception.ToString())"
+            Write-LogFile @debugParams
+
+            $debugParams.Message = "[DEBUG]   Stack trace: $($_.ScriptStackTrace)"
+            Write-LogFile @debugParams
+
+            $debugParams.Message = "[DEBUG]   Records collected before error: $($summary.TotalRecords)"
+            Write-LogFile @debugParams
         }
-		throw
+        throw
     }
 }
-	
+

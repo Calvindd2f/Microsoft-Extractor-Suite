@@ -13,7 +13,7 @@
         <PackageProjectUrl>https://github.com/invictus-ir/Microsoft-Extractor-Suite</PackageProjectUrl>
         <RepositoryUrl>https://github.com/invictus-ir/Microsoft-Extractor-Suite</RepositoryUrl>
         <LangVersion>10.0</LangVersion>
-        <Nullable>disable</Nullable>
+        <Nullable>enable</Nullable>
         <GenerateDocumentationFile>true</GenerateDocumentationFile>
         <NoWarn>CS1591</NoWarn>
         <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
@@ -44,7 +44,8 @@
 
         <!-- JSON handling -->
         <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
-        <PackageReference Include="System.Text.Json" Version="8.0.5" />
+        <PackageReference Include="SimdJsonSharp.Bindings" Version="1.7.0" />
+        <!-- <PackageReference Include="System.Text.Json" Version="8.0.5" /> -->
 
         <!-- CSV handling -->
         <PackageReference Include="CsvHelper" Version="33.0.1" />

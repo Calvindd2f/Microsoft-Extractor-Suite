@@ -21,9 +21,12 @@ Created by Joey Rentenaar & Korstiaan Stam
     Write-Host $logo -ForegroundColor Yellow
 }
 
-$outputDir = "Output"
-if (!(test-path $outputDir)) {
-	New-Item -ItemType Directory -Force -Name $Outputdir > $null
+function UpsertOutputDirectory([string]$OutputDir = "Output") {
+    if (!(Test-Path $OutputDir)) {
+        [void](New-Item -ItemType Directory -Force -Path $OutputDir)
+    } elseif (!(Test-Path -Path $OutputDir)) {
+        Write-LogFile -Message "[Error] Custom directory invalid: $OutputDir exiting script" -Level Minimal -Color "Red"
+    }
 }
 
 $retryCount = 0
@@ -113,36 +116,46 @@ function Set-LogLevel {
     $script:LogLevel = $Level
 }
 
+function private:AssertFolderExists {
+    param(
+        [Parameter(Mandatory=$true,HelpMessage="The folder to check if it exists",Position=0)]
+        [string]
+        $Folder
+    )
+    if (-not (Test-Path $Folder)) {
+        [void](New-Item -ItemType Directory -Force -Name $Folder)
+    }
+}
+
 
 $logFile = "Output\LogFile.txt"
 function Write-LogFile {
-    [CmdletBinding()]
+    [CmdletBinding(SupportsShouldProcess,DefaultParameterSetName="Message")]
     param(
-        [Parameter(Mandatory=$true)]
-        [string]$Message,
-        [string]$Color,
+        [Parameter(Mandatory=$true,ValueFromPipeline=$true,ValueFromPipelineByPropertyName=$true,Position=0,HelpMessage="The message to write to the log file",AllowEmptyString=$false,AllowNull=$false)]
+        [string]
+        $Message,
+
+        [Parameter(Position=1,Mandatory=$false,HelpMessage="The color of the message")]
+        [string]
+        $Color,
+
         [switch]$NoNewLine,
-        [LogLevel]$Level = [LogLevel]::Standard
+
+        [Parameter(Position=2,Mandatory=$false,HelpMessage="The log level to write the message at")]
+        [LogLevel]
+        $Level = [LogLevel]::Standard
     )
 
-    if ($Level -gt $script:LogLevel) {
+    if ($Level -gt $script:LogLevel -or $script:LogLevel -eq [LogLevel]::None) {
         return
     }
 
-    if ($script:LogLevel -eq [LogLevel]::None) {
-        return
-    }
+	AssertFolderExists("Output")
 
-	$outputDir = "Output"
-	if (!(test-path $outputDir)) {
-		New-Item -ItemType Directory -Force -Name $Outputdir > $null
-	}
+    if(-not $Color -and $Level -eq [LogLevel]::Debug) { $Color = "Yellow" }
 
-    if(!$color -and $Level -eq [LogLevel]::Debug) {
-        $color = "Yellow"
-    }
-
-	switch ($color) {
+	switch ($Color) {
         "Yellow" { [Console]::ForegroundColor = [ConsoleColor]::Yellow }
         "Red" 	 { [Console]::ForegroundColor = [ConsoleColor]::Red }
         "Green"  { [Console]::ForegroundColor = [ConsoleColor]::Green }
@@ -151,7 +164,7 @@ function Write-LogFile {
         default  { [Console]::ResetColor() }
     }
 
-    $logMessage = if (!$NoTimestamp) {
+    $logMessage = if (-not $NoTimestamp) {
         "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss'): $Message"
     } else {
         $Message
@@ -170,14 +183,10 @@ function Write-LogFile {
 function versionCheck{
 	$moduleName = "Microsoft-Extractor-Suite"
 	$currentVersionString = $version
-
 	$currentVersion = [Version]$currentVersionString
     $latestVersionString = (Find-Module -Name $moduleName).Version.ToString()
     $latestVersion = [Version]$latestVersionString
-
-
 	$latestVersion = (Find-Module -Name $moduleName).Version.ToString()
-
 	if ($currentVersion -lt $latestVersion) {
 		write-LogFile -Message "`n[INFO] You are running an outdated version ($currentVersion) of $moduleName. The latest version is ($latestVersion), please update to the latest version." -Color "Yellow"
 	}
@@ -243,8 +252,27 @@ function Get-GraphAuthType {
         MissingScopes = $missingScopes
     }
 }
+$GlobalRoleId="62e90394-69f5-4237-9190-012177145e10";
+$ExchangeRoleId="29232cdf-9323-42fd-ade2-1d097af3e4de";
+$delegatedScopesExchange=@("$ExchangeRoleId")
+$applicationScopesExchange=@("full_access_as_app""Exchange.ManageAsApp")
+$delegated
+$application
 
-function Merge-OutputFiles {
+
+$delegatedScopesGraph
+$applicationScopesGraph
+
+
+$applicationScopesExchange;$delegatedScopesExchange;$ExchangeRoleId;$GlobalRoleId
+#Get-ManagementRole -RoleType ExchangeFullAccessApp
+#$Perms = Get-ManagementRole -Cmdlet Get-OrganizationConfig
+#$Perms | foreach {Get-ManagementRoleAssignment -Role $_.Name -Delegating $false | Format-Table -Auto Role,RoleAssigneeType,RoleAssigneeName}
+$me=(Get-ConnectionInformation).UserPrincipalName
+Get-ManagementRoleAssignment -RoleAssignee $me | Format-Table -Auto Role,RoleAssigneeName,RoleAssigneeType,Delegating
+$error_description="AADSTS700054: response_type 'id_token' is not enabled for the application. Trace ID: 276a464d-f9cf-42c1-9549-e0e52f510000 Correlation ID: 246df67a-b874-4ef3-aefc-9046fe6d0c5e Timestamp: 2024-11-19 1846Z"
+
+function private:Merge-OutputFiles {
     param (
         [Parameter(Mandatory)][string]$OutputDir,
         [Parameter(Mandatory)][string]$OutputType,
@@ -252,28 +280,27 @@ function Merge-OutputFiles {
         [switch]$SofElk
     )
 
-    $outputDirMerged = Join-Path -Path $OutputDir -ChildPath "Merged"
-    If (!(Test-Path $outputDirMerged)) {
-        Write-LogFile -Message "[INFO] Creating the following directory: $outputDirMerged"
-        New-Item -ItemType Directory -Force -Path $outputDirMerged > $null
+    begin {
+    AssertFolderExists($OutputDir)
+	$mergedPath = Join-Path -Path $OutputDir -ChildPath $MergedFileName
+        AssertFolderExists($mergedPath)
     }
 
-	$mergedPath = Join-Path -Path $outputDirMerged -ChildPath $MergedFileName
-
-    switch ($OutputType) {
+    process {
+        switch ($OutputType) {
         'CSV' {
-			Get-ChildItem $OutputDir -Filter *.csv | Select-Object -ExpandProperty FullName | Import-Csv | Export-Csv $mergedPath -NoTypeInformation -Append -Encoding UTF8
+			Get-ChildItem -Path $OutputDir -Filter *.csv | Select-Object -ExpandProperty FullName | Import-Csv | Export-Csv $mergedPath -NoTypeInformation -Append -Encoding UTF8
             Write-LogFile -Message "[INFO] CSV files merged into $mergedPath"
         }
         'SOF-ELK' {
-			Get-ChildItem $OutputDir -Filter *.json | Select-Object -ExpandProperty FullName | ForEach-Object { Get-Content -Path $_ | Where-Object { $_.Trim() -ne "" } } | Out-File -Append $mergedPath -Encoding UTF8
+			Get-ChildItem -Path $OutputDir -Filter *.json | Select-Object -ExpandProperty FullName | ForEach-Object { Get-Content -Path $_ | Where-Object { $_.Trim() -ne "" } } | Out-File -Append $mergedPath -Encoding UTF8
             Write-LogFile -Message "[INFO] SOF-ELK files merged into $mergedPath"
         }
         'JSON' {
             "[" | Set-Content $mergedPath -Encoding UTF8
 
             $firstFile = $true
-            Get-ChildItem $OutputDir -Filter *.json | ForEach-Object {
+            Get-ChildItem -Path $OutputDir -Filter *.json | ForEach-Object {
                 $content = Get-Content -Path $_.FullName -Raw
 
                 $content = $content.Trim()
@@ -295,7 +322,6 @@ function Merge-OutputFiles {
                 }
             }
             "]" | Add-Content $mergedPath -Encoding UTF8
-            Write-LogFile -Message "[INFO] JSON files merged into $mergedPath"
 
         }
         'JSONL' {
@@ -312,12 +338,15 @@ function Merge-OutputFiles {
             }
 
             Set-Content -Path $mergedPath -Value ($mergedContent -join "`n") -Encoding UTF8
-            Write-LogFile -Message "[INFO] JSONL files merged into $mergedPath"
         }
         default {
             Write-LogFile -Message "[ERROR] Unsupported file type specified: $OutputType" -Color Red
         }
+        }
+    end {
+        Write-LogFile -Message "[INFO] Output files merged into $mergedPath"
     }
+}
 }
 
 versionCheck

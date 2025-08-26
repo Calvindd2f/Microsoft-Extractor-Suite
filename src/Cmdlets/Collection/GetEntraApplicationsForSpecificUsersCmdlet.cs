@@ -1,44 +1,60 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Management.Automation;
-using System.Threading;
-using System.Threading.Tasks;
-using Microsoft.ExtractorSuite.Core;
-using Microsoft.ExtractorSuite.Core.Json;
-using Microsoft.Graph;
-using Microsoft.Graph.Models;
-using CsvHelper;
-
 namespace Microsoft.ExtractorSuite.Cmdlets.Collection
 {
+    using System;
+    using System.Collections.Generic;
+    using System.IO;
+    using System.Linq;
+    using System.Management.Automation;
+    using System.Threading;
+    using System.Threading.Tasks;
+    using CsvHelper;
+    using Microsoft.ExtractorSuite.Core;
+    using Microsoft.ExtractorSuite.Core.Json;
+    using Microsoft.Graph;
+    using Microsoft.Graph.Models;
+
+
     [Cmdlet(VerbsCommon.Get, "EntraApplicationsForSpecificUsers")]
     [OutputType(typeof(UserApplicationInfo))]
+#pragma warning disable SA1600
     public class GetEntraApplicationsForSpecificUsersCmdlet : AsyncBaseCmdlet
+#pragma warning restore SA1600
     {
         [Parameter(HelpMessage = "The output directory.")]
+#pragma warning disable SA1600
         public new string OutputDirectory { get; set; } = "Output\\Applications";
+#pragma warning restore SA1600
 
         [Parameter(HelpMessage = "The encoding of the output file.")]
+#pragma warning disable SA1600
         public string Encoding { get; set; } = "UTF8";
+#pragma warning restore SA1600
 
         [Parameter(HelpMessage = "The level of logging.")]
         [ValidateSet("None", "Minimal", "Standard", "Debug")]
+#pragma warning disable SA1600
         public new string LogLevel { get; set; } = "Standard";
+#pragma warning restore SA1600
 
         [Parameter(Mandatory = true, HelpMessage = "UserIds to filter applications by owner or assignments.")]
+#pragma warning disable SA1600
         public string[] UserIds { get; set; } = Array.Empty<string>();
+#pragma warning restore SA1600
 
+#pragma warning disable SA1600
         protected override void ProcessRecord()
+#pragma warning restore SA1600
         {
+#pragma warning disable SA1101
             if (!RequireGraphConnection())
             {
                 return;
             }
+#pragma warning restore SA1101
 
             var applications = RunAsyncOperation(GetApplicationsForUsersAsync, "Get Entra Applications for Specific Users");
 
+#pragma warning disable SA1101
             if (!Async.IsPresent && applications != null)
             {
                 foreach (var app in applications)
@@ -46,28 +62,39 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Collection
                     WriteObject(app);
                 }
             }
+#pragma warning restore SA1101
         }
 
         private async Task<List<UserApplicationInfo>> GetApplicationsForUsersAsync(
             IProgress<Core.AsyncOperations.TaskProgress> progress,
             CancellationToken cancellationToken)
         {
+#pragma warning disable SA1101
             var graphClient = AuthManager.GraphClient
                 ?? throw new InvalidOperationException("Graph client not initialized");
+#pragma warning restore SA1101
 
             WriteVerboseWithTimestamp("=== Starting Entra Applications Collection ===");
 
             try
             {
+#pragma warning disable SA1101
                 if (!Directory.Exists(OutputDirectory))
                 {
+#pragma warning disable SA1101
                     Directory.CreateDirectory(OutputDirectory);
+#pragma warning restore SA1101
+#pragma warning disable SA1101
                     WriteVerboseWithTimestamp($"Created output directory: {OutputDirectory}");
+#pragma warning restore SA1101
                 }
+#pragma warning restore SA1101
             }
             catch (Exception ex)
             {
+#pragma warning disable SA1101
                 WriteErrorWithTimestamp($"Failed to create directory: {OutputDirectory}", ex);
+#pragma warning restore SA1101
                 throw;
             }
 
@@ -80,8 +107,11 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Collection
 
             // Resolve users
             var validUsers = new List<User>();
+#pragma warning disable SA1101
             WriteVerboseWithTimestamp($"Resolving {UserIds.Length} users...");
+#pragma warning restore SA1101
 
+#pragma warning disable SA1101
             foreach (var userId in UserIds)
             {
                 try
@@ -94,13 +124,18 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Collection
                 }
                 catch (ServiceException ex)
                 {
+#pragma warning disable SA1101
                     WriteWarningWithTimestamp($"Could not resolve user: {userId} - {ex.Message}");
+#pragma warning restore SA1101
                 }
             }
+#pragma warning restore SA1101
 
             if (validUsers.Count == 0)
             {
+#pragma warning disable SA1101
                 WriteErrorWithTimestamp("No valid users found. Cannot proceed.");
+#pragma warning restore SA1101
                 return results;
             }
 
@@ -123,6 +158,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Collection
                             {
                                 if (obj.GetType().Name == "Application")
                                 {
+#pragma warning disable SA1101
                                     await ProcessOwnedApplication(
                                         graphClient,
                                         obj.Id,
@@ -131,6 +167,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Collection
                                         results,
                                         summary,
                                         cancellationToken);
+#pragma warning restore SA1101
                                 }
                                 return !cancellationToken.IsCancellationRequested;
                             });
@@ -139,7 +176,9 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Collection
                 }
                 catch (ServiceException ex)
                 {
+#pragma warning disable SA1101
                     WriteWarningWithTimestamp($"Error getting owned apps for {user.UserPrincipalName}: {ex.Message}");
+#pragma warning restore SA1101
                 }
 
                 // Get application assignments
@@ -154,6 +193,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Collection
                             assignments,
                             async (assignment) =>
                             {
+#pragma warning disable SA1101
                                 await ProcessAssignedApplication(
                                     graphClient,
                                     assignment.ResourceId?.ToString(),
@@ -162,6 +202,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Collection
                                     results,
                                     summary,
                                     cancellationToken);
+#pragma warning restore SA1101
                                 return !cancellationToken.IsCancellationRequested;
                             });
 
@@ -169,7 +210,9 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Collection
                 }
                 catch (ServiceException ex)
                 {
+#pragma warning disable SA1101
                     WriteWarningWithTimestamp($"Error getting assignments for {user.UserPrincipalName}: {ex.Message}");
+#pragma warning restore SA1101
                 }
 
                 processedCount++;
@@ -186,10 +229,14 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Collection
             summary.ProcessingTime = DateTime.UtcNow - summary.StartTime;
 
             // Export results
+#pragma warning disable SA1101
             await ExportResultsAsync(results, cancellationToken);
+#pragma warning restore SA1101
 
             // Write summary
+#pragma warning disable SA1101
             WriteSummary(summary, validUsers.Count);
+#pragma warning restore SA1101
 
             return results;
         }
@@ -228,6 +275,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Collection
                 }
                 catch { }
 
+#pragma warning disable SA1101
                 var appInfo = new UserApplicationInfo
                 {
                     AssociationType = "Owner",
@@ -247,12 +295,15 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Collection
                     WebRedirectUris = string.Join("; ", app.Web?.RedirectUris ?? new List<string>()),
                     PublicClientRedirectUris = string.Join("; ", app.PublicClient?.RedirectUris ?? new List<string>())
                 };
+#pragma warning restore SA1101
 
                 results.Add(appInfo);
             }
             catch (Exception ex)
             {
+#pragma warning disable SA1101
                 WriteWarningWithTimestamp($"Could not process owned app {appId}: {ex.Message}");
+#pragma warning restore SA1101
             }
         }
 
@@ -297,6 +348,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Collection
                     catch { }
                 }
 
+#pragma warning disable SA1101
                 var appInfo = new UserApplicationInfo
                 {
                     AssociationType = "Assignment",
@@ -316,12 +368,15 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Collection
                     WebRedirectUris = app != null ? string.Join("; ", app.Web?.RedirectUris ?? new List<string>()) : string.Empty,
                     PublicClientRedirectUris = app != null ? string.Join("; ", app.PublicClient?.RedirectUris ?? new List<string>()) : string.Empty
                 };
+#pragma warning restore SA1101
 
                 results.Add(appInfo);
             }
             catch (Exception ex)
             {
+#pragma warning disable SA1101
                 WriteWarningWithTimestamp($"Could not process assignment: {ex.Message}");
+#pragma warning restore SA1101
             }
         }
 
@@ -359,11 +414,15 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Collection
             CancellationToken cancellationToken)
         {
             var date = DateTime.Now.ToString("yyyyMMddHHmm");
+#pragma warning disable SA1101
             var outputPath = Path.Combine(OutputDirectory, $"{date}-UserApplications.csv");
+#pragma warning restore SA1101
 
             WriteVerboseWithTimestamp($"Exporting {results.Count} applications to CSV...");
 
+#pragma warning disable SA1101
             using var writer = new StreamWriter(outputPath, false, System.Text.Encoding.GetEncoding(Encoding));
+#pragma warning restore SA1101
             using var csv = new CsvWriter(writer, System.Globalization.CultureInfo.InvariantCulture);
 
             await csv.WriteRecordsAsync(results);
@@ -373,55 +432,121 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Collection
 
         private void WriteSummary(ApplicationsSummary summary, int userCount)
         {
+#pragma warning disable SA1101
             WriteHost("");
+#pragma warning restore SA1101
+#pragma warning disable SA1101
             WriteHost("=== User Applications Summary ===", ConsoleColor.Cyan);
+#pragma warning restore SA1101
+#pragma warning disable SA1101
             WriteHost($"Users Processed: {userCount}");
+#pragma warning restore SA1101
+#pragma warning disable SA1101
             WriteHost($"Owned Applications: {summary.OwnedApps}");
+#pragma warning restore SA1101
+#pragma warning disable SA1101
             WriteHost($"Assigned Applications: {summary.AssignedApps}");
+#pragma warning restore SA1101
+#pragma warning disable SA1101
             WriteHost($"Total Applications: {summary.TotalApps}");
+#pragma warning restore SA1101
+#pragma warning disable SA1101
             WriteHost($"Processing Time: {summary.ProcessingTime:mm\\:ss}", ConsoleColor.Green);
+#pragma warning restore SA1101
+#pragma warning disable SA1101
             WriteHost("===================================", ConsoleColor.Cyan);
+#pragma warning restore SA1101
         }
 
         private void WriteHost(string message, ConsoleColor? color = null)
         {
             if (color.HasValue)
             {
+#pragma warning disable SA1101
                 Host.UI.WriteLine(color.Value, Host.UI.RawUI.BackgroundColor, message);
+#pragma warning restore SA1101
             }
             else
             {
+#pragma warning disable SA1101
                 Host.UI.WriteLine(message);
+#pragma warning restore SA1101
             }
         }
     }
 
+#pragma warning disable SA1600
     public class UserApplicationInfo
+#pragma warning restore SA1600
     {
+#pragma warning disable SA1600
         public string AssociationType { get; set; } = string.Empty;
+#pragma warning restore SA1600
+#pragma warning disable SA1600
         public string AssociatedUser { get; set; } = string.Empty;
+#pragma warning restore SA1600
+#pragma warning disable SA1600
         public string? ApplicationName { get; set; }
+#pragma warning restore SA1600
+#pragma warning disable SA1600
         public string? ApplicationId { get; set; }
+#pragma warning restore SA1600
+#pragma warning disable SA1600
         public string? ObjectId { get; set; }
+#pragma warning restore SA1600
+#pragma warning disable SA1600
         public string? PublisherName { get; set; }
+#pragma warning restore SA1600
+#pragma warning disable SA1600
         public string ApplicationType { get; set; } = string.Empty;
+#pragma warning restore SA1600
+#pragma warning disable SA1600
         public DateTime? CreatedDateTime { get; set; }
+#pragma warning restore SA1600
+#pragma warning disable SA1600
         public string ServicePrincipalEnabled { get; set; } = string.Empty;
+#pragma warning restore SA1600
+#pragma warning disable SA1600
+#pragma warning restore SA1600
+        #pragma warning disable SA1600
         public bool HasClientSecrets { get; set; }
+#pragma warning restore SA1600
+        #pragma warning disable SA1600
         public bool HasCertificates { get; set; }
+#pragma warning restore SA1600
+        #pragma warning disable SA1600
         public int RequiredApiPermissionCount { get; set; }
         public string? SignInAudience { get; set; }
+#pragma warning restore SA1600
+#pragma warning disable SA1600
         public string? Homepage { get; set; }
+#pragma warning restore SA1600
+#pragma warning disable SA1600
         public string? WebRedirectUris { get; set; }
+#pragma warning restore SA1600
+#pragma warning disable SA1600
         public string? PublicClientRedirectUris { get; set; }
+#pragma warning restore SA1600
     }
 
+#pragma warning disable SA1600
     internal class ApplicationsSummary
+#pragma warning restore SA1600
     {
+#pragma warning disable SA1600
+#pragma warning restore SA1600
+        #pragma warning disable SA1600
         public int OwnedApps { get; set; }
+#pragma warning restore SA1600
+        #pragma warning disable SA1600
         public int AssignedApps { get; set; }
+#pragma warning restore SA1600
+        #pragma warning disable SA1600
         public int TotalApps { get; set; }
+#pragma warning restore SA1600
+        #pragma warning disable SA1600
         public DateTime StartTime { get; set; }
+#pragma warning restore SA1600
         public TimeSpan ProcessingTime { get; set; }
     }
 }

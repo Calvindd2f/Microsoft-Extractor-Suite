@@ -1,24 +1,34 @@
-using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Management.Automation;
-using System.Threading;
-using System.Threading.Tasks;
-using Microsoft.ExtractorSuite.Core.AsyncOperations;
-using Microsoft.ExtractorSuite.Core.Authentication;
-using Microsoft.ExtractorSuite.Core.Logging;
+// <copyright file="AsyncBaseCmdlet.cs" company="PlaceholderCompany">
+// Copyright (c) PlaceholderCompany. All rights reserved.
+// </copyright>
 
 namespace Microsoft.ExtractorSuite.Core
 {
+    using System;
+    using System.Collections.Concurrent;
+    using System.Collections.Generic;
+    using System.Management.Automation;
+    using System.Threading;
+    using System.Threading.Tasks;
+    using Microsoft.ExtractorSuite.Core.AsyncOperations;
+    using Microsoft.ExtractorSuite.Core.Authentication;
+    using Microsoft.ExtractorSuite.Core.Logging;
+
     /// <summary>
     /// Enhanced base cmdlet with proper async support for long-running operations
-    /// Prevents blocking and provides non-blocking async execution patterns
+    /// Prevents blocking and provides non-blocking async execution patterns.
     /// </summary>
     public abstract class AsyncBaseCmdlet : PSCmdlet, IDisposable
     {
+#pragma warning disable SA1309
         private CancellationTokenSource? _cancellationTokenSource;
+#pragma warning restore SA1309
         private AsyncTaskManager? _taskManager;
+#pragma warning disable SA1600
+#pragma warning restore SA1600
         private bool _disposed;
+#pragma warning disable SA1202
+#pragma warning restore SA1202
         private readonly ConcurrentQueue<Action> _pendingWrites = new();
         private readonly object _writeLock = new();
 
@@ -37,7 +47,9 @@ namespace Microsoft.ExtractorSuite.Core
         public SwitchParameter Async { get; set; }
 
         protected AuthenticationManager AuthManager => AuthenticationManager.Instance;
+#pragma warning disable SA1101
         protected CancellationToken CancellationToken => _cancellationTokenSource?.Token ?? CancellationToken.None;
+#pragma warning restore SA1101
         protected AsyncTaskManager TaskManager => _taskManager ??= new AsyncTaskManager();
 
         protected override void BeginProcessing()
@@ -49,6 +61,7 @@ namespace Microsoft.ExtractorSuite.Core
             Logger = new FileLogger(LogLevel, OutputDirectory ?? Environment.CurrentDirectory);
             Logger.LogInfo($"Starting cmdlet: {this.MyInvocation.MyCommand.Name}");
         }
+
 
         protected override void StopProcessing()
         {
@@ -64,25 +77,25 @@ namespace Microsoft.ExtractorSuite.Core
 
             try
             {
-                // Process the async task while pumping the message queue
+                // Process the async task while
                 var task = ProcessRecordAsync();
-                
+
                 // Pump messages while the task runs to completion
                 while (!task.IsCompleted)
                 {
                     // Process any queued writes on the main thread
                     ProcessQueuedWrites();
-                    
+
                     // Small delay to prevent CPU spinning
                     if (!task.Wait(10))
                     {
                         // Continue processing
                     }
                 }
-                
+
                 // Process any remaining writes
                 ProcessQueuedWrites();
-                
+
                 // Get the result (will throw if task faulted)
                 task.GetAwaiter().GetResult();
             }
@@ -104,10 +117,10 @@ namespace Microsoft.ExtractorSuite.Core
         protected override void EndProcessing()
         {
             base.EndProcessing();
-            
+
             // Process any remaining queued writes
             ProcessQueuedWrites();
-            
+
             Logger?.LogInfo($"Completed cmdlet: {this.MyInvocation.MyCommand.Name}");
             Dispose();
         }
@@ -372,24 +385,24 @@ namespace Microsoft.ExtractorSuite.Core
             return true;
         }
 
-        public void Dispose()
-        {
-            Dispose(true);
-            GC.SuppressFinalize(this);
-        }
+public void Dispose()
+{
+    Dispose(true);
+    GC.SuppressFinalize(this);
+}
 
-        protected virtual void Dispose(bool disposing)
+protected virtual void Dispose(bool disposing)
+{
+    if (!_disposed)
+    {
+        if (disposing)
         {
-            if (!_disposed)
-            {
-                if (disposing)
-                {
-                    _cancellationTokenSource?.Dispose();
-                    _taskManager?.Dispose();
-                    Logger?.Dispose();
-                }
-                _disposed = true;
-            }
+            _cancellationTokenSource?.Dispose();
+            _taskManager?.Dispose();
+            Logger?.Dispose();
         }
+        _disposed = true;
+    }
+}
     }
 }

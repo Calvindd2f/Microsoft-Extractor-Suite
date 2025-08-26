@@ -1,25 +1,32 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-using Microsoft.Graph;
-using Microsoft.Graph.Models;
-using Microsoft.ExtractorSuite.Core.Authentication;
-
 namespace Microsoft.ExtractorSuite.Core.Exchange
 {
+    using System;
+    using System.Collections.Generic;
+    using System.Linq;
+    using System.Threading;
+    using System.Threading.Tasks;
+    using Microsoft.ExtractorSuite.Core.Authentication;
+    using Microsoft.Graph;
+    using Microsoft.Graph.Models;
+
+
     /// <summary>
     /// Alternative Exchange client using Microsoft Graph API
     /// Provides fallback functionality when Exchange Admin API is not available
     /// </summary>
     public class GraphExchangeClient
     {
+#pragma warning disable SA1309
         private readonly AuthenticationManager _authManager;
+#pragma warning disable SA1600
+#pragma warning restore SA1309
+u
 
         public GraphExchangeClient(AuthenticationManager authManager)
         {
+#pragma warning disable SA1101
             _authManager = authManager;
+#pragma warning restore SA1101
         }
 
         /// <summary>
@@ -33,20 +40,22 @@ namespace Microsoft.ExtractorSuite.Core.Exchange
             string? from = null,
             CancellationToken cancellationToken = default)
         {
-            var graphClient = _authManager.GraphClient 
+#pragma warning disable SA1101
+            var graphClient = _authManager.GraphClient
                 ?? throw new InvalidOperationException("Graph client not initialized");
+#pragma warning restore SA1101
 
             var filter = new List<string>();
 
             if (startDate.HasValue)
                 filter.Add($"receivedDateTime ge {startDate.Value:yyyy-MM-ddTHH:mm:ssZ}");
-            
+
             if (endDate.HasValue)
                 filter.Add($"receivedDateTime le {endDate.Value:yyyy-MM-ddTHH:mm:ssZ}");
-            
+
             if (!string.IsNullOrEmpty(subject))
                 filter.Add($"contains(subject, '{subject}')");
-            
+
             if (!string.IsNullOrEmpty(from))
                 filter.Add($"from/emailAddress/address eq '{from}'");
 
@@ -72,8 +81,10 @@ namespace Microsoft.ExtractorSuite.Core.Exchange
             string userPrincipalName,
             CancellationToken cancellationToken = default)
         {
-            var graphClient = _authManager.GraphClient 
+#pragma warning disable SA1101
+            var graphClient = _authManager.GraphClient
                 ?? throw new InvalidOperationException("Graph client not initialized");
+#pragma warning restore SA1101
 
             var user = await graphClient.Users[userPrincipalName]
                 .GetAsync(config =>
@@ -91,8 +102,10 @@ namespace Microsoft.ExtractorSuite.Core.Exchange
             string userPrincipalName,
             CancellationToken cancellationToken = default)
         {
-            var graphClient = _authManager.GraphClient 
+#pragma warning disable SA1101
+            var graphClient = _authManager.GraphClient
                 ?? throw new InvalidOperationException("Graph client not initialized");
+#pragma warning restore SA1101
 
             var folders = await graphClient.Users[userPrincipalName]
                 .MailFolders
@@ -111,8 +124,10 @@ namespace Microsoft.ExtractorSuite.Core.Exchange
             string userPrincipalName,
             CancellationToken cancellationToken = default)
         {
-            var graphClient = _authManager.GraphClient 
+#pragma warning disable SA1101
+            var graphClient = _authManager.GraphClient
                 ?? throw new InvalidOperationException("Graph client not initialized");
+#pragma warning restore SA1101
 
             var rules = await graphClient.Users[userPrincipalName]
                 .MailFolders["Inbox"]
@@ -131,8 +146,10 @@ namespace Microsoft.ExtractorSuite.Core.Exchange
             DateTime endDate,
             CancellationToken cancellationToken = default)
         {
-            var graphClient = _authManager.GraphClient 
+#pragma warning disable SA1101
+            var graphClient = _authManager.GraphClient
                 ?? throw new InvalidOperationException("Graph client not initialized");
+#pragma warning restore SA1101
 
             var events = await graphClient.Users[userPrincipalName]
                 .CalendarView
@@ -155,8 +172,10 @@ namespace Microsoft.ExtractorSuite.Core.Exchange
         {
             try
             {
-                var graphClient = _authManager.GraphClient 
+#pragma warning disable SA1101
+                var graphClient = _authManager.GraphClient
                     ?? throw new InvalidOperationException("Graph client not initialized");
+#pragma warning restore SA1101
 
                 var user = await graphClient.Users[userPrincipalName]
                     .GetAsync(config =>

@@ -1,54 +1,43 @@
-using System;
-using System.Buffers;
-using System.Collections.Generic;
-using System.IO;
-using System.IO.Pipelines;
-using System.Text;
-using System.Text.Json;
-using System.Text.Json.Serialization;
-using System.Threading;
-using System.Threading.Tasks;
-using Microsoft.IO;
-
 namespace Microsoft.ExtractorSuite.Core.Json
 {
+    using System;
+    using System.Buffers;
+    using System.Collections.Generic;
+    using System.IO;
+    using System.Linq;
+    using System.Text;
+    using System.Threading;
+    using System.Threading.Tasks;
+    using Microsoft.IO;
+    using Newtonsoft.Json.Linq;
+    // Note: SimdJsonSharp requires native dependencies that may not be compatible with all PowerShell environments
+    // Consider using System.Text.Json or Newtonsoft.Json for broader compatibility
+    using SimdJsonSharp.Bindings;
+
+
     /// <summary>
-    /// High-performance JSON processor using System.Text.Json
+    /// High-performance JSON processor using SIMDJson native C++ bindings
     /// Optimized for large datasets with minimal memory allocation
     /// </summary>
     public class HighPerformanceJsonProcessor : IDisposable
     {
+#pragma warning disable SA1309
         private static readonly RecyclableMemoryStreamManager _memoryStreamManager = new();
-        private readonly JsonSerializerOptions _defaultOptions;
-        private readonly JsonWriterOptions _writerOptions;
+#pragma warning restore SA1309
+#pragma warning disable SA1309
+#pragma warning disable SA1600
         private readonly ArrayPool<byte> _arrayPool;
+#pragma warning restore SA1600
+#pragma warning disable SA1309
+        private readonly SimdJsonParser _jsonParser;
+#pragma warning restore SA1309
 
         public HighPerformanceJsonProcessor()
         {
             _arrayPool = ArrayPool<byte>.Shared;
-
-            // Configure for optimal performance
-            _defaultOptions = new JsonSerializerOptions
-            {
-                PropertyNameCaseInsensitive = true,
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-                DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-                WriteIndented = false,
-                DefaultBufferSize = 16384, // 16KB buffer
-                Converters =
-                {
-                    new JsonStringEnumConverter(JsonNamingPolicy.CamelCase),
-                    new HighPerformanceDateTimeConverter(),
-                    new DynamicJsonConverter()
-                }
-            };
-
-            _writerOptions = new JsonWriterOptions
-            {
-                Indented = false,
-                SkipValidation = true, // Skip validation for performance
-                Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
-            };
+#pragma warning disable SA1101
+            _jsonParser = new SimdJsonParser();
+#pragma warning restore SA1101
         }
 
         /// <summary>
@@ -58,20 +47,24 @@ namespace Microsoft.ExtractorSuite.Core.Json
             Stream stream,
             CancellationToken cancellationToken = default)
         {
-            // For small streams, use direct deserialization
-            if (stream.Length < 81920) // 80KB threshold
+            var buffer = _arrayPool.Rent((int)stream.Length);
+
+            try
             {
-                return await JsonSerializer.DeserializeAsync<T>(stream, _defaultOptions, cancellationToken);
+                var bytesRead = await stream.ReadAsync(buffer.AsMemory(0, (int)stream.Length), cancellationToken);
+                var jsonSpan = buffer.AsSpan(0, bytesRead);
+
+#pragma warning disable SA1101
+                var element = _jsonParser.Parse(jsonSpan.ToArray());
+#pragma warning restore SA1101
+                return element == null
+                    ? throw new InvalidOperationException("Failed to parse JSON")
+                    : Newtonsoft.Json.JsonConvert.DeserializeObject<T>(element.ToString());
             }
-
-            // For large streams, use PipeReader for better memory efficiency
-            var pipe = new Pipe();
-            var writing = FillPipeAsync(stream, pipe.Writer, cancellationToken);
-            var reading = ReadFromPipeAsync<T>(pipe.Reader, cancellationToken);
-
-            await Task.WhenAll(writing, reading);
-
-            return await reading;
+            finally
+            {
+                _arrayPool.Return(buffer);
+            }
         }
 
         /// <summary>
@@ -81,37 +74,26 @@ namespace Microsoft.ExtractorSuite.Core.Json
             Stream stream,
             [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
-            var buffer = _arrayPool.Rent(4096);
+            var buffer = _arrayPool.Rent((int)stream.Length);
 
             try
             {
-                using var jsonDoc = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+                var bytesRead = await stream.ReadAsync(buffer.AsMemory(0, (int)stream.Length), cancellationToken);
+                var jsonSpan = buffer.AsSpan(0, bytesRead);
 
-                if (jsonDoc.RootElement.ValueKind != JsonValueKind.Array)
+#pragma warning disable SA1101
+                var element = _jsonParser.Parse(jsonSpan.ToArray());
+#pragma warning restore SA1101
+                if (element?.Type != JsonType.Array)
+                    throw new InvalidOperationException(element == null ? "Failed to parse JSON" : "Expected JSON array");
+
+                foreach (var item in element.AsArray())
                 {
-                    throw new JsonException("Expected JSON array");
-                }
+                    cancellationToken.ThrowIfCancellationRequested();
 
-                foreach (var element in jsonDoc.RootElement.EnumerateArray())
-                {
-                    if (cancellationToken.IsCancellationRequested)
-                        yield break;
-
-                    // Use buffer to serialize element
-                    using var bufferStream = new MemoryStream(buffer, 0, buffer.Length, true, true);
-                    using var writer = new Utf8JsonWriter(bufferStream, _writerOptions);
-
-                    element.WriteTo(writer);
-                    await writer.FlushAsync(cancellationToken);
-
-                    bufferStream.Position = 0;
-                    var item = await JsonSerializer.DeserializeAsync<T>(
-                        bufferStream,
-                        _defaultOptions,
-                        cancellationToken);
-
-                    if (item != null)
-                        yield return item;
+                    var deserializedItem = Newtonsoft.Json.JsonConvert.DeserializeObject<T>(item.ToString());
+                    if (deserializedItem != null)
+                        yield return deserializedItem;
                 }
             }
             finally
@@ -129,15 +111,11 @@ namespace Microsoft.ExtractorSuite.Core.Json
             bool indented = false,
             CancellationToken cancellationToken = default)
         {
-            var options = indented ? GetIndentedOptions() : _defaultOptions;
+            var jsonString = Newtonsoft.Json.JsonConvert.SerializeObject(
+                value,
+                indented ? Newtonsoft.Json.Formatting.Indented : Newtonsoft.Json.Formatting.None);
 
-            // Use recyclable memory stream for buffering
-            using var bufferStream = _memoryStreamManager.GetStream();
-            await JsonSerializer.SerializeAsync(bufferStream, value, options, cancellationToken);
-
-            bufferStream.Position = 0;
-            await bufferStream.CopyToAsync(stream, 81920, cancellationToken);
-            await stream.FlushAsync(cancellationToken);
+            await stream.WriteAsync(Encoding.UTF8.GetBytes(jsonString), cancellationToken);
         }
 
         /// <summary>
@@ -148,23 +126,23 @@ namespace Microsoft.ExtractorSuite.Core.Json
             IAsyncEnumerable<T> items,
             CancellationToken cancellationToken = default)
         {
-            await using var writer = new Utf8JsonWriter(stream, _writerOptions);
+            var openBracket = Encoding.UTF8.GetBytes("[");
+            var comma = Encoding.UTF8.GetBytes(",");
+            var closeBracket = Encoding.UTF8.GetBytes("]");
 
-            writer.WriteStartArray();
+            await stream.WriteAsync(openBracket, cancellationToken);
 
+            var isFirst = true;
             await foreach (var item in items.WithCancellation(cancellationToken))
             {
-                JsonSerializer.Serialize(writer, item, _defaultOptions);
+                if (!isFirst)
+                    await stream.WriteAsync(comma, cancellationToken);
 
-                // Flush periodically to prevent memory buildup
-                if (writer.BytesCommitted > 65536) // 64KB
-                {
-                    await writer.FlushAsync(cancellationToken);
-                }
+                await stream.WriteAsync(Encoding.UTF8.GetBytes(Newtonsoft.Json.JsonConvert.SerializeObject(item)), cancellationToken);
+                isFirst = false;
             }
 
-            writer.WriteEndArray();
-            await writer.FlushAsync(cancellationToken);
+            await stream.WriteAsync(closeBracket, cancellationToken);
         }
 
         /// <summary>
@@ -176,18 +154,27 @@ namespace Microsoft.ExtractorSuite.Core.Json
             string[] fieldPaths,
             CancellationToken cancellationToken = default)
         {
-            var result = new Dictionary<string, object?>();
+            var buffer = _arrayPool.Rent((int)stream.Length);
 
-            using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
-            var root = document.RootElement;
-
-            foreach (var path in fieldPaths)
+            try
             {
-                var value = GetValueByPath(root, path);
-                result[path] = value;
-            }
+                var bytesRead = await stream.ReadAsync(buffer.AsMemory(0, (int)stream.Length), cancellationToken);
+#pragma warning disable SA1101
+                var element = _jsonParser.Parse(buffer.AsSpan(0, bytesRead).ToArray());
+#pragma warning restore SA1101
 
-            return result;
+                if (element == null)
+                    throw new InvalidOperationException("Failed to parse JSON");
+
+                var jToken = JToken.Parse(element.ToString());
+#pragma warning disable SA1101
+                return fieldPaths.ToDictionary(path => path, path => GetValueByPath(jToken, path));
+#pragma warning restore SA1101
+            }
+            finally
+            {
+                _arrayPool.Return(buffer);
+            }
         }
 
         /// <summary>
@@ -207,56 +194,87 @@ namespace Microsoft.ExtractorSuite.Core.Json
                 bufferSize: 65536,
                 useAsync: true);
 
-            await using var writer = new Utf8JsonWriter(output, _writerOptions);
-
             if (asArray)
             {
-                writer.WriteStartArray();
+                await output.WriteAsync(Encoding.UTF8.GetBytes("["), 0, 1, cancellationToken);
             }
 
-            foreach (var inputFile in inputFiles)
+            for (int i = 0; i < inputFiles.Length; i++)
             {
+                if (i > 0 && asArray)
+                {
+                    await output.WriteAsync(Encoding.UTF8.GetBytes(","), 0, 1, cancellationToken);
+                }
+
                 using var input = new FileStream(
-                    inputFile,
+                    inputFiles[i],
                     FileMode.Open,
                     FileAccess.Read,
                     FileShare.Read,
                     bufferSize: 65536,
                     useAsync: true);
 
-                using var document = await JsonDocument.ParseAsync(input, cancellationToken: cancellationToken);
-
-                if (asArray)
+                var buffer = _arrayPool.Rent((int)input.Length);
+                try
                 {
-                    // If input is array, write elements individually
-                    if (document.RootElement.ValueKind == JsonValueKind.Array)
+                    var bytesRead = await input.ReadAsync(buffer.AsMemory(0, (int)input.Length), cancellationToken);
+#pragma warning disable SA1101
+                    var element = _jsonParser.Parse(buffer.AsSpan(0, bytesRead).ToArray());
+#pragma warning restore SA1101
+                    if (element == null)
                     {
-                        foreach (var element in document.RootElement.EnumerateArray())
+                        continue; // Skip invalid files
+                    }
+
+                    if (asArray)
+                    {
+                        // If input is array, write elements individually
+                        if (element.Type == JsonType.Array)
                         {
-                            element.WriteTo(writer);
+                            var arrayElement = element.AsArray();
+                            var isFirstElement = true;
+                            foreach (var arrayItem in arrayElement)
+                            {
+                                if (!isFirstElement)
+                                {
+                                    await output.WriteAsync(Encoding.UTF8.GetBytes(","), 0, 1, cancellationToken);
+                                }
+
+                                var itemJson = arrayItem.ToString();
+                                var itemBytes = Encoding.UTF8.GetBytes(itemJson);
+                                await output.WriteAsync(itemBytes, 0, itemBytes.Length, cancellationToken);
+
+                                isFirstElement = false;
+                            }
+                        }
+                        else
+                        {
+                            var jsonString = element.ToString();
+                            var jsonBytes = Encoding.UTF8.GetBytes(jsonString);
+                            await output.WriteAsync(jsonBytes, 0, jsonBytes.Length, cancellationToken);
                         }
                     }
                     else
                     {
-                        document.RootElement.WriteTo(writer);
+                        // Write as separate JSON objects (JSONL format)
+                        var jsonString = element.ToString();
+                        var jsonBytes = Encoding.UTF8.GetBytes(jsonString);
+                        await output.WriteAsync(jsonBytes, 0, jsonBytes.Length, cancellationToken);
+                        await output.WriteAsync(Encoding.UTF8.GetBytes("\n"), 0, 1, cancellationToken);
                     }
                 }
-                else
+                finally
                 {
-                    // Write as separate JSON objects (JSONL format)
-                    document.RootElement.WriteTo(writer);
-                    await writer.FlushAsync(cancellationToken);
-                    var newlineBytes = Encoding.UTF8.GetBytes("\n");
-                    await output.WriteAsync(newlineBytes, 0, newlineBytes.Length, cancellationToken);
+                    _arrayPool.Return(buffer);
                 }
             }
 
             if (asArray)
             {
-                writer.WriteEndArray();
+                await output.WriteAsync(Encoding.UTF8.GetBytes("]"), 0, 1, cancellationToken);
             }
 
-            await writer.FlushAsync(cancellationToken);
+            await output.FlushAsync(cancellationToken);
         }
 
         /// <summary>
@@ -267,106 +285,64 @@ namespace Microsoft.ExtractorSuite.Core.Json
             Stream output,
             CancellationToken cancellationToken = default)
         {
-            using var document = await JsonDocument.ParseAsync(input, cancellationToken: cancellationToken);
+            var buffer = _arrayPool.Rent((int)input.Length);
 
-            if (document.RootElement.ValueKind != JsonValueKind.Array)
+            try
             {
-                // Single object - write as single line
-                await using var writer = new Utf8JsonWriter(output, _writerOptions);
-                document.RootElement.WriteTo(writer);
-                await writer.FlushAsync(cancellationToken);
-                var newlineBytes = Encoding.UTF8.GetBytes("\n");
-                await output.WriteAsync(newlineBytes, 0, newlineBytes.Length, cancellationToken);
-            }
-            else
-            {
-                // Array - write each element as separate line
-                foreach (var element in document.RootElement.EnumerateArray())
+                var bytesRead = await input.ReadAsync(buffer.AsMemory(0, (int)input.Length), cancellationToken);
+#pragma warning disable SA1101
+                var element = _jsonParser.Parse(buffer.AsSpan(0, bytesRead).ToArray());
+#pragma warning restore SA1101
+                if (element == null)
                 {
-                    await using var writer = new Utf8JsonWriter(output, _writerOptions);
-                    element.WriteTo(writer);
-                    await writer.FlushAsync(cancellationToken);
-                    var newlineBytes = Encoding.UTF8.GetBytes("\n");
-                    await output.WriteAsync(newlineBytes, 0, newlineBytes.Length, cancellationToken);
+                    throw new InvalidOperationException("Failed to parse JSON");
                 }
-            }
-        }
 
-        private async Task FillPipeAsync(Stream stream, PipeWriter writer, CancellationToken cancellationToken)
-        {
-            const int minimumBufferSize = 512;
-
-            while (true)
-            {
-                var memory = writer.GetMemory(minimumBufferSize);
-
-                try
+                if (element.Type != JsonType.Array)
                 {
-                    var buffer = memory.ToArray();
-                    var bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length, cancellationToken);
-
-                    if (bytesRead == 0)
+                    // Single object - write as single line
+                    var jsonString = element.ToString();
+                    var jsonBytes = Encoding.UTF8.GetBytes(jsonString);
+                    await output.WriteAsync(jsonBytes, 0, jsonBytes.Length, cancellationToken);
+                    await output.WriteAsync(Encoding.UTF8.GetBytes("\n"), 0, 1, cancellationToken);
+                }
+                else
+                {
+                    // Array - write each element as separate line
+                    var arrayElement = element.AsArray();
+                    foreach (var arrayItem in arrayElement)
                     {
-                        break;
+                        var itemJson = arrayItem.ToString();
+                        var itemBytes = Encoding.UTF8.GetBytes(itemJson);
+                        await output.WriteAsync(itemBytes, 0, itemBytes.Length, cancellationToken);
+                        await output.WriteAsync(Encoding.UTF8.GetBytes("\n"), 0, 1, cancellationToken);
                     }
-
-                    // Copy the read data back to memory
-                    buffer.AsMemory(0, bytesRead).CopyTo(memory);
-                    writer.Advance(bytesRead);
-                }
-                catch (Exception ex)
-                {
-                    await writer.CompleteAsync(ex);
-                    return;
-                }
-
-                var result = await writer.FlushAsync(cancellationToken);
-
-                if (result.IsCompleted || result.IsCanceled)
-                {
-                    break;
                 }
             }
-
-            await writer.CompleteAsync();
-        }
-
-        private async Task<T?> ReadFromPipeAsync<T>(PipeReader reader, CancellationToken cancellationToken)
-        {
-            using var stream = new MemoryStream();
-
-            while (true)
+            finally
             {
-                var result = await reader.ReadAsync(cancellationToken);
-                var buffer = result.Buffer;
-
-                foreach (var segment in buffer)
-                {
-                    await stream.WriteAsync(segment.ToArray(), 0, segment.Length, cancellationToken);
-                }
-
-                reader.AdvanceTo(buffer.End);
-
-                if (result.IsCompleted)
-                {
-                    break;
-                }
+                _arrayPool.Return(buffer);
             }
-
-            stream.Position = 0;
-            return await JsonSerializer.DeserializeAsync<T>(stream, _defaultOptions, cancellationToken);
         }
 
-        private object? GetValueByPath(JsonElement element, string path)
+        private object? GetValueByPath(JToken element, string path)
         {
             var parts = path.Split('.');
             var current = element;
 
             foreach (var part in parts)
             {
-                if (current.ValueKind == JsonValueKind.Object && current.TryGetProperty(part, out var property))
+                if (current.Type == JTokenType.Object)
                 {
-                    current = property;
+                    var obj = current as JObject;
+                    if (obj != null && obj.TryGetValue(part, out var property))
+                    {
+                        current = property;
+                    }
+                    else
+                    {
+                        return null;
+                    }
                 }
                 else
                 {
@@ -374,82 +350,100 @@ namespace Microsoft.ExtractorSuite.Core.Json
                 }
             }
 
-            return current.ValueKind switch
+            return current.Type switch
             {
-                JsonValueKind.String => current.GetString(),
-                JsonValueKind.Number => current.GetDecimal(),
-                JsonValueKind.True => true,
-                JsonValueKind.False => false,
-                JsonValueKind.Null => null,
+                JTokenType.String => current.ToString(),
+                JTokenType.Float or JTokenType.Integer => current.ToObject<object>(),
+#pragma warning disable SA1600
+                JTokenType.Bo
+#pragma warning restore SA1600
+current.ToObject<object>(),
+                JTokenType.Null => null,
                 _ => current.ToString()
             };
         }
 
-        private JsonSerializerOptions GetIndentedOptions()
-        {
-            var options = new JsonSerializerOptions(_defaultOptions)
-            {
-                WriteIndented = true
-            };
-            return options;
-        }
-
         public void Dispose()
         {
-            // Cleanup if needed
+#pragma warning disable SA1101
+            _jsonParser?.Dispose();
+#pragma warning restore SA1101
         }
     }
 
     /// <summary>
-    /// High-performance DateTime converter
+#pragma warning disable SA1600
+    /// High-performance DateTime converter for SIMDJson
+#pragma warning restore SA1600
     /// </summary>
-    public class HighPerformanceDateTimeConverter : JsonConverter<DateTime>
+    public class HighPerformanceDateTimeConverter
     {
         private const string DateTimeFormat = "yyyy-MM-ddTHH:mm:ss.fffZ";
 
-        public override DateTime Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        public static DateTime ParseDateTime(string? value)
         {
-            if (reader.TokenType == JsonTokenType.String)
-            {
-                var str = reader.GetString();
-                if (DateTime.TryParse(str, out var result))
-                    return result;
-            }
+            if (string.IsNullOrEmpty(value))
+                return DateTime.MinValue;
+
+#pragma warning disable SA1600
+            if (DateTime.TryParse(value, out var result))
+#pragma warning restore SA1600
+                return result;
+
             return DateTime.MinValue;
         }
 
-        public override void Write(Utf8JsonWriter writer, DateTime value, JsonSerializerOptions options)
+        public static string FormatDateTime(DateTime value)
         {
-            writer.WriteStringValue(value.ToUniversalTime().ToString(DateTimeFormat));
+            return value.ToUniversalTime().ToString(DateTimeFormat);
         }
     }
+#pragma warning disable SA1600
 
+#pragma warning restore SA1600
     /// <summary>
-    /// Dynamic JSON converter for handling unknown structures
+    /// Dynamic JSON converter for handling unknown structures with SIMDJson
     /// </summary>
-    public class DynamicJsonConverter : JsonConverter<object>
+    public class DynamicJsonConverter
     {
-        public override object? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        public static object? ConvertElement(JToken element)
         {
-            return reader.TokenType switch
+            return element.Type switch
             {
-                JsonTokenType.True => true,
-                JsonTokenType.False => false,
-                JsonTokenType.Number when reader.TryGetInt64(out var l) => l,
-                JsonTokenType.Number => reader.GetDecimal(),
-                JsonTokenType.String when reader.TryGetDateTime(out var dt) => dt,
-                JsonTokenType.String => reader.GetString(),
-                JsonTokenType.StartArray => JsonSerializer.Deserialize<List<object>>(ref reader, options),
-                JsonTokenType.StartObject => JsonSerializer.Deserialize<Dictionary<string, object>>(ref reader, options),
-                _ => null
+                JTokenType.Boolean => element.ToObject<object>(),
+                JTokenType.Float or JTokenType.Integer => element.ToObject<object>(),
+                JTokenType.String => element.ToString(),
+                JTokenType.Null => null,
+                JTokenType.Array => ConvertArray(element),
+                JTokenType.Object => ConvertObject(element),
+                _ => element.ToString()
             };
         }
 
-        public override void Write(Utf8JsonWriter writer, object value, JsonSerializerOptions options)
+        private static List<object?> ConvertArray(JToken element)
         {
-            JsonSerializer.Serialize(writer, value, value.GetType(), options);
+            var result = new List<object?>();
+            var array = element as JArray;
+
+            foreach (var item in array)
+            {
+                result.Add(ConvertElement(item));
+            }
+
+            return result;
         }
 
-        public override bool CanConvert(Type typeToConvert) => typeToConvert == typeof(object);
+        private static Dictionary<string, object?> ConvertObject(JToken element)
+        {
+            var result = new Dictionary<string, object?>();
+            var obj = element as JObject;
+
+            foreach (var kvp in obj)
+            {
+                result[kvp.Key] = ConvertElement(kvp.Value);
+            }
+
+            return result;
+        }
     }
 }

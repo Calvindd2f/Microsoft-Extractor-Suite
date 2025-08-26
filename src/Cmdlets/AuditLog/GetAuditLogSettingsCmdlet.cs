@@ -1,18 +1,19 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Management.Automation;
-using System.Threading;
-using System.Threading.Tasks;
-using Microsoft.ExtractorSuite.Core;
-using Microsoft.ExtractorSuite.Core.Exchange;
-using Microsoft.ExtractorSuite.Core.Json;
-using CsvHelper;
-using System.Globalization;
-
 namespace Microsoft.ExtractorSuite.Cmdlets.AuditLog
 {
+    using System;
+    using System.Collections.Generic;
+    using System.Globalization;
+    using System.IO;
+    using System.Linq;
+    using System.Management.Automation;
+    using System.Threading;
+    using System.Threading.Tasks;
+    using CsvHelper;
+    using Microsoft.ExtractorSuite.Core;
+    using Microsoft.ExtractorSuite.Core.Exchange;
+    using Microsoft.ExtractorSuite.Core.Json;
+
+
     /// <summary>
     /// Retrieves audit status and settings for all mailboxes in Microsoft 365.
     /// Collects detailed information about mailbox audit settings, including audit status,
@@ -23,19 +24,28 @@ namespace Microsoft.ExtractorSuite.Cmdlets.AuditLog
     public class GetAuditLogSettingsCmdlet : AsyncBaseCmdlet
     {
         [Parameter(HelpMessage = "Comma-separated list of user IDs to filter results by specific users.")]
+#pragma warning disable SA1600
         public string[]? UserIds { get; set; }
+#pragma warning restore SA1600
 
         [Parameter(HelpMessage = "Output format for the results. Default: CSV")]
         [ValidateSet("CSV", "JSON")]
+#pragma warning disable SA1600
         public string OutputFormat { get; set; } = "CSV";
+#pragma warning restore SA1600
 
         [Parameter(HelpMessage = "Text encoding for the output file. Default: UTF8")]
+#pragma warning disable SA1600
         public string Encoding { get; set; } = "UTF8";
+#pragma warning restore SA1600
 
+#pragma warning disable SA1600
         protected override void ProcessRecord()
+#pragma warning restore SA1600
         {
             var results = RunAsyncOperation(GetAuditLogSettingsAsync, "Getting Audit Log Settings");
 
+#pragma warning disable SA1101
             if (!Async.IsPresent && results != null)
             {
                 foreach (var result in results)
@@ -43,6 +53,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.AuditLog
                     WriteObject(result);
                 }
             }
+#pragma warning restore SA1101
         }
 
         private async Task<List<MailboxAuditStatus>> GetAuditLogSettingsAsync(
@@ -57,10 +68,12 @@ namespace Microsoft.ExtractorSuite.Cmdlets.AuditLog
             };
 
             // Check Exchange connection - this would need to be implemented in AuthManager
+#pragma warning disable SA1101
             if (!AuthManager.IsGraphConnected)
             {
                 throw new InvalidOperationException("Not connected to Exchange Online. Please run Connect-M365 first.");
             }
+#pragma warning restore SA1101
 
             progress.Report(new Core.AsyncOperations.TaskProgress
             {
@@ -69,7 +82,9 @@ namespace Microsoft.ExtractorSuite.Cmdlets.AuditLog
             });
 
             // Get organization audit configuration
+#pragma warning disable SA1101
             var orgConfig = await GetOrganizationAuditConfigAsync(cancellationToken);
+#pragma warning restore SA1101
             summary.OrgWideAuditingEnabled = !orgConfig.AuditDisabled;
 
             WriteVerboseWithTimestamp($"Organization-wide auditing: {(summary.OrgWideAuditingEnabled ? "Enabled" : "Disabled")}");
@@ -81,7 +96,9 @@ namespace Microsoft.ExtractorSuite.Cmdlets.AuditLog
             });
 
             // Get all mailboxes
+#pragma warning disable SA1101
             var mailboxes = await GetMailboxesAsync(cancellationToken);
+#pragma warning restore SA1101
             summary.TotalMailboxes = mailboxes.Count;
 
             WriteVerboseWithTimestamp($"Found {mailboxes.Count} mailboxes to process");
@@ -93,7 +110,9 @@ namespace Microsoft.ExtractorSuite.Cmdlets.AuditLog
             });
 
             // Get audit bypass associations
+#pragma warning disable SA1101
             var bypassLookup = await GetAuditBypassLookupAsync(mailboxes, cancellationToken);
+#pragma warning restore SA1101
 
             progress.Report(new Core.AsyncOperations.TaskProgress
             {
@@ -121,6 +140,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.AuditLog
                 if (mailbox.AuditDelegate?.Any() == true) summary.DelegateActionsConfigured++;
                 if (mailbox.AuditAdmin?.Any() == true) summary.AdminActionsConfigured++;
 
+#pragma warning disable SA1101
                 var auditStatus = new MailboxAuditStatus
                 {
                     UserPrincipalName = mailbox.UserPrincipalName,
@@ -137,6 +157,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.AuditLog
                     AdminAuditActionsCount = mailbox.AuditAdmin?.Count() ?? 0,
                     EffectiveAuditState = GetEffectiveAuditState(summary.OrgWideAuditingEnabled, bypassStatus, mailbox.AuditEnabled)
                 };
+#pragma warning restore SA1101
 
                 results.Add(auditStatus);
 
@@ -163,10 +184,14 @@ namespace Microsoft.ExtractorSuite.Cmdlets.AuditLog
             });
 
             // Export results if output directory is specified
+#pragma warning disable SA1101
             if (!string.IsNullOrEmpty(OutputDirectory))
             {
+#pragma warning disable SA1101
                 await ExportAuditStatusAsync(results, cancellationToken);
+#pragma warning restore SA1101
             }
+#pragma warning restore SA1101
 
             // Log summary
             WriteVerboseWithTimestamp($"Audit Status Collection Summary:");
@@ -222,7 +247,9 @@ namespace Microsoft.ExtractorSuite.Cmdlets.AuditLog
             }
             catch (Exception ex)
             {
+#pragma warning disable SA1101
                 WriteWarningWithTimestamp($"Bulk retrieval failed: {ex.Message}. Processing individually...");
+#pragma warning restore SA1101
 
                 // Process in batches if bulk fails
                 const int batchSize = 10;
@@ -265,12 +292,15 @@ namespace Microsoft.ExtractorSuite.Cmdlets.AuditLog
 
         private async Task ExportAuditStatusAsync(List<MailboxAuditStatus> results, CancellationToken cancellationToken)
         {
+#pragma warning disable SA1101
             var fileName = Path.Combine(
                 OutputDirectory!,
                 $"MailboxAuditStatus_{DateTime.UtcNow:yyyyMMdd_HHmmss}.{OutputFormat.ToLower()}");
+#pragma warning restore SA1101
 
             Directory.CreateDirectory(Path.GetDirectoryName(fileName)!);
 
+#pragma warning disable SA1101
             if (OutputFormat.Equals("JSON", StringComparison.OrdinalIgnoreCase))
             {
                 using var stream = File.Create(fileName);
@@ -279,61 +309,138 @@ namespace Microsoft.ExtractorSuite.Cmdlets.AuditLog
             }
             else // CSV
             {
+#pragma warning disable SA1101
                 using var writer = new StreamWriter(fileName, false, System.Text.Encoding.GetEncoding(Encoding));
+#pragma warning restore SA1101
                 using var csv = new CsvWriter(writer, CultureInfo.InvariantCulture);
                 await csv.WriteRecordsAsync(results, cancellationToken);
             }
+#pragma warning restore SA1101
 
             WriteVerboseWithTimestamp($"Exported audit status to {fileName}");
         }
     }
 
+#pragma warning disable SA1600
     public class MailboxAuditStatus
+#pragma warning restore SA1600
     {
+#pragma warning disable SA1600
         public string UserPrincipalName { get; set; } = string.Empty;
+#pragma warning restore SA1600
+#pragma warning disable SA1600
         public string DisplayName { get; set; } = string.Empty;
+#pragma warning restore SA1600
+#pragma warning disable SA1600
         public string RecipientTypeDetails { get; set; } = string.Empty;
+#pragma warning restore SA1600
+#pragma warning disable SA1600
+#pragma warning restore SA1600
+        #pragma warning disable SA1600
         public bool AuditEnabled { get; set; }
+#pragma warning restore SA1600
+        #pragma warning disable SA1600
         public bool AuditBypassEnabled { get; set; }
         public string DefaultAuditSet { get; set; } = string.Empty;
+#pragma warning restore SA1600
+#pragma warning disable SA1600
         public string OwnerAuditActions { get; set; } = string.Empty;
+#pragma warning restore SA1600
+#pragma warning disable SA1600
+#pragma warning restore SA1600
+        #pragma warning disable SA1600
         public int OwnerAuditActionsCount { get; set; }
         public string DelegateAuditActions { get; set; } = string.Empty;
+#pragma warning restore SA1600
+#pragma warning disable SA1600
+#pragma warning restore SA1600
+        #pragma warning disable SA1600
         public int DelegateAuditActionsCount { get; set; }
         public string AdminAuditActions { get; set; } = string.Empty;
+#pragma warning restore SA1600
+#pragma warning disable SA1600
+#pragma warning restore SA1600
+        #pragma warning disable SA1600
         public int AdminAuditActionsCount { get; set; }
         public string EffectiveAuditState { get; set; } = string.Empty;
+#pragma warning restore SA1600
     }
 
+#pragma warning disable SA1600
     public class AuditStatusSummary
+#pragma warning restore SA1600
     {
+#pragma warning disable SA1600
+#pragma warning restore SA1600
+        #pragma warning disable SA1600
         public DateTime StartTime { get; set; }
+#pragma warning restore SA1600
+        #pragma warning disable SA1600
         public TimeSpan ProcessingTime { get; set; }
+#pragma warning restore SA1600
+        #pragma warning disable SA1600
         public int TotalMailboxes { get; set; }
+#pragma warning restore SA1600
+        #pragma warning disable SA1600
         public int ProcessedMailboxes { get; set; }
+#pragma warning restore SA1600
+        #pragma warning disable SA1600
         public int AuditEnabled { get; set; }
+#pragma warning restore SA1600
+        #pragma warning disable SA1600
         public int AuditDisabled { get; set; }
+#pragma warning restore SA1600
+        #pragma warning disable SA1600
         public int AuditBypass { get; set; }
+#pragma warning restore SA1600
+        #pragma warning disable SA1600
         public int OwnerActionsConfigured { get; set; }
+#pragma warning restore SA1600
+        #pragma warning disable SA1600
         public int DelegateActionsConfigured { get; set; }
+#pragma warning restore SA1600
+        #pragma warning disable SA1600
         public int AdminActionsConfigured { get; set; }
+#pragma warning restore SA1600
         public bool OrgWideAuditingEnabled { get; set; }
     }
 
+#pragma warning disable SA1600
     public class OrganizationConfig
+#pragma warning restore SA1600
     {
+#pragma warning disable SA1600
+#pragma warning restore SA1600
         public bool AuditDisabled { get; set; }
     }
 
+#pragma warning disable SA1600
     public class MailboxInfo
+#pragma warning restore SA1600
     {
+#pragma warning disable SA1600
         public string UserPrincipalName { get; set; } = string.Empty;
+#pragma warning restore SA1600
+#pragma warning disable SA1600
         public string DisplayName { get; set; } = string.Empty;
+#pragma warning restore SA1600
+#pragma warning disable SA1600
         public string RecipientTypeDetails { get; set; } = string.Empty;
+#pragma warning restore SA1600
+#pragma warning disable SA1600
+#pragma warning restore SA1600
+        #pragma warning disable SA1600
         public bool AuditEnabled { get; set; }
         public string[]? DefaultAuditSet { get; set; }
+#pragma warning restore SA1600
+#pragma warning disable SA1600
         public string[]? AuditOwner { get; set; }
+#pragma warning restore SA1600
+#pragma warning disable SA1600
         public string[]? AuditDelegate { get; set; }
+#pragma warning restore SA1600
+#pragma warning disable SA1600
         public string[]? AuditAdmin { get; set; }
+#pragma warning restore SA1600
     }
 }

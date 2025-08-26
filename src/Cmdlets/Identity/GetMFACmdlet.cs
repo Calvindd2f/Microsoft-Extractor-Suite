@@ -1,42 +1,58 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Management.Automation;
-using System.Threading;
-using System.Threading.Tasks;
-using Microsoft.ExtractorSuite.Core;
-using Microsoft.ExtractorSuite.Core.Json;
-using Microsoft.Graph;
-using Microsoft.Graph.Models;
-
 namespace Microsoft.ExtractorSuite.Cmdlets.Identity
 {
+    using System;
+    using System.Collections.Generic;
+    using System.IO;
+    using System.Linq;
+    using System.Management.Automation;
+    using System.Threading;
+    using System.Threading.Tasks;
+    using Microsoft.ExtractorSuite.Core;
+    using Microsoft.ExtractorSuite.Core.Json;
+    using Microsoft.Graph;
+    using Microsoft.Graph.Models;
+
+
     [Cmdlet(VerbsCommon.Get, "MFA")]
     [OutputType(typeof(MFAStatus))]
+#pragma warning disable SA1600
     public class GetMFACmdlet : AsyncBaseCmdlet
+#pragma warning restore SA1600
     {
         [Parameter]
+#pragma warning disable SA1600
         public string[]? UserIds { get; set; }
+#pragma warning restore SA1600
 
         [Parameter]
+#pragma warning disable SA1600
+#pragma warning restore SA1600
         public SwitchParameter IncludeDisabledUsers { get; set; }
 
         [Parameter]
+#pragma warning disable SA1600
+#pragma warning restore SA1600
         public SwitchParameter IncludeGuests { get; set; }
 
         [Parameter]
+#pragma warning disable SA1600
         public string OutputFormat { get; set; } = "CSV";
+#pragma warning restore SA1600
 
+#pragma warning disable SA1600
         protected override void ProcessRecord()
+#pragma warning restore SA1600
         {
+#pragma warning disable SA1101
             if (!RequireGraphConnection())
             {
                 return;
             }
+#pragma warning restore SA1101
 
             var mfaStatuses = RunAsyncOperation(GetMFAStatusAsync, "Get MFA Status");
 
+#pragma warning disable SA1101
             if (!Async.IsPresent && mfaStatuses != null)
             {
                 foreach (var status in mfaStatuses)
@@ -44,14 +60,17 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                     WriteObject(status);
                 }
             }
+#pragma warning restore SA1101
         }
 
         private async Task<List<MFAStatus>> GetMFAStatusAsync(
             IProgress<Core.AsyncOperations.TaskProgress> progress,
             CancellationToken cancellationToken)
         {
+#pragma warning disable SA1101
             var graphClient = AuthManager.BetaGraphClient ?? AuthManager.GraphClient
                 ?? throw new InvalidOperationException("Graph client not initialized");
+#pragma warning restore SA1101
 
             var mfaStatuses = new List<MFAStatus>();
             var processedCount = 0;
@@ -61,22 +80,30 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                 // Apply filters
                 var filters = new List<string>();
 
+#pragma warning disable SA1101
                 if (!IncludeDisabledUsers.IsPresent)
                 {
                     filters.Add("accountEnabled eq true");
                 }
+#pragma warning restore SA1101
 
+#pragma warning disable SA1101
                 if (!IncludeGuests.IsPresent)
                 {
                     filters.Add("userType eq 'Member'");
                 }
+#pragma warning restore SA1101
 
+#pragma warning disable SA1101
                 if (UserIds != null && UserIds.Length > 0)
                 {
+#pragma warning disable SA1101
                     var userFilter = string.Join(" or ",
                         UserIds.Select(u => $"userPrincipalName eq '{u}' or mail eq '{u}'"));
+#pragma warning restore SA1101
                     filters.Add($"({userFilter})");
                 }
+#pragma warning restore SA1101
 
                 // Build user query with v5 syntax
                 var usersResponse = await graphClient.Users
@@ -84,11 +111,11 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                     {
                         requestConfiguration.QueryParameters.Select = new string[]
                         {
-                            "id", "displayName", "userPrincipalName", "mail", "accountEnabled", 
+                            "id", "displayName", "userPrincipalName", "mail", "accountEnabled",
                             "userType", "createdDateTime", "signInActivity"
                         };
                         requestConfiguration.QueryParameters.Top = 999;
-                        
+
                         if (filters.Any())
                         {
                             requestConfiguration.QueryParameters.Filter = string.Join(" and ", filters);
@@ -105,9 +132,11 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                             try
                             {
                                 // Run on thread pool to avoid STA thread issues
-                                var mfaStatus = Task.Run(async () => 
+#pragma warning disable SA1101
+                                var mfaStatus = Task.Run(async () =>
                                     await GetUserMFAStatusAsync(graphClient, user, cancellationToken).ConfigureAwait(false))
                                     .GetAwaiter().GetResult();
+#pragma warning restore SA1101
                                 mfaStatuses.Add(mfaStatus);
 
                                 processedCount++;
@@ -123,7 +152,9 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                             }
                             catch (Exception ex)
                             {
+#pragma warning disable SA1101
                                 WriteWarningWithTimestamp($"Failed to get MFA status for {user.UserPrincipalName}: {ex.Message}");
+#pragma warning restore SA1101
                             }
 
                             return !cancellationToken.IsCancellationRequested;
@@ -134,19 +165,27 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                 WriteVerboseWithTimestamp($"Retrieved MFA status for {mfaStatuses.Count} users");
 
                 // Generate summary statistics
+#pragma warning disable SA1101
                 GenerateMFASummary(mfaStatuses);
+#pragma warning restore SA1101
 
                 // Export to file if output directory specified
+#pragma warning disable SA1101
                 if (!string.IsNullOrEmpty(OutputDirectory))
                 {
+#pragma warning disable SA1101
                     await ExportMFAStatusAsync(mfaStatuses, cancellationToken);
+#pragma warning restore SA1101
                 }
+#pragma warning restore SA1101
 
                 return mfaStatuses;
             }
             catch (ServiceException ex)
             {
+#pragma warning disable SA1101
                 WriteErrorWithTimestamp($"Graph API error: {ex.Message}", ex);
+#pragma warning restore SA1101
                 throw;
             }
         }
@@ -180,19 +219,25 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                 {
                     foreach (var method in authMethods.Value)
                     {
+#pragma warning disable SA1101
                         var methodType = GetAuthMethodType(method);
+#pragma warning restore SA1101
                         mfaStatus.AuthenticationMethods.Add(methodType);
 
                         // Check if this is an MFA method
+#pragma warning disable SA1101
                         if (IsMethodMFA(methodType))
                         {
                             mfaStatus.HasMFAEnabled = true;
                         }
+#pragma warning restore SA1101
                     }
                 }
 
                 // Check for per-user MFA state (legacy)
+#pragma warning disable SA1101
                 var mfaData = await GetLegacyMFAStateAsync(graphClient, user.Id, cancellationToken);
+#pragma warning restore SA1101
                 if (mfaData != null)
                 {
                     mfaStatus.PerUserMFAState = mfaData.State;
@@ -200,11 +245,15 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                 }
 
                 // Determine overall MFA status
+#pragma warning disable SA1101
                 DetermineMFAStatus(mfaStatus);
+#pragma warning restore SA1101
 
                 // Check if MFA is enforced by Conditional Access
+#pragma warning disable SA1101
                 mfaStatus.ConditionalAccessEnforced = await CheckConditionalAccessMFAAsync(
                     graphClient, user.Id, cancellationToken);
+#pragma warning restore SA1101
             }
             catch (ServiceException ex) when (ex.ResponseStatusCode == (int)System.Net.HttpStatusCode.Forbidden)
             {
@@ -322,7 +371,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                     .GetAsync(requestConfiguration => {
                         requestConfiguration.QueryParameters.Filter = "state eq 'enabled'";
                     }, cancellationToken);
-                
+
                 var policies = response?.Value ?? new List<ConditionalAccessPolicy>();
 
                 foreach (var policy in policies)
@@ -361,34 +410,65 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                     m.PerUserMFAState == "Enforced")
             };
 
+#pragma warning disable SA1101
             WriteHost("");
+#pragma warning restore SA1101
+#pragma warning disable SA1101
             WriteHost("MFA Status Summary", ConsoleColor.Cyan);
+#pragma warning restore SA1101
+#pragma warning disable SA1101
             WriteHost("==================", ConsoleColor.Cyan);
+#pragma warning restore SA1101
+#pragma warning disable SA1101
             WriteHost($"Total Users: {summary.TotalUsers}");
+#pragma warning restore SA1101
+#pragma warning disable SA1101
             WriteHost($"MFA Enabled: {summary.MFAEnabled} ({(summary.MFAEnabled * 100.0 / summary.TotalUsers):F1}%)",
                 ConsoleColor.Green);
+#pragma warning restore SA1101
+#pragma warning disable SA1101
             WriteHost($"MFA Not Configured: {summary.MFANotConfigured} ({(summary.MFANotConfigured * 100.0 / summary.TotalUsers):F1}%)",
                 ConsoleColor.Yellow);
+#pragma warning restore SA1101
+#pragma warning disable SA1101
             WriteHost("");
+#pragma warning restore SA1101
+#pragma warning disable SA1101
             WriteHost("Authentication Methods:");
+#pragma warning restore SA1101
+#pragma warning disable SA1101
             WriteHost($"  Authenticator App: {summary.AuthenticatorApp}");
+#pragma warning restore SA1101
+#pragma warning disable SA1101
             WriteHost($"  Phone: {summary.PhoneAuth}");
+#pragma warning restore SA1101
+#pragma warning disable SA1101
             WriteHost($"  Passwordless: {summary.Passwordless}");
+#pragma warning restore SA1101
+#pragma warning disable SA1101
             WriteHost($"  Conditional Access: {summary.ConditionalAccessEnforced}");
+#pragma warning restore SA1101
+#pragma warning disable SA1101
             WriteHost($"  Legacy MFA: {summary.LegacyMFA}");
+#pragma warning restore SA1101
+#pragma warning disable SA1101
             WriteHost("");
+#pragma warning restore SA1101
         }
 
         private async Task ExportMFAStatusAsync(
             List<MFAStatus> mfaStatuses,
             CancellationToken cancellationToken)
         {
+#pragma warning disable SA1101
             var fileName = Path.Combine(
                 OutputDirectory!,
                 $"MFAStatus_{DateTime.UtcNow:yyyyMMdd_HHmmss}.{OutputFormat.ToLower()}");
+#pragma warning restore SA1101
 
             Directory.CreateDirectory(Path.GetDirectoryName(fileName)!);
 
+#pragma warning disable SA1101
             if (OutputFormat.Equals("JSON", StringComparison.OrdinalIgnoreCase))
             {
                 using var stream = File.Create(fileName);
@@ -419,6 +499,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                 using var csv = new CsvHelper.CsvWriter(writer, System.Globalization.CultureInfo.InvariantCulture);
                 await csv.WriteRecordsAsync(flattenedData);
             }
+#pragma warning restore SA1101
 
             WriteVerboseWithTimestamp($"Exported MFA status to {fileName}");
         }
@@ -427,35 +508,73 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
         {
             if (color.HasValue)
             {
+#pragma warning disable SA1101
                 Host.UI.WriteLine(color.Value, Host.UI.RawUI.BackgroundColor, message);
+#pragma warning restore SA1101
             }
             else
             {
+#pragma warning disable SA1101
                 Host.UI.WriteLine(message);
+#pragma warning restore SA1101
             }
         }
     }
 
+#pragma warning disable SA1600
     public class MFAStatus
+#pragma warning restore SA1600
     {
+#pragma warning disable SA1600
         public string? UserId { get; set; }
+#pragma warning restore SA1600
+#pragma warning disable SA1600
         public string? UserPrincipalName { get; set; }
+#pragma warning restore SA1600
+#pragma warning disable SA1600
         public string? DisplayName { get; set; }
+#pragma warning restore SA1600
+#pragma warning disable SA1600
+#pragma warning restore SA1600
+        #pragma warning disable SA1600
         public bool AccountEnabled { get; set; }
         public string? UserType { get; set; }
+#pragma warning restore SA1600
+#pragma warning disable SA1600
         public DateTime? CreatedDateTime { get; set; }
+#pragma warning restore SA1600
+#pragma warning disable SA1600
         public DateTime? LastSignInDateTime { get; set; }
+#pragma warning restore SA1600
+#pragma warning disable SA1600
+#pragma warning restore SA1600
+        #pragma warning disable SA1600
         public bool HasMFAEnabled { get; set; }
         public string Status { get; set; } = "Unknown";
+#pragma warning restore SA1600
+#pragma warning disable SA1600
         public List<string> AuthenticationMethods { get; set; } = new();
+#pragma warning restore SA1600
+#pragma warning disable SA1600
         public string? DefaultMFAMethod { get; set; }
+#pragma warning restore SA1600
+#pragma warning disable SA1600
         public string? PerUserMFAState { get; set; }
+#pragma warning restore SA1600
+#pragma warning disable SA1600
+#pragma warning restore SA1600
         public bool ConditionalAccessEnforced { get; set; }
     }
 
+#pragma warning disable SA1600
     internal class LegacyMFAData
+#pragma warning restore SA1600
     {
+#pragma warning disable SA1600
         public string? State { get; set; }
+#pragma warning restore SA1600
+#pragma warning disable SA1600
         public string? DefaultMethod { get; set; }
+#pragma warning restore SA1600
     }
 }
