@@ -25,22 +25,19 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Security
     {
         [Parameter(HelpMessage = "Output format for the results. Default: CSV")]
         [ValidateSet("CSV", "JSON")]
-#pragma warning disable SA1600
+
         public string OutputFormat { get; set; } = "CSV";
-#pragma warning restore SA1600
+
 
         [Parameter(HelpMessage = "Text encoding for the output file. Default: UTF8")]
-#pragma warning disable SA1600
-        public string Encoding { get; set; } = "UTF8";
-#pragma warning restore SA1600
 
-#pragma warning disable SA1600
+        public string Encoding { get; set; } = "UTF8";
+
+
+
         protected override void ProcessRecord()
-#pragma warning restore SA1600
         {
             var results = RunAsyncOperation(GetConditionalAccessPoliciesAsync, "Getting Conditional Access Policies");
-
-#pragma warning disable SA1101
             if (!Async.IsPresent && results != null)
             {
                 foreach (var result in results)
@@ -48,7 +45,6 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Security
                     WriteObject(result);
                 }
             }
-#pragma warning restore SA1101
         }
 
         private async Task<List<ConditionalAccessPolicyInfo>> GetConditionalAccessPoliciesAsync(
@@ -57,16 +53,12 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Security
         {
             WriteVerboseWithTimestamp("Starting Conditional Access Policy Collection");
 
-#pragma warning disable SA1101
             if (!RequireGraphConnection())
             {
                 throw new InvalidOperationException("Not connected to Microsoft Graph. Please run Connect-M365 first.");
             }
-#pragma warning restore SA1101
 
-#pragma warning disable SA1101
             var graphClient = AuthManager.GraphClient!;
-#pragma warning restore SA1101
 
             progress.Report(new Core.AsyncOperations.TaskProgress
             {
@@ -94,9 +86,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Security
 
                 if (policies?.Value == null)
                 {
-#pragma warning disable SA1101
                     WriteWarningWithTimestamp("No Conditional Access policies found or insufficient permissions");
-#pragma warning restore SA1101
                     return results;
                 }
 
@@ -113,9 +103,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Security
                     processedCount++;
                     WriteVerboseWithTimestamp($"Processing policy: {policy.DisplayName}");
 
-#pragma warning disable SA1101
                     var policyInfo = MapPolicyToInfo(policy);
-#pragma warning restore SA1101
                     results.Add(policyInfo);
 
                     // Update summary statistics
@@ -148,14 +136,10 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Security
                 });
 
                 // Export results if output directory is specified
-#pragma warning disable SA1101
                 if (!string.IsNullOrEmpty(OutputDirectory))
                 {
-#pragma warning disable SA1101
                     await ExportPoliciesAsync(results, cancellationToken);
-#pragma warning restore SA1101
                 }
-#pragma warning restore SA1101
 
                 summary.ProcessingTime = DateTime.UtcNow - summary.StartTime;
 
@@ -175,16 +159,12 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Security
             }
             catch (ServiceException ex)
             {
-#pragma warning disable SA1101
                 WriteErrorWithTimestamp($"Microsoft Graph API error: {ex.ResponseStatusCode} - {ex.Message}", ex);
-#pragma warning restore SA1101
                 throw;
             }
             catch (Exception ex)
             {
-#pragma warning disable SA1101
                 WriteErrorWithTimestamp($"Error retrieving Conditional Access policies: {ex.Message}", ex);
-#pragma warning restore SA1101
                 throw;
             }
 
@@ -193,7 +173,6 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Security
 
         private ConditionalAccessPolicyInfo MapPolicyToInfo(ConditionalAccessPolicy policy)
         {
-#pragma warning disable SA1101
             return new ConditionalAccessPolicyInfo
             {
                 // Basic Information
@@ -257,7 +236,6 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Security
                 AuthenticationContextClassReferences = JoinStringArray(policy.Conditions?.Applications?.IncludeAuthenticationContextClassReferences),
                 InsiderRiskLevels = "" // InsiderRiskLevels not available in SDK v5
             };
-#pragma warning restore SA1101
         }
 
         private string JoinStringArray(IEnumerable<string>? items)
@@ -288,15 +266,12 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Security
 
         private async Task ExportPoliciesAsync(List<ConditionalAccessPolicyInfo> policies, CancellationToken cancellationToken)
         {
-#pragma warning disable SA1101
             var fileName = Path.Combine(
                 OutputDirectory!,
                 $"ConditionalAccessPolicies_{DateTime.UtcNow:yyyyMMdd_HHmmss}.{OutputFormat.ToLower()}");
-#pragma warning restore SA1101
 
             Directory.CreateDirectory(Path.GetDirectoryName(fileName)!);
 
-#pragma warning disable SA1101
             if (OutputFormat.Equals("JSON", StringComparison.OrdinalIgnoreCase))
             {
                 using var stream = File.Create(fileName);
@@ -305,181 +280,178 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Security
             }
             else // CSV
             {
-#pragma warning disable SA1101
                 using var writer = new StreamWriter(fileName, false, System.Text.Encoding.GetEncoding(Encoding));
-#pragma warning restore SA1101
                 using var csv = new CsvWriter(writer, CultureInfo.InvariantCulture);
                 await csv.WriteRecordsAsync(policies, cancellationToken);
             }
-#pragma warning restore SA1101
 
             WriteVerboseWithTimestamp($"Exported {policies.Count} Conditional Access policies to {fileName}");
         }
     }
 
-#pragma warning disable SA1600
+
     public class ConditionalAccessPolicyInfo
-#pragma warning restore SA1600
+
     {
         // Basic Information
-#pragma warning disable SA1600
+
         public string DisplayName { get; set; } = string.Empty;
-#pragma warning restore SA1600
-#pragma warning disable SA1600
+
+
         public string Id { get; set; } = string.Empty;
-#pragma warning restore SA1600
-#pragma warning disable SA1600
+
+
         public string State { get; set; } = string.Empty;
-#pragma warning restore SA1600
-#pragma warning disable SA1600
+
+
         public DateTime? CreatedDateTime { get; set; }
-#pragma warning restore SA1600
-#pragma warning disable SA1600
+
+
         public DateTime? ModifiedDateTime { get; set; }
-#pragma warning restore SA1600
-#pragma warning disable SA1600
+
+
         public string Description { get; set; } = string.Empty;
-#pragma warning restore SA1600
+
 
         // Users and Groups
-#pragma warning disable SA1600
+
         public string IncludeUsers { get; set; } = string.Empty;
-#pragma warning restore SA1600
-#pragma warning disable SA1600
+
+
         public string ExcludeUsers { get; set; } = string.Empty;
-#pragma warning restore SA1600
-#pragma warning disable SA1600
+
+
         public string IncludeGroups { get; set; } = string.Empty;
-#pragma warning restore SA1600
-#pragma warning disable SA1600
+
+
         public string ExcludeGroups { get; set; } = string.Empty;
-#pragma warning restore SA1600
-#pragma warning disable SA1600
+
+
         public string IncludeRoles { get; set; } = string.Empty;
-#pragma warning restore SA1600
-#pragma warning disable SA1600
+
+
         public string ExcludeRoles { get; set; } = string.Empty;
-#pragma warning restore SA1600
+
 
         // Applications
-#pragma warning disable SA1600
+
         public string IncludeApplications { get; set; } = string.Empty;
-#pragma warning restore SA1600
-#pragma warning disable SA1600
+
+
         public string ExcludeApplications { get; set; } = string.Empty;
-#pragma warning restore SA1600
-#pragma warning disable SA1600
+
+
         public string ClientAppTypes { get; set; } = string.Empty;
-#pragma warning restore SA1600
-#pragma warning disable SA1600
+
+
         public string IncludeUserActions { get; set; } = string.Empty;
-#pragma warning restore SA1600
+
 
         // Platforms
-#pragma warning disable SA1600
+
         public string IncludePlatforms { get; set; } = string.Empty;
-#pragma warning restore SA1600
-#pragma warning disable SA1600
+
+
         public string ExcludePlatforms { get; set; } = string.Empty;
-#pragma warning restore SA1600
+
 
         // Locations
-#pragma warning disable SA1600
+
         public string IncludeLocations { get; set; } = string.Empty;
-#pragma warning restore SA1600
-#pragma warning disable SA1600
+
+
         public string ExcludeLocations { get; set; } = string.Empty;
-#pragma warning restore SA1600
+
 
         // Risk Levels
-#pragma warning disable SA1600
+
         public string UserRiskLevels { get; set; } = string.Empty;
-#pragma warning restore SA1600
-#pragma warning disable SA1600
+
+
         public string SignInRiskLevels { get; set; } = string.Empty;
-#pragma warning restore SA1600
-#pragma warning disable SA1600
+
+
         public string ServicePrincipalRiskLevels { get; set; } = string.Empty;
-#pragma warning restore SA1600
+
 
         // Device States and Filters
-#pragma warning disable SA1600
+
         public string IncludeDeviceStates { get; set; } = string.Empty;
-#pragma warning restore SA1600
-#pragma warning disable SA1600
+
+
         public string ExcludeDeviceStates { get; set; } = string.Empty;
-#pragma warning restore SA1600
-#pragma warning disable SA1600
+
+
         public string DeviceFilter { get; set; } = string.Empty;
-#pragma warning restore SA1600
+
 
         // Grant Controls
-#pragma warning disable SA1600
+
         public string BuiltInControls { get; set; } = string.Empty;
-#pragma warning restore SA1600
-#pragma warning disable SA1600
+
+
         public string CustomAuthenticationFactors { get; set; } = string.Empty;
-#pragma warning restore SA1600
-#pragma warning disable SA1600
+
+
         public string GrantOperator { get; set; } = string.Empty;
-#pragma warning restore SA1600
-#pragma warning disable SA1600
+
+
         public string TermsOfUse { get; set; } = string.Empty;
-#pragma warning restore SA1600
+
 
         // Session Controls
-#pragma warning disable SA1600
-#pragma warning restore SA1600
-        #pragma warning disable SA1600
+
+
+
         public bool ApplicationEnforcedRestrictions { get; set; }
-#pragma warning restore SA1600
-        #pragma warning disable SA1600
+
+
         public bool CloudAppSecurity { get; set; }
-#pragma warning restore SA1600
-        #pragma warning disable SA1600
+
+
         public bool DisableResilienceDefaults { get; set; }
         public string PersistentBrowser { get; set; } = string.Empty;
-#pragma warning restore SA1600
-#pragma warning disable SA1600
+
+
         public string SignInFrequency { get; set; } = string.Empty;
-#pragma warning restore SA1600
+
 
         // Additional Properties
-#pragma warning disable SA1600
+
         public string DeviceFilterMode { get; set; } = string.Empty;
-#pragma warning restore SA1600
-#pragma warning disable SA1600
+
+
         public string DeviceFilterRule { get; set; } = string.Empty;
-#pragma warning restore SA1600
-#pragma warning disable SA1600
+
+
         public string AuthenticationContextClassReferences { get; set; } = string.Empty;
-#pragma warning restore SA1600
-#pragma warning disable SA1600
+
+
         public string InsiderRiskLevels { get; set; } = string.Empty;
-#pragma warning restore SA1600
+
     }
 
-#pragma warning disable SA1600
+
     public class ConditionalAccessSummary
-#pragma warning restore SA1600
+
     {
-#pragma warning disable SA1600
-#pragma warning restore SA1600
-        #pragma warning disable SA1600
+
+
+
         public DateTime StartTime { get; set; }
-#pragma warning restore SA1600
-        #pragma warning disable SA1600
+
+
         public TimeSpan ProcessingTime { get; set; }
-#pragma warning restore SA1600
-        #pragma warning disable SA1600
+
+
         public int TotalPolicies { get; set; }
-#pragma warning restore SA1600
-        #pragma warning disable SA1600
+
+
         public int EnabledPolicies { get; set; }
-#pragma warning restore SA1600
-        #pragma warning disable SA1600
+
+
         public int DisabledPolicies { get; set; }
-#pragma warning restore SA1600
+
         public int ReportOnlyPolicies { get; set; }
     }
 }
