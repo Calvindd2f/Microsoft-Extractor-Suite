@@ -16,17 +16,17 @@ namespace Microsoft.ExtractorSuite.Core.Exchange
     /// </summary>
     public class GraphExchangeClient
     {
-#pragma warning disable SA1309
+
         private readonly AuthenticationManager _authManager;
-#pragma warning disable SA1600
-#pragma warning restore SA1309
+
+
 u
 
         public GraphExchangeClient(AuthenticationManager authManager)
         {
-#pragma warning disable SA1101
+
             _authManager = authManager;
-#pragma warning restore SA1101
+
         }
 
         /// <summary>
@@ -40,10 +40,10 @@ u
             string? from = null,
             CancellationToken cancellationToken = default)
         {
-#pragma warning disable SA1101
+
             var graphClient = _authManager.GraphClient
                 ?? throw new InvalidOperationException("Graph client not initialized");
-#pragma warning restore SA1101
+
 
             var filter = new List<string>();
 
@@ -81,10 +81,10 @@ u
             string userPrincipalName,
             CancellationToken cancellationToken = default)
         {
-#pragma warning disable SA1101
+
             var graphClient = _authManager.GraphClient
                 ?? throw new InvalidOperationException("Graph client not initialized");
-#pragma warning restore SA1101
+
 
             var user = await graphClient.Users[userPrincipalName]
                 .GetAsync(config =>
@@ -102,10 +102,10 @@ u
             string userPrincipalName,
             CancellationToken cancellationToken = default)
         {
-#pragma warning disable SA1101
+
             var graphClient = _authManager.GraphClient
                 ?? throw new InvalidOperationException("Graph client not initialized");
-#pragma warning restore SA1101
+
 
             var folders = await graphClient.Users[userPrincipalName]
                 .MailFolders
@@ -124,10 +124,10 @@ u
             string userPrincipalName,
             CancellationToken cancellationToken = default)
         {
-#pragma warning disable SA1101
+
             var graphClient = _authManager.GraphClient
                 ?? throw new InvalidOperationException("Graph client not initialized");
-#pragma warning restore SA1101
+
 
             var rules = await graphClient.Users[userPrincipalName]
                 .MailFolders["Inbox"]
@@ -146,10 +146,10 @@ u
             DateTime endDate,
             CancellationToken cancellationToken = default)
         {
-#pragma warning disable SA1101
+
             var graphClient = _authManager.GraphClient
                 ?? throw new InvalidOperationException("Graph client not initialized");
-#pragma warning restore SA1101
+
 
             var events = await graphClient.Users[userPrincipalName]
                 .CalendarView
@@ -172,10 +172,10 @@ u
         {
             try
             {
-#pragma warning disable SA1101
+
                 var graphClient = _authManager.GraphClient
                     ?? throw new InvalidOperationException("Graph client not initialized");
-#pragma warning restore SA1101
+
 
                 var user = await graphClient.Users[userPrincipalName]
                     .GetAsync(config =>

@@ -19,27 +19,27 @@ namespace Microsoft.ExtractorSuite.Core
         /// <summary>
         /// The cancellation token source.
         /// </summary>
-#pragma warning disable SA1309
-#pragma warning disable SA1600
-        private CancellationTokenSource? _cancellationTokenSource;
-#pragma warning restore SA1600
-        protected ILogger? Logger { get; private set; }
-#pragma warning disable SA1600
 
-#pragma warning restore SA1600
+
+        private CancellationTokenSource? _cancellationTokenSource;
+
+        protected ILogger? Logger { get; private set; }
+
+
+
         [Parameter]
         public LogLevel LogLevel { get; set; } = LogLevel.Standard;
-#pragma warning disable SA1600
 
-#pragma warning restore SA1600
+
+
         [Parameter]
-#pragma warning disable SA1600
-        public string? OutputDirectory { get; set; }
-#pragma warning restore SA1600
 
-#pragma warning disable SA1600
+        public string? OutputDirectory { get; set; }
+
+
+
         protected AuthenticationManager AuthManager => AuthenticationManager.Instance;
-#pragma warning restore SA1600
+
 
         protected CancellationToken CancellationToken => _cancellationTokenSource?.Token ?? CancellationToken.None;
 
@@ -51,14 +51,14 @@ namespace Microsoft.ExtractorSuite.Core
             _cancellationTokenSource = new CancellationTokenSource();
 
             // Initialize logger
-#pragma warning disable SA1101
+
             Logger = new FileLogger(LogLevel, OutputDirectory ?? Environment.CurrentDirectory);
-#pragma warning restore SA1101
+
 
             // Log cmdlet start
-#pragma warning disable SA1101
+
             Logger.LogInfo($"Starting cmdlet: {this.MyInvocation.MyCommand.Name}");
-#pragma warning restore SA1101
+
         }
 
         /// <inheritdoc/>
@@ -67,9 +67,9 @@ namespace Microsoft.ExtractorSuite.Core
         {
             base.StopProcessing();
             _cancellationTokenSource?.Cancel();
-#pragma warning disable SA1101
+
             Logger?.LogInfo($"Stopping cmdlet: {this.MyInvocation.MyCommand.Name}");
-#pragma warning restore SA1101
+
         }
 
         /// <inheritdoc/>
@@ -78,15 +78,15 @@ namespace Microsoft.ExtractorSuite.Core
         {
             base.EndProcessing();
             _cancellationTokenSource?.Dispose();
-#pragma warning disable SA1101
+
             Logger?.LogInfo($"Completed cmdlet: {this.MyInvocation.MyCommand.Name}");
-#pragma warning restore SA1101
-#pragma warning disable SA1101
+
+
             Logger?.Dispose();
-#pragma warning restore SA1101
-#pragma warning disable SA1600
+
+
         }
-#pragma warning restore SA1600
+
 
         protected T RunAsync<T>(Task<T> task)
         {
@@ -99,9 +99,9 @@ namespace Microsoft.ExtractorSuite.Core
             {
                 throw ex.InnerException ?? ex;
             }
-#pragma warning disable SA1600
+
         }
-#pragma warning restore SA1600
+
 
         protected void RunAsync(Task task)
         {
@@ -114,33 +114,33 @@ namespace Microsoft.ExtractorSuite.Core
             {
                 throw ex.InnerException ?? ex;
             }
-#pragma warning disable SA1600
+
         }
-#pragma warning restore SA1600
+
 
         protected void WriteVerboseWithTimestamp(string message)
         {
-#pragma warning disable SA1101
+
             WriteVerbose($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] {message}");
-#pragma warning restore SA1101
-#pragma warning disable SA1101
+
+
             Logger?.LogDebug(message);
-#pragma warning restore SA1101
-#pragma warning disable SA1600
+
+
         }
-#pragma warning restore SA1600
+
 
         protected void WriteWarningWithTimestamp(string message)
         {
-#pragma warning disable SA1101
+
             WriteWarning($"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss}] {message}");
-#pragma warning restore SA1101
-#pragma warning disable SA1101
+
+
             Logger?.WriteWarningWithTimestamp(message);
-#pragma warning restore SA1101
-#pragma warning disable SA1600
+
+
         }
-#pragma warning restore SA1600
+
 
         protected void WriteErrorWithTimestamp(string message, Exception? exception = null)
         {
@@ -150,15 +150,15 @@ namespace Microsoft.ExtractorSuite.Core
                 ErrorCategory.InvalidOperation,
                 null);
 
-#pragma warning disable SA1101
+
             WriteError(errorRecord);
-#pragma warning restore SA1101
-#pragma warning disable SA1101
+
+
             Logger?.WriteErrorWithTimestamp(message, exception);
-#pragma warning restore SA1101
-#pragma warning disable SA1600
+
+
         }
-#pragma warning restore SA1600
+
 
         protected void WriteProgressSafe(string activity, string statusDescription, int percentComplete)
         {
@@ -168,76 +168,76 @@ namespace Microsoft.ExtractorSuite.Core
                 {
                     PercentComplete = percentComplete
                 };
-#pragma warning disable SA1101
+
                 WriteProgress(progressRecord);
-#pragma warning restore SA1101
+
             }
             catch
             {
                 // Ignore progress errors (some hosts don't support progress)
             }
-#pragma warning disable SA1600
+
         }
-#pragma warning restore SA1600
+
 
         protected bool RequireGraphConnection()
         {
-#pragma warning disable SA1101
+
             if (!AuthManager.IsGraphConnected)
             {
-#pragma warning disable SA1101
+
                 WriteErrorWithTimestamp("Not connected to Microsoft Graph. Please run Connect-M365 first.");
-#pragma warning restore SA1101
+
                 return false;
             }
-#pragma warning restore SA1101
+
             return true;
-#pragma warning disable SA1600
+
         }
-#pragma warning restore SA1600
+
 
         protected bool RequireAzureConnection()
         {
-#pragma warning disable SA1101
+
             if (!AuthManager.IsAzureConnected)
             {
-#pragma warning disable SA1101
+
                 WriteErrorWithTimestamp("Not connected to Azure. Please run Connect-AzureAZ first.");
-#pragma warning restore SA1101
+
                 return false;
             }
-#pragma warning restore SA1101
+
             return true;
         }
 
         /// <summary>
         /// Check if the cmdlet is running in a PowerShell context
         /// </summary>
-#pragma warning disable SA1201
+
         protected bool IsRunningInPowerShell =>
             System.Management.Automation.Runspaces.Runspace.DefaultRunspace != null &&
             System.Management.Automation.Runspaces.Runspace.DefaultRunspace.RunspaceStateInfo.State ==
                 System.Management.Automation.Runspaces.RunspaceState.Opened;
-#pragma warning restore SA1201
+
 
         /// <summary>
         /// Safe way to write output that works both in PowerShell and API contexts
         /// </summary>
         protected void SafeWriteOutput(object output)
         {
-#pragma warning disable SA1101
+
             if (IsRunningInPowerShell)
             {
-#pragma warning disable SA1101
+
                 WriteObject(output);
-#pragma warning restore SA1101
+
             }
             else
             {
                 // When not in PowerShell, just log the output
                 Console.WriteLine($"Output: {System.Text.Json.JsonSerializer.Serialize(output, new System.Text.Json.JsonSerializerOptions { WriteIndented = true })}");
             }
-#pragma warning restore SA1101
+
         }
 
         /// <summary>
@@ -245,7 +245,7 @@ namespace Microsoft.ExtractorSuite.Core
         /// </summary>
         protected void SafeWriteError(string message, Exception? exception = null)
         {
-#pragma warning disable SA1101
+
             if (IsRunningInPowerShell)
             {
                 var errorRecord = new System.Management.Automation.ErrorRecord(
@@ -253,9 +253,9 @@ namespace Microsoft.ExtractorSuite.Core
                     "CmdletError",
                     System.Management.Automation.ErrorCategory.InvalidOperation,
                     null);
-#pragma warning disable SA1101
+
                 WriteError(errorRecord);
-#pragma warning restore SA1101
+
             }
             else
             {
@@ -267,7 +267,7 @@ namespace Microsoft.ExtractorSuite.Core
                     Console.WriteLine($"Exception: {exception}");
                 }
             }
-#pragma warning restore SA1101
+
         }
 
         /// <summary>
@@ -275,19 +275,19 @@ namespace Microsoft.ExtractorSuite.Core
         /// </summary>
         protected void SafeWriteVerbose(string message)
         {
-#pragma warning disable SA1101
+
             if (IsRunningInPowerShell)
             {
-#pragma warning disable SA1101
+
                 WriteVerbose(message);
-#pragma warning restore SA1101
+
             }
             else
             {
                 // When not in PowerShell, just log the verbose message
                 Console.WriteLine($"VERBOSE: {message}");
             }
-#pragma warning restore SA1101
+
         }
 
         /// <inheritdoc/>

@@ -21,23 +21,23 @@ namespace Microsoft.ExtractorSuite.Core.Json
     /// </summary>
     public class HighPerformanceJsonProcessor : IDisposable
     {
-#pragma warning disable SA1309
+
         private static readonly RecyclableMemoryStreamManager _memoryStreamManager = new();
-#pragma warning restore SA1309
-#pragma warning disable SA1309
-#pragma warning disable SA1600
+
+
+
         private readonly ArrayPool<byte> _arrayPool;
-#pragma warning restore SA1600
-#pragma warning disable SA1309
+
+
         private readonly SimdJsonParser _jsonParser;
-#pragma warning restore SA1309
+
 
         public HighPerformanceJsonProcessor()
         {
             _arrayPool = ArrayPool<byte>.Shared;
-#pragma warning disable SA1101
+
             _jsonParser = new SimdJsonParser();
-#pragma warning restore SA1101
+
         }
 
         /// <summary>
@@ -54,9 +54,9 @@ namespace Microsoft.ExtractorSuite.Core.Json
                 var bytesRead = await stream.ReadAsync(buffer.AsMemory(0, (int)stream.Length), cancellationToken);
                 var jsonSpan = buffer.AsSpan(0, bytesRead);
 
-#pragma warning disable SA1101
+
                 var element = _jsonParser.Parse(jsonSpan.ToArray());
-#pragma warning restore SA1101
+
                 return element == null
                     ? throw new InvalidOperationException("Failed to parse JSON")
                     : Newtonsoft.Json.JsonConvert.DeserializeObject<T>(element.ToString());
@@ -81,9 +81,9 @@ namespace Microsoft.ExtractorSuite.Core.Json
                 var bytesRead = await stream.ReadAsync(buffer.AsMemory(0, (int)stream.Length), cancellationToken);
                 var jsonSpan = buffer.AsSpan(0, bytesRead);
 
-#pragma warning disable SA1101
+
                 var element = _jsonParser.Parse(jsonSpan.ToArray());
-#pragma warning restore SA1101
+
                 if (element?.Type != JsonType.Array)
                     throw new InvalidOperationException(element == null ? "Failed to parse JSON" : "Expected JSON array");
 
@@ -159,17 +159,17 @@ namespace Microsoft.ExtractorSuite.Core.Json
             try
             {
                 var bytesRead = await stream.ReadAsync(buffer.AsMemory(0, (int)stream.Length), cancellationToken);
-#pragma warning disable SA1101
+
                 var element = _jsonParser.Parse(buffer.AsSpan(0, bytesRead).ToArray());
-#pragma warning restore SA1101
+
 
                 if (element == null)
                     throw new InvalidOperationException("Failed to parse JSON");
 
                 var jToken = JToken.Parse(element.ToString());
-#pragma warning disable SA1101
+
                 return fieldPaths.ToDictionary(path => path, path => GetValueByPath(jToken, path));
-#pragma warning restore SA1101
+
             }
             finally
             {
@@ -218,9 +218,9 @@ namespace Microsoft.ExtractorSuite.Core.Json
                 try
                 {
                     var bytesRead = await input.ReadAsync(buffer.AsMemory(0, (int)input.Length), cancellationToken);
-#pragma warning disable SA1101
+
                     var element = _jsonParser.Parse(buffer.AsSpan(0, bytesRead).ToArray());
-#pragma warning restore SA1101
+
                     if (element == null)
                     {
                         continue; // Skip invalid files
@@ -290,9 +290,9 @@ namespace Microsoft.ExtractorSuite.Core.Json
             try
             {
                 var bytesRead = await input.ReadAsync(buffer.AsMemory(0, (int)input.Length), cancellationToken);
-#pragma warning disable SA1101
+
                 var element = _jsonParser.Parse(buffer.AsSpan(0, bytesRead).ToArray());
-#pragma warning restore SA1101
+
                 if (element == null)
                 {
                     throw new InvalidOperationException("Failed to parse JSON");
@@ -354,9 +354,9 @@ namespace Microsoft.ExtractorSuite.Core.Json
             {
                 JTokenType.String => current.ToString(),
                 JTokenType.Float or JTokenType.Integer => current.ToObject<object>(),
-#pragma warning disable SA1600
+
                 JTokenType.Bo
-#pragma warning restore SA1600
+
 current.ToObject<object>(),
                 JTokenType.Null => null,
                 _ => current.ToString()
@@ -365,16 +365,16 @@ current.ToObject<object>(),
 
         public void Dispose()
         {
-#pragma warning disable SA1101
+
             _jsonParser?.Dispose();
-#pragma warning restore SA1101
+
         }
     }
 
     /// <summary>
-#pragma warning disable SA1600
+
     /// High-performance DateTime converter for SIMDJson
-#pragma warning restore SA1600
+
     /// </summary>
     public class HighPerformanceDateTimeConverter
     {
@@ -385,9 +385,9 @@ current.ToObject<object>(),
             if (string.IsNullOrEmpty(value))
                 return DateTime.MinValue;
 
-#pragma warning disable SA1600
+
             if (DateTime.TryParse(value, out var result))
-#pragma warning restore SA1600
+
                 return result;
 
             return DateTime.MinValue;
@@ -398,9 +398,9 @@ current.ToObject<object>(),
             return value.ToUniversalTime().ToString(DateTimeFormat);
         }
     }
-#pragma warning disable SA1600
 
-#pragma warning restore SA1600
+
+
     /// <summary>
     /// Dynamic JSON converter for handling unknown structures with SIMDJson
     /// </summary>

@@ -9,28 +9,28 @@ using Microsoft.ExtractorSuite.Cmdlets.MLPipeline;
 
 namespace Microsoft.ExtractorSuite.Core.MLPipeline
 {
-#pragma warning disable SA1600
+
     public class OpenPipeDataExporter
-#pragma warning restore SA1600
+
     {
-#pragma warning disable SA1309
+
         private readonly JsonSerializerOptions _serializerOptions;
-#pragma warning disable SA1600
-#pragma warning restore SA1309
+
+
 
         public OpenPipeDataExporter()
         {
-#pragma warning disable SA1101
+
             _serializerOptions = new JsonSerializerOptions
             {
                 WriteIndented = false,
                 PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
                 DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
             };
-#pragma warning restore SA1101
-#pragma warning disable SA1600
+
+
         }
-#pragma warning restore SA1600
+
 
         public async Task<string> ExportToOpenPipeFormatAsync(
             List<MLTrainingRecord> data,
@@ -38,21 +38,21 @@ namespace Microsoft.ExtractorSuite.Core.MLPipeline
             ExportOptions options,
             CancellationToken cancellationToken)
         {
-#pragma warning disable SA1101
+
             var openPipePath = GetOpenPipePath(outputPath);
-#pragma warning restore SA1101
+
 
             using var writer = new StreamWriter(openPipePath);
             var recordCount = 0;
 
             foreach (var record in data)
             {
-#pragma warning disable SA1101
+
                 var openPipeRecord = ConvertToOpenPipeFormat(record, options);
-#pragma warning restore SA1101
-#pragma warning disable SA1101
+
+
                 var json = JsonSerializer.Serialize(openPipeRecord, _serializerOptions);
-#pragma warning restore SA1101
+
                 await writer.WriteLineAsync(json);
 
                 recordCount++;
@@ -66,9 +66,9 @@ namespace Microsoft.ExtractorSuite.Core.MLPipeline
             }
 
             return openPipePath;
-#pragma warning disable SA1600
+
         }
-#pragma warning restore SA1600
+
 
         public async Task<string> ExportToStandardJSONLAsync(
             List<MLTrainingRecord> data,
@@ -76,18 +76,18 @@ namespace Microsoft.ExtractorSuite.Core.MLPipeline
             ExportOptions options,
             CancellationToken cancellationToken)
         {
-#pragma warning disable SA1101
+
             var jsonlPath = GetJSONLPath(outputPath);
-#pragma warning restore SA1101
+
 
             using var writer = new StreamWriter(jsonlPath);
             var recordCount = 0;
 
             foreach (var record in data)
             {
-#pragma warning disable SA1101
+
                 var json = JsonSerializer.Serialize(record, _serializerOptions);
-#pragma warning restore SA1101
+
                 await writer.WriteLineAsync(json);
 
                 recordCount++;
@@ -100,9 +100,9 @@ namespace Microsoft.ExtractorSuite.Core.MLPipeline
             }
 
             return jsonlPath;
-#pragma warning disable SA1600
+
         }
-#pragma warning restore SA1600
+
 
         public async Task<ExportMetadata> ExportWithMetadataAsync(
             List<MLTrainingRecord> data,
@@ -124,12 +124,12 @@ namespace Microsoft.ExtractorSuite.Core.MLPipeline
             };
 
             // Export data
-#pragma warning disable SA1101
+
             var openPipePath = await ExportToOpenPipeFormatAsync(data, outputPath, options, cancellationToken);
-#pragma warning restore SA1101
-#pragma warning disable SA1101
+
+
             var jsonlPath = await ExportToStandardJSONLAsync(data, outputPath, options, cancellationToken);
-#pragma warning restore SA1101
+
 
             // Export metadata
             var metadataPath = Path.Combine(Path.GetDirectoryName(outputPath)!, "export_metadata.json");
@@ -155,22 +155,22 @@ namespace Microsoft.ExtractorSuite.Core.MLPipeline
             }
 
             // Add user message
-#pragma warning disable SA1101
+
             messages.Add(new OpenPipeMessage
             {
                 Role = "user",
                 Content = FormatUserPrompt(record, options)
             });
-#pragma warning restore SA1101
+
 
             // Add assistant message
-#pragma warning disable SA1101
+
             messages.Add(new OpenPipeMessage
             {
                 Role = "assistant",
                 Content = FormatAssistantResponse(record, options)
             });
-#pragma warning restore SA1101
+
 
             return new OpenPipeRecord
             {
@@ -275,23 +275,23 @@ namespace Microsoft.ExtractorSuite.Core.MLPipeline
             if (data.ContainsKey("ipAddress") && !string.IsNullOrEmpty(data["ipAddress"]?.ToString()))
             {
                 var ip = data["ipAddress"].ToString();
-#pragma warning disable SA1101
+
                 if (IsSuspiciousIP(ip))
                 {
                     explanations.Add($"IP address {ip} is associated with suspicious activity or known threats.");
                 }
-#pragma warning restore SA1101
+
             }
 
             if (data.ContainsKey("location") && !string.IsNullOrEmpty(data["location"]?.ToString()))
             {
                 var location = data["location"].ToString();
-#pragma warning disable SA1101
+
                 if (IsUnusualLocation(location))
                 {
                     explanations.Add($"Sign-in from unusual location: {location}");
                 }
-#pragma warning restore SA1101
+
             }
 
             if (data.ContainsKey("status") && data["status"]?.ToString() != "")
@@ -325,12 +325,12 @@ namespace Microsoft.ExtractorSuite.Core.MLPipeline
             if (data.ContainsKey("ipAddress") && !string.IsNullOrEmpty(data["ipAddress"]?.ToString()))
             {
                 var ip = data["ipAddress"].ToString();
-#pragma warning disable SA1101
+
                 if (IsSuspiciousIP(ip))
                 {
                     explanations.Add($"IP address {ip} is associated with suspicious activity.");
                 }
-#pragma warning restore SA1101
+
             }
 
             return explanations.Any()
@@ -459,84 +459,84 @@ namespace Microsoft.ExtractorSuite.Core.MLPipeline
             if (jsonlPath == basePath) jsonlPath = basePath.Replace(".jsonl", "_standard.jsonl");
             return jsonlPath;
         }
-#pragma warning disable SA1600
-    }
-#pragma warning restore SA1600
 
-#pragma warning disable SA1600
+    }
+
+
+
     public class ExportOptions
-#pragma warning restore SA1600
-#pragma warning disable SA1600
+
+
     {
-#pragma warning restore SA1600
-#pragma warning disable SA1600
+
+
         public bool IncludeSystemMessage { get; set; } = true;
-#pragma warning restore SA1600
-#pragma warning disable SA1600
+
+
         public bool IncludeAllFields { get; set; } = false;
-#pragma warning restore SA1600
-#pragma warning disable SA1600
+
+
         public bool IncludeLabels { get; set; } = true;
-#pragma warning restore SA1600
-#pragma warning disable SA1600
+
+
         public bool IncludeRecommendations { get; set; } = true;
-#pragma warning restore SA1600
+
         public bool AnonymizeData { get; set; } = true;
         public bool IncludeMetadata { get; set; } = true;
-#pragma warning disable SA1600
-    }
-#pragma warning restore SA1600
 
-#pragma warning disable SA1600
+    }
+
+
+
     public class ExportMetadata
-#pragma warning restore SA1600
-#pragma warning disable SA1600
+
+
     {
-#pragma warning restore SA1600
-#pragma warning disable SA1600
-#pragma warning restore SA1600
-        #pragma warning disable SA1600
+
+
+
+
         public DateTime ExportTime { get; set; }
-#pragma warning restore SA1600
-        #pragma warning disable SA1600
+
+
         public int TotalRecords { get; set; }
         public string[] DataSources { get; set; } = Array.Empty<string>();
-#pragma warning restore SA1600
-#pragma warning disable SA1600
+
+
         public DateRange DateRange { get; set; } = new();
-#pragma warning restore SA1600
+
         public ExportOptions Options { get; set; } = new();
         public string[] OutputFiles { get; set; } = Array.Empty<string>();
-#pragma warning disable SA1600
-    }
-#pragma warning restore SA1600
 
-#pragma warning disable SA1600
+    }
+
+
+
     public class DateRange
-#pragma warning restore SA1600
-#pragma warning disable SA1600
+
+
     {
-#pragma warning restore SA1600
-#pragma warning disable SA1600
+
+
         public DateTime Start { get; set; }public DateTime End { get; set; }
     }
-#pragma warning restore SA1600
 
-#pragma warning disable SA1600
+
+
     public class OpenPipeRecord
-#pragma warning restore SA1600
+
     {
         public OpenPipeMessage[] Messages { get; set; } = Array.Empty<OpenPipeMessage>();
-#pragma warning disable SA1600
-    }
-#pragma warning restore SA1600
 
-#pragma warning disable SA1600
+    }
+
+
+
     public class OpenPipeMessage
-#pragma warning restore SA1600
-#pragma warning disable SA1600
+
+
     {
-#pragma warning restore SA1600
+
         public string Role { get; set; } = string.Empty;
         public string Content { get; set; } = string.Empty;
     }

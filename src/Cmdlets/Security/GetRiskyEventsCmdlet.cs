@@ -37,11 +37,11 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Security
 
         [Parameter(
             HelpMessage = "Include only high-risk events")]
-        #pragma warning disable SA1309
+
         public SwitchParameter HighRiskOnly { get; set; }
-#pragma warning disable SA1201
+
         private GraphApiClient? _graphClient;
-#pragma warning restore SA1201
+
         private readonly string[] RequiredScopes = {"IdentityRiskEvent.Read.All", "IdentityRiskyUser.Read.All" };
 
         protected override void BeginProcessing()
@@ -541,80 +541,80 @@ List<RiskyUser>();
 
     public class RiskyUser
     {
-        #pragma warning disable SA1600
+
         public string Id { get; set; }
-        #pragma warning disable SA1600
+
         public bool IsDeleted { get; set; }
-        #pragma warning disable SA1600
+
         public bool IsProcessing { get; set; }
-        #pragma warning disable SA1600
+
         public string RiskDetail { get; set; }
-#pragma warning disable SA1201
+
         public DateTime? RiskLastUpdatedDateTime { get; set; }
-#pragma warning restore SA1201
-        #pragma warning disable SA1600
+
+
         public string RiskLevel { get; set; }
-        #pragma warning disable SA1600
+
         public string RiskState { get; set; }
-        #pragma warning disable SA1600
+
         public string UserDisplayName { get; set; }
         public string UserPrincipalName { get; set; }public string AdditionalProperties { get; set; }
     }
 
     public class RiskDetection
     {
-        #pragma warning disable SA1600
+
         public string Activity { get; set; }
         public DateTime? ActivityDateTime { get; set; }
-        #pragma warning disable SA1600
+
         public string AdditionalInfo { get; set; }
-        #pragma warning disable SA1600
+
         public string CorrelationId { get; set; }
-#pragma warning disable SA1201
+
         public DateTime? DetectedDateTime { get; set; }
-#pragma warning restore SA1201
-        #pragma warning disable SA1600
+
+
         public string IpAddress { get; set; }
-        #pragma warning disable SA1600
+
         public string Id { get; set; }
         public DateTime? LastUpdatedDateTime { get; set; }
-        #pragma warning disable SA1600
+
         public string City { get; set; }
-        #pragma warning disable SA1600
+
         public string CountryOrRegion { get; set; }
-        #pragma warning disable SA1600
+
         public string State { get; set; }
-        #pragma warning disable SA1600
+
         public string RequestId { get; set; }
-        #pragma warning disable SA1600
+
         public string RiskDetail { get; set; }
-        #pragma warning disable SA1600
+
         public string RiskEventType { get; set; }
-        #pragma warning disable SA1600
+
         public string RiskLevel { get; set; }
-        #pragma warning disable SA1600
+
         public string RiskState { get; set; }
-        #pragma warning disable SA1600
+
         public string DetectionTimingType { get; set; }
-        #pragma warning disable SA1600
+
         public string Source { get; set; }
-        #pragma warning disable SA1600
+
         public string TokenIssuerType { get; set; }
-        #pragma warning disable SA1600
+
         public string UserDisplayName { get; set; }
-        #pragma warning disable SA1600
+
         public string UserId { get; set; }
         public string UserPrincipalName { get; set; }public string AdditionalProperties { get; set; }
     }
 
     public class RiskyEventsSummary
     {
-        #pragma warning disable SA1600
+
         public DateTime StartTime { get; set; }
         public TimeSpan? ProcessingTime { get; set;}
-        #pragma warning disable SA1600
+
         public int TotalRiskyUsers { get; set; }
-        #pragma warning disable SA1600
+
         public int TotalRiskDetections { get; set; }
         public Dictionary<string, int> RiskLevelBreakdown { get; set; } = new
 int>();

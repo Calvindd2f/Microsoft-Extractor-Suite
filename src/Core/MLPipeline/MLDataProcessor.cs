@@ -5,23 +5,23 @@ using Microsoft.ExtractorSuite.Cmdlets.MLPipeline;
 
 namespace Microsoft.ExtractorSuite.Core.MLPipeline
 {
-#pragma warning disable SA1600
+
     public class MLDataProcessor
-#pragma warning restore SA1600
+
     {
-#pragma warning disable SA1309
+
         private readonly Random _random;
-#pragma warning disable SA1600
-#pragma warning restore SA1309
+
+
 
         public MLDataProcessor(int? seed = null)
         {
-#pragma warning disable SA1101
+
             _random = seed.HasValue ? new Random(seed.Value) : new Random();
-#pragma warning restore SA1101
-#pragma warning disable SA1600
+
+
         }
-#pragma warning restore SA1600
+
 
         public DataSetSplit SplitDataSets(
             List<MLTrainingRecord> data,
@@ -36,9 +36,9 @@ namespace Microsoft.ExtractorSuite.Core.MLPipeline
                 throw new ArgumentException("Training and validation percentages cannot exceed 100%");
 
             // Shuffle data for random split
-#pragma warning disable SA1101
+
             var shuffledData = data.OrderBy(x => _random.Next()).ToList();
-#pragma warning restore SA1101
+
 
             var totalCount = shuffledData.Count;
             var trainingCount = (int)(totalCount * trainingPercentage);
@@ -51,9 +51,9 @@ namespace Microsoft.ExtractorSuite.Core.MLPipeline
                 Validation = shuffledData.Skip(trainingCount).Take(validationCount).ToList(),
                 Test = shuffledData.Skip(trainingCount + validationCount).Take(testCount).ToList()
             };
-#pragma warning disable SA1600
+
         }
-#pragma warning restore SA1600
+
 
         public DataSetSplit SplitDataSetsByTime(
             List<MLTrainingRecord> data,
@@ -76,9 +76,9 @@ namespace Microsoft.ExtractorSuite.Core.MLPipeline
                 Validation = sortedData.Skip(trainingCount).Take(validationCount).ToList(),
                 Test = sortedData.Skip(trainingCount + validationCount).ToList()
             };
-#pragma warning disable SA1600
+
         }
-#pragma warning restore SA1600
+
 
         public DataSetSplit SplitDataSetsStratified(
             List<MLTrainingRecord> data,
@@ -90,9 +90,9 @@ namespace Microsoft.ExtractorSuite.Core.MLPipeline
                 return new DataSetSplit();
 
             // Group by label for stratified sampling
-#pragma warning disable SA1101
+
             var groupedData = data.GroupBy(x => GetLabelValue(x, labelKey)).ToList();
-#pragma warning restore SA1101
+
             var result = new DataSetSplit();
 
             foreach (var group in groupedData)
@@ -107,20 +107,20 @@ namespace Microsoft.ExtractorSuite.Core.MLPipeline
             }
 
             // Shuffle each set to avoid bias
-#pragma warning disable SA1101
+
             result.Training = result.Training.OrderBy(x => _random.Next()).ToList();
-#pragma warning restore SA1101
-#pragma warning disable SA1101
+
+
             result.Validation = result.Validation.OrderBy(x => _random.Next()).ToList();
-#pragma warning restore SA1101
-#pragma warning disable SA1101
+
+
             result.Test = result.Test.OrderBy(x => _random.Next()).ToList();
-#pragma warning restore SA1101
+
 
             return result;
-#pragma warning disable SA1600
+
         }
-#pragma warning restore SA1600
+
 
         public List<MLTrainingRecord> BalanceDataset(
             List<MLTrainingRecord> data,
@@ -130,9 +130,9 @@ namespace Microsoft.ExtractorSuite.Core.MLPipeline
             if (data == null || !data.Any())
                 return new List<MLTrainingRecord>();
 
-#pragma warning disable SA1101
+
             var groupedData = data.GroupBy(x => GetLabelValue(x, labelKey)).ToList();
-#pragma warning restore SA1101
+
 
             if (groupedData.Count < 2)
                 return data;
@@ -149,9 +149,9 @@ namespace Microsoft.ExtractorSuite.Core.MLPipeline
                 if (groupData.Count > targetSize)
                 {
                     // Downsample majority class
-#pragma warning disable SA1101
+
                     balancedData.AddRange(groupData.OrderBy(x => _random.Next()).Take(targetSize));
-#pragma warning restore SA1101
+
                 }
                 else
                 {
@@ -160,12 +160,12 @@ namespace Microsoft.ExtractorSuite.Core.MLPipeline
                 }
             }
 
-#pragma warning disable SA1101
+
             return balancedData.OrderBy(x => _random.Next()).ToList();
-#pragma warning restore SA1101
-#pragma warning disable SA1600
+
+
         }
-#pragma warning restore SA1600
+
 
         public List<MLTrainingRecord> AugmentDataset(
             List<MLTrainingRecord> data,
@@ -176,32 +176,32 @@ namespace Microsoft.ExtractorSuite.Core.MLPipeline
                 return new List<MLTrainingRecord>();
 
             var augmentedData = new List<MLTrainingRecord>(data);
-#pragma warning disable SA1101
+
             var minorityClass = data.GroupBy(x => GetLabelValue(x, labelKey))
                                    .OrderBy(g => g.Count())
                                    .First();
-#pragma warning restore SA1101
+
 
             var augmentationCount = (int)(minorityClass.Count() * augmentationRatio);
             var minorityData = minorityClass.ToList();
 
             for (int i = 0; i < augmentationCount; i++)
             {
-#pragma warning disable SA1101
+
                 var originalRecord = minorityData[_random.Next(minorityData.Count)];
-#pragma warning restore SA1101
-#pragma warning disable SA1101
+
+
                 var augmentedRecord = CreateAugmentedRecord(originalRecord);
-#pragma warning restore SA1101
+
                 augmentedData.Add(augmentedRecord);
             }
 
-#pragma warning disable SA1101
+
             return augmentedData.OrderBy(x => _random.Next()).ToList();
-#pragma warning restore SA1101
-#pragma warning disable SA1600
+
+
         }
-#pragma warning restore SA1600
+
 
         public Dictionary<string, object> ExtractFeatures(MLTrainingRecord record)
         {
@@ -226,9 +226,9 @@ namespace Microsoft.ExtractorSuite.Core.MLPipeline
             features["isBusinessHours"] = record.Timestamp.Hour >= 8 && record.Timestamp.Hour <= 18;
 
             return features;
-#pragma warning disable SA1600
+
         }
-#pragma warning restore SA1600
+
 
         public Dictionary<string, object> ExtractLabels(MLTrainingRecord record)
         {
@@ -250,18 +250,18 @@ namespace Microsoft.ExtractorSuite.Core.MLPipeline
             }
 
             return labels;
-#pragma warning disable SA1600
+
         }
-#pragma warning restore SA1600
+
 
         public List<MLTrainingRecord> FilterRecords(
             List<MLTrainingRecord> data,
             Func<MLTrainingRecord, bool> predicate)
         {
             return data?.Where(predicate).ToList() ?? new List<MLTrainingRecord>();
-#pragma warning disable SA1600
+
         }
-#pragma warning restore SA1600
+
 
         public List<MLTrainingRecord> SampleRecords(
             List<MLTrainingRecord> data,
@@ -279,21 +279,21 @@ namespace Microsoft.ExtractorSuite.Core.MLPipeline
                 var sampled = new List<MLTrainingRecord>();
                 for (int i = 0; i < sampleSize; i++)
                 {
-#pragma warning disable SA1101
+
                     sampled.Add(data[_random.Next(data.Count)]);
-#pragma warning restore SA1101
+
                 }
                 return sampled;
             }
             else
             {
-#pragma warning disable SA1101
+
                 return data.OrderBy(x => _random.Next()).Take(sampleSize).ToList();
-#pragma warning restore SA1101
+
             }
-#pragma warning disable SA1600
+
         }
-#pragma warning restore SA1600
+
 
         public Dictionary<string, object> GenerateFeatureStatistics(List<MLTrainingRecord> data)
         {
@@ -331,7 +331,7 @@ namespace Microsoft.ExtractorSuite.Core.MLPipeline
 
         private MLTrainingRecord CreateAugmentedRecord(MLTrainingRecord original)
         {
-#pragma warning disable SA1101
+
             var augmented = new MLTrainingRecord
             {
                 Id = Guid.NewGuid().ToString(),
@@ -341,22 +341,22 @@ namespace Microsoft.ExtractorSuite.Core.MLPipeline
                 Features = new Dictionary<string, object>(original.Features),
                 Labels = new Dictionary<string, object>(original.Labels)
             };
-#pragma warning restore SA1101
+
 
             // Add some noise to numeric features
             foreach (var feature in augmented.Features)
             {
                 if (feature.Value is int intValue)
                 {
-#pragma warning disable SA1101
+
                     augmented.Features[feature.Key] = intValue + _random.Next(-2, 3); // ±2
-#pragma warning restore SA1101
+
                 }
                 else if (feature.Value is double doubleValue)
                 {
-#pragma warning disable SA1101
+
                     augmented.Features[feature.Key] = doubleValue + (_random.NextDouble() - 0.5) * 0.1; // ±0.05
-#pragma warning restore SA1101
+
                 }
             }
 

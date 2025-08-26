@@ -20,37 +20,37 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
     public class GetEmailsCmdlet : AsyncBaseCmdlet
     {
         [Parameter(Mandatory = true, HelpMessage = "The user ID or email address of the mailbox to search")]
-#pragma warning disable SA1600
+
         public string UserId { get; set; } = string.Empty;
-#pragma warning restore SA1600
+
 
         [Parameter(ParameterSetName = "SingleEmail", HelpMessage = "Internet Message ID of the specific email to retrieve")]
-#pragma warning disable SA1600
+
         public string? InternetMessageId { get; set; }
-#pragma warning restore SA1600
+
 
         [Parameter(ParameterSetName = "BatchFile", HelpMessage = "Path to text file containing multiple Internet Message IDs (one per line)")]
-#pragma warning disable SA1600
+
         public string? InputFile { get; set; }
-#pragma warning restore SA1600
+
 
         [Parameter(HelpMessage = "Output format for emails. Default: EML")]
         [ValidateSet("EML", "TXT")]
-#pragma warning disable SA1600
+
         public string OutputFormat { get; set; } = "EML";
-#pragma warning restore SA1600
+
 
         [Parameter(HelpMessage = "Include email attachments in the export")]
-#pragma warning disable SA1600
-#pragma warning restore SA1600
-        #pragma warning disable SA1600
+
+
+
         public SwitchParameter IncludeAttachments { get; set; }
         protected override void ProcessRecord()
-#pragma warning restore SA1600
+
         {
             var results = RunAsyncOperation(GetEmailsAsync, "Getting Emails");
 
-#pragma warning disable SA1101
+
             if (!Async.IsPresent && results != null)
             {
                 foreach (var result in results)
@@ -58,7 +58,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
                     WriteObject(result);
                 }
             }
-#pragma warning restore SA1101
+
         }
 
         private async Task<List<EmailExportResult>> GetEmailsAsync(
@@ -67,16 +67,16 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
         {
             WriteVerboseWithTimestamp("Starting Email Export");
 
-#pragma warning disable SA1101
+
             if (!RequireGraphConnection())
             {
                 throw new InvalidOperationException("Not connected to Microsoft Graph. Please run Connect-M365 first.");
             }
-#pragma warning restore SA1101
 
-#pragma warning disable SA1101
+
+
             var graphClient = AuthManager.GraphClient!;
-#pragma warning restore SA1101
+
             var results = new List<EmailExportResult>();
             var summary = new EmailExportSummary
             {
@@ -84,39 +84,39 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
             };
 
             // Set up output directory
-#pragma warning disable SA1101
+
             if (string.IsNullOrEmpty(OutputDirectory))
             {
-#pragma warning disable SA1101
-                OutputDirectory = Path.Combine(Environment.CurrentDirectory, "Output", "EmailExport");
-#pragma warning restore SA1101
-            }
-#pragma warning restore SA1101
 
-#pragma warning disable SA1101
+                OutputDirectory = Path.Combine(Environment.CurrentDirectory, "Output", "EmailExport");
+
+            }
+
+
+
             Directory.CreateDirectory(OutputDirectory);
-#pragma warning restore SA1101
+
 
             // Determine which emails to process
             List<string> messageIds;
-#pragma warning disable SA1101
+
             if (!string.IsNullOrEmpty(InternetMessageId))
             {
-#pragma warning disable SA1101
+
                 messageIds = new List<string> { InternetMessageId };
-#pragma warning restore SA1101
+
             }
             else if (!string.IsNullOrEmpty(InputFile))
             {
-#pragma warning disable SA1101
+
                 messageIds = await ReadMessageIdsFromFileAsync(InputFile, cancellationToken);
-#pragma warning restore SA1101
+
             }
             else
             {
                 throw new ArgumentException("Either InternetMessageId or InputFile must be provided");
             }
-#pragma warning restore SA1101
+
 
             WriteVerboseWithTimestamp($"Processing {messageIds.Count} message ID(s)");
             summary.TotalMessages = messageIds.Count;
@@ -143,10 +143,10 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
 
                 try
                 {
-#pragma warning disable SA1101
+
                     var exportResult = await ProcessSingleEmailAsync(
                         graphClient, messageId.Trim(), duplicateTracker, cancellationToken);
-#pragma warning restore SA1101
+
 
                     results.Add(exportResult);
 
@@ -158,9 +158,9 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
                     else
                     {
                         summary.FailedExports++;
-#pragma warning disable SA1101
+
                         WriteWarningWithTimestamp($"✗ Failed to export: {messageId} - {exportResult.ErrorMessage}");
-#pragma warning restore SA1101
+
                     }
 
                     if (exportResult.IsDuplicate)
@@ -183,9 +183,9 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
                     };
                     results.Add(errorResult);
                     summary.FailedExports++;
-#pragma warning disable SA1101
+
                     WriteErrorWithTimestamp($"Error processing message {messageId}: {ex.Message}", ex);
-#pragma warning restore SA1101
+
                 }
             }
 
@@ -203,15 +203,15 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
             WriteVerboseWithTimestamp($"  Successful Exports: {summary.SuccessfulExports}");
             WriteVerboseWithTimestamp($"  Failed Exports: {summary.FailedExports}");
             WriteVerboseWithTimestamp($"  Duplicates Found: {summary.Duplicates}");
-#pragma warning disable SA1101
+
             if (IncludeAttachments.IsPresent)
             {
                 WriteVerboseWithTimestamp($"  Attachments Processed: {summary.TotalAttachments}");
             }
-#pragma warning restore SA1101
-#pragma warning disable SA1101
+
+
             WriteVerboseWithTimestamp($"  Output Directory: {OutputDirectory}");
-#pragma warning restore SA1101
+
             WriteVerboseWithTimestamp($"  Processing Time: {summary.ProcessingTime:mm\\:ss}");
 
             return results;
@@ -232,9 +232,9 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
             }
             catch (Exception ex)
             {
-#pragma warning disable SA1101
+
                 WriteErrorWithTimestamp($"Failed to read input file: {ex.Message}", ex);
-#pragma warning restore SA1101
+
                 throw;
             }
         }
@@ -253,7 +253,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
             try
             {
                 // Search for the message by Internet Message ID
-#pragma warning disable SA1101
+
                 var messages = await graphClient.Users[UserId].Messages
                     .GetAsync(requestConfiguration =>
                     {
@@ -263,7 +263,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
                             "id", "subject", "receivedDateTime", "from", "hasAttachments", "internetMessageId"
                         };
                     }, cancellationToken);
-#pragma warning restore SA1101
+
 
                 if (messages?.Value == null || !messages.Value.Any())
                 {
@@ -287,12 +287,12 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
                 duplicateTracker.Add(messageId);
 
                 // Generate filename
-#pragma warning disable SA1101
+
                 var fileName = await GenerateFileNameAsync(message, OutputFormat);
-#pragma warning restore SA1101
-#pragma warning disable SA1101
+
+
                 var filePath = Path.Combine(OutputDirectory!, fileName);
-#pragma warning restore SA1101
+
 
                 // Ensure unique filename
                 var counter = 1;
@@ -302,17 +302,17 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
                     var extension = Path.GetExtension(originalFileName);
                     var nameWithoutExtension = Path.GetFileNameWithoutExtension(originalFileName);
                     fileName = $"{nameWithoutExtension}_{counter}{extension}";
-#pragma warning disable SA1101
+
                     filePath = Path.Combine(OutputDirectory!, fileName);
-#pragma warning restore SA1101
+
                     counter++;
                 }
 
                 // Download the email content
-#pragma warning disable SA1101
+
                 var emailStream = await graphClient.Users[UserId].Messages[messageId].Content
                     .GetAsync(cancellationToken: cancellationToken);
-#pragma warning restore SA1101
+
 
                 if (emailStream != null)
                 {
@@ -328,16 +328,16 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
                 result.FromAddress = message.From?.EmailAddress?.Address ?? "";
 
                 // Process attachments if requested
-#pragma warning disable SA1101
+
                 if (IncludeAttachments.IsPresent && message.HasAttachments == true)
                 {
-#pragma warning disable SA1101
+
                     var attachmentsProcessed = await ProcessAttachmentsAsync(
                         graphClient, messageId, fileName, cancellationToken);
-#pragma warning restore SA1101
+
                     result.AttachmentsProcessed = attachmentsProcessed;
                 }
-#pragma warning restore SA1101
+
             }
             catch (ServiceException ex)
             {
@@ -359,9 +359,9 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
             var receivedDate = message.ReceivedDateTime?.DateTime ?? DateTime.UtcNow;
 
             // Sanitize subject for filename
-#pragma warning disable SA1101
+
             var sanitizedSubject = SanitizeFileName(subject);
-#pragma warning restore SA1101
+
 
             // Truncate if too long
             if (sanitizedSubject.Length > 100)
@@ -391,10 +391,10 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
 
             try
             {
-#pragma warning disable SA1101
+
                 var attachments = await graphClient.Users[UserId].Messages[messageId].Attachments
                     .GetAsync(cancellationToken: cancellationToken);
-#pragma warning restore SA1101
+
 
                 if (attachments?.Value == null || !attachments.Value.Any())
                 {
@@ -402,9 +402,9 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
                 }
 
                 var emailNameWithoutExtension = Path.GetFileNameWithoutExtension(emailFileName);
-#pragma warning disable SA1101
+
                 var attachmentDir = Path.Combine(OutputDirectory!, $"{emailNameWithoutExtension}_Attachments");
-#pragma warning restore SA1101
+
                 Directory.CreateDirectory(attachmentDir);
 
                 foreach (var attachment in attachments.Value)
@@ -416,34 +416,34 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
                     {
                         if (attachment is FileAttachment fileAttachment)
                         {
-#pragma warning disable SA1101
+
                             await SaveFileAttachmentAsync(fileAttachment, attachmentDir);
-#pragma warning restore SA1101
+
                             attachmentsProcessed++;
                             WriteVerboseWithTimestamp($"Saved attachment: {fileAttachment.Name}");
                         }
                         else if (attachment is ItemAttachment itemAttachment)
                         {
-#pragma warning disable SA1101
+
                             await SaveItemAttachmentAsync(graphClient, messageId, itemAttachment, attachmentDir, cancellationToken);
-#pragma warning restore SA1101
+
                             attachmentsProcessed++;
                             WriteVerboseWithTimestamp($"Saved item attachment: {itemAttachment.Name}");
                         }
                     }
                     catch (Exception ex)
                     {
-#pragma warning disable SA1101
+
                         WriteWarningWithTimestamp($"Failed to save attachment {attachment.Name}: {ex.Message}");
-#pragma warning restore SA1101
+
                     }
                 }
             }
             catch (Exception ex)
             {
-#pragma warning disable SA1101
+
                 WriteWarningWithTimestamp($"Error processing attachments: {ex.Message}");
-#pragma warning restore SA1101
+
             }
 
             return attachmentsProcessed;
@@ -454,9 +454,9 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
             if (attachment.ContentBytes == null || string.IsNullOrEmpty(attachment.Name))
                 return;
 
-#pragma warning disable SA1101
+
             var fileName = SanitizeFileName(attachment.Name);
-#pragma warning restore SA1101
+
             var filePath = Path.Combine(attachmentDir, fileName);
 
             // Ensure unique filename
@@ -484,18 +484,18 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
             try
             {
                 // Get the full item attachment
-#pragma warning disable SA1101
+
                 var fullAttachment = await graphClient.Users[UserId]
                     .Messages[messageId]
                     .Attachments[attachment.Id]
                     .GetAsync(cancellationToken: cancellationToken);
-#pragma warning restore SA1101
+
 
                 if (fullAttachment is ItemAttachment itemAtt && itemAtt.Item is Message attachedMessage)
                 {
-#pragma warning disable SA1101
+
                     var fileName = SanitizeFileName($"{attachment.Name ?? "ItemAttachment"}.eml");
-#pragma warning restore SA1101
+
                     var filePath = Path.Combine(attachmentDir, fileName);
 
                     // For item attachments, we'll save the message properties as JSON
@@ -518,73 +518,73 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Mail
             }
             catch (Exception ex)
             {
-#pragma warning disable SA1101
+
                 WriteWarningWithTimestamp($"Error saving item attachment: {ex.Message}");
-#pragma warning restore SA1101
+
             }
         }
     }
 
-#pragma warning disable SA1600
+
     public class EmailExportResult
-#pragma warning restore SA1600
+
     {
-#pragma warning disable SA1600
+
         public string InternetMessageId { get; set; } = string.Empty;
-#pragma warning restore SA1600
-#pragma warning disable SA1600
-#pragma warning restore SA1600
-        #pragma warning disable SA1600
+
+
+
+
         public bool Success { get; set; }
         public string? ErrorMessage { get; set; }
-#pragma warning restore SA1600
-#pragma warning disable SA1600
+
+
         public string? FileName { get; set; }
-#pragma warning restore SA1600
-#pragma warning disable SA1600
+
+
         public string? FilePath { get; set; }
-#pragma warning restore SA1600
-#pragma warning disable SA1600
+
+
         public string Subject { get; set; } = string.Empty;
-#pragma warning restore SA1600
-#pragma warning disable SA1600
+
+
         public DateTime? ReceivedDateTime { get; set; }
-#pragma warning restore SA1600
-#pragma warning disable SA1600
+
+
         public string FromAddress { get; set; } = string.Empty;
-#pragma warning restore SA1600
-#pragma warning disable SA1600
-#pragma warning restore SA1600
-        #pragma warning disable SA1600
+
+
+
+
         public bool IsDuplicate { get; set; }
-#pragma warning restore SA1600
+
         public int AttachmentsProcessed { get; set; }
     }
 
-#pragma warning disable SA1600
+
     public class EmailExportSummary
-#pragma warning restore SA1600
+
     {
-#pragma warning disable SA1600
-#pragma warning restore SA1600
-        #pragma warning disable SA1600
+
+
+
         public DateTime StartTime { get; set; }
-#pragma warning restore SA1600
-        #pragma warning disable SA1600
+
+
         public TimeSpan ProcessingTime { get; set; }
-#pragma warning restore SA1600
-        #pragma warning disable SA1600
+
+
         public int TotalMessages { get; set; }
-#pragma warning restore SA1600
-        #pragma warning disable SA1600
+
+
         public int SuccessfulExports { get; set; }
-#pragma warning restore SA1600
-        #pragma warning disable SA1600
+
+
         public int FailedExports { get; set; }
-#pragma warning restore SA1600
-        #pragma warning disable SA1600
+
+
         public int Duplicates { get; set; }
-#pragma warning restore SA1600
+
         public int TotalAttachments { get; set; }
     }
 }

@@ -22,60 +22,60 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
     public class GetAzureEntraGraphLogsCmdlet : AsyncBaseCmdlet
     {
         [Parameter(HelpMessage = "Start date for log collection. Default: 30 days ago")]
-#pragma warning disable SA1600
+
         public DateTime? StartDate { get; set; }
-#pragma warning restore SA1600
+
 
         [Parameter(HelpMessage = "End date for log collection. Default: Now")]
-#pragma warning disable SA1600
+
         public DateTime? EndDate { get; set; }
-#pragma warning restore SA1600
+
 
         [Parameter(HelpMessage = "Type of logs to collect: SignIn, Audit, or Both. Default: Both")]
         [ValidateSet("SignIn", "Audit", "Both")]
-#pragma warning disable SA1600
+
         public string LogType { get; set; } = "Both";
-#pragma warning restore SA1600
+
 
         [Parameter(HelpMessage = "Event types to collect for sign-in logs")]
         [ValidateSet("All", "InteractiveUser", "NonInteractiveUser", "ServicePrincipal", "ManagedIdentity")]
-#pragma warning disable SA1600
+
         public string[] EventTypes { get; set; } = new[] { "All" };
-#pragma warning restore SA1600
+
 
         [Parameter(HelpMessage = "Comma-separated list of user IDs to filter results")]
-#pragma warning disable SA1600
+
         public string[]? UserIds { get; set; }
-#pragma warning restore SA1600
+
 
         [Parameter(HelpMessage = "Include target resources in audit log filtering when UserIds is specified")]
-#pragma warning disable SA1600
-#pragma warning restore SA1600
+
+
         public SwitchParameter IncludeTargetResources { get; set; }
 
         [Parameter(HelpMessage = "Output format for the results. Default: JSON")]
         [ValidateSet("JSON", "SOF-ELK")]
-#pragma warning disable SA1600
+
         public string OutputFormat { get; set; } = "JSON";
-#pragma warning restore SA1600
+
 
         [Parameter(HelpMessage = "Merge output into single files per log type")]
-#pragma warning disable SA1600
-#pragma warning restore SA1600
+
+
         public SwitchParameter MergeOutput { get; set; }
 
         [Parameter(HelpMessage = "Text encoding for the output file. Default: UTF8")]
-#pragma warning disable SA1600
-        public string Encoding { get; set; } = "UTF8";
-#pragma warning restore SA1600
 
-#pragma warning disable SA1600
+        public string Encoding { get; set; } = "UTF8";
+
+
+
         protected override void ProcessRecord()
-#pragma warning restore SA1600
+
         {
             var results = RunAsyncOperation(GetEntraGraphLogsAsync, "Getting Entra Graph Logs");
 
-#pragma warning disable SA1101
+
             if (!Async.IsPresent && results != null)
             {
                 foreach (var result in results)
@@ -83,7 +83,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                     WriteObject(result);
                 }
             }
-#pragma warning restore SA1101
+
         }
 
         private async Task<List<EntraLogEntry>> GetEntraGraphLogsAsync(
@@ -92,38 +92,38 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
         {
             WriteVerboseWithTimestamp("Starting Entra ID Graph Log Collection");
 
-#pragma warning disable SA1101
+
             if (!RequireGraphConnection())
             {
                 throw new InvalidOperationException("Not connected to Microsoft Graph. Please run Connect-M365 first.");
             }
-#pragma warning restore SA1101
 
-#pragma warning disable SA1101
+
+
             var graphClient = AuthManager.GraphClient!;
-#pragma warning restore SA1101
+
 
             // Set default dates
-#pragma warning disable SA1101
+
             var startDate = StartDate ?? DateTime.UtcNow.AddDays(-30);
-#pragma warning restore SA1101
-#pragma warning disable SA1101
+
+
             var endDate = EndDate ?? DateTime.UtcNow;
-#pragma warning restore SA1101
+
 
             WriteVerboseWithTimestamp($"Start Date: {startDate:yyyy-MM-dd HH:mm:ss}");
             WriteVerboseWithTimestamp($"End Date: {endDate:yyyy-MM-dd HH:mm:ss}");
-#pragma warning disable SA1101
+
             WriteVerboseWithTimestamp($"Log Type: {LogType}");
-#pragma warning restore SA1101
-#pragma warning disable SA1101
+
+
             if (UserIds?.Length > 0)
             {
-#pragma warning disable SA1101
+
                 WriteVerboseWithTimestamp($"Filtering for Users: {string.Join(", ", UserIds)}");
-#pragma warning restore SA1101
+
             }
-#pragma warning restore SA1101
+
 
             var allResults = new List<EntraLogEntry>();
             var summary = new EntraLogSummary
@@ -132,7 +132,7 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
             };
 
             // Collect Sign-In Logs
-#pragma warning disable SA1101
+
             if (LogType == "SignIn" || LogType == "Both")
             {
                 progress.Report(new Core.AsyncOperations.TaskProgress
@@ -141,18 +141,18 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                     PercentComplete = 10
                 });
 
-#pragma warning disable SA1101
+
                 var signInResults = await CollectSignInLogsAsync(graphClient, startDate, endDate, progress, cancellationToken);
-#pragma warning restore SA1101
+
                 allResults.AddRange(signInResults);
                 summary.SignInRecords = signInResults.Count;
 
                 WriteVerboseWithTimestamp($"Collected {signInResults.Count} sign-in log entries");
             }
-#pragma warning restore SA1101
+
 
             // Collect Audit Logs
-#pragma warning disable SA1101
+
             if (LogType == "Audit" || LogType == "Both")
             {
                 progress.Report(new Core.AsyncOperations.TaskProgress
@@ -161,15 +161,15 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                     PercentComplete = 60
                 });
 
-#pragma warning disable SA1101
+
                 var auditResults = await CollectAuditLogsAsync(graphClient, startDate, endDate, progress, cancellationToken);
-#pragma warning restore SA1101
+
                 allResults.AddRange(auditResults);
                 summary.AuditRecords = auditResults.Count;
 
                 WriteVerboseWithTimestamp($"Collected {auditResults.Count} audit log entries");
             }
-#pragma warning restore SA1101
+
 
             progress.Report(new Core.AsyncOperations.TaskProgress
             {
@@ -178,14 +178,14 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
             });
 
             // Export results if output directory is specified
-#pragma warning disable SA1101
+
             if (!string.IsNullOrEmpty(OutputDirectory))
             {
-#pragma warning disable SA1101
+
                 await ExportLogsAsync(allResults, summary, cancellationToken);
-#pragma warning restore SA1101
+
             }
-#pragma warning restore SA1101
+
 
             summary.TotalRecords = allResults.Count;
             summary.ProcessingTime = DateTime.UtcNow - summary.StartTime;
@@ -214,9 +214,9 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
             CancellationToken cancellationToken)
         {
             var results = new List<EntraLogEntry>();
-#pragma warning disable SA1101
+
             var eventTypesToProcess = DetermineEventTypes();
-#pragma warning restore SA1101
+
 
             var currentEventType = 1;
             foreach (var eventType in eventTypesToProcess)
@@ -226,9 +226,9 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
 
                 WriteVerboseWithTimestamp($"Acquiring {eventType} sign-in logs");
 
-#pragma warning disable SA1101
+
                 var filter = BuildSignInFilter(startDate, endDate, eventType);
-#pragma warning restore SA1101
+
                 WriteVerboseWithTimestamp($"Using filter: {filter}");
 
                 try
@@ -246,9 +246,9 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                             signIns,
                             (signIn) =>
                             {
-#pragma warning disable SA1101
+
                                 results.Add(MapSignInToLogEntry(signIn, eventType));
-#pragma warning restore SA1101
+
                                 return !cancellationToken.IsCancellationRequested;
                             });
 
@@ -263,9 +263,9 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                 }
                 catch (Exception ex)
                 {
-#pragma warning disable SA1101
+
                     WriteErrorWithTimestamp($"Error collecting {eventType} sign-in logs: {ex.Message}", ex);
-#pragma warning restore SA1101
+
                 }
 
                 currentEventType++;
@@ -285,9 +285,9 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
 
             WriteVerboseWithTimestamp("Acquiring directory audit logs");
 
-#pragma warning disable SA1101
+
             var filter = BuildAuditFilter(startDate, endDate);
-#pragma warning restore SA1101
+
             WriteVerboseWithTimestamp($"Using filter: {filter}");
 
             try
@@ -305,9 +305,9 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                         auditLogs,
                         (audit) =>
                         {
-#pragma warning disable SA1101
+
                             results.Add(MapAuditToLogEntry(audit));
-#pragma warning restore SA1101
+
                             return !cancellationToken.IsCancellationRequested;
                         });
 
@@ -321,9 +321,9 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
             }
             catch (Exception ex)
             {
-#pragma warning disable SA1101
+
                 WriteErrorWithTimestamp($"Error collecting audit logs: {ex.Message}", ex);
-#pragma warning restore SA1101
+
             }
 
             return results;
@@ -331,10 +331,10 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
 
         private List<string> DetermineEventTypes()
         {
-#pragma warning disable SA1101
+
             if (EventTypes.Contains("All"))
             {
-#pragma warning disable SA1101
+
                 if (UserIds?.Length > 0)
                 {
                     // When filtering by users, skip service principal and managed identity as they won't have results
@@ -344,13 +344,13 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
                 {
                     return new List<string> { "InteractiveUser", "NonInteractiveUser", "ServicePrincipal", "ManagedIdentity" };
                 }
-#pragma warning restore SA1101
-            }
-#pragma warning restore SA1101
 
-#pragma warning disable SA1101
+            }
+
+
+
             return EventTypes.ToList();
-#pragma warning restore SA1101
+
         }
 
         private string BuildSignInFilter(DateTime startDate, DateTime endDate, string eventType)
@@ -378,15 +378,15 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
             }
 
             // Add user filter if specified
-#pragma warning disable SA1101
+
             if (UserIds?.Length > 0 && (eventType.ToLowerInvariant().Contains("user")))
             {
-#pragma warning disable SA1101
+
                 var userFilters = UserIds.Select(u => $"startsWith(userPrincipalName, '{u}')");
-#pragma warning restore SA1101
+
                 filter += $" and ({string.Join(" or ", userFilters)})";
             }
-#pragma warning restore SA1101
+
 
             return filter;
         }
@@ -398,25 +398,25 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
 
             var filter = $"activityDateTime ge {startDateStr} and activityDateTime le {endDateStr}";
 
-#pragma warning disable SA1101
+
             if (UserIds?.Length > 0)
             {
-#pragma warning disable SA1101
+
                 var userFilters = UserIds.Select(u => $"startsWith(initiatedBy/user/userPrincipalName, '{u}')");
-#pragma warning restore SA1101
+
                 filter += $" and ({string.Join(" or ", userFilters)})";
 
-#pragma warning disable SA1101
+
                 if (IncludeTargetResources.IsPresent)
                 {
-#pragma warning disable SA1101
+
                     var targetFilters = UserIds.Select(u => $"targetResources/any(tr: tr/userPrincipalName eq '{u}')");
-#pragma warning restore SA1101
+
                     filter = $"({filter}) or ({string.Join(" or ", targetFilters)})";
                 }
-#pragma warning restore SA1101
+
             }
-#pragma warning restore SA1101
+
 
             return filter;
         }
@@ -468,17 +468,17 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
             EntraLogSummary summary,
             CancellationToken cancellationToken)
         {
-#pragma warning disable SA1101
-            Directory.CreateDirectory(OutputDirectory!);
-#pragma warning restore SA1101
 
-#pragma warning disable SA1101
+            Directory.CreateDirectory(OutputDirectory!);
+
+
+
             if (MergeOutput.IsPresent)
             {
                 // Export all logs to single file
-#pragma warning disable SA1101
+
                 await ExportLogFile(results, "Combined", cancellationToken);
-#pragma warning restore SA1101
+
             }
             else
             {
@@ -488,24 +488,24 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
 
                 if (signInLogs.Any())
                 {
-#pragma warning disable SA1101
+
                     await ExportLogFile(signInLogs, "SignIn", cancellationToken);
-#pragma warning restore SA1101
+
                 }
 
                 if (auditLogs.Any())
                 {
-#pragma warning disable SA1101
+
                     await ExportLogFile(auditLogs, "Audit", cancellationToken);
-#pragma warning restore SA1101
+
                 }
             }
-#pragma warning restore SA1101
+
 
             // Export summary
-#pragma warning disable SA1101
+
             var summaryPath = Path.Combine(OutputDirectory!, $"{DateTime.UtcNow:yyyyMMddHHmmss}-EntraLogSummary.json");
-#pragma warning restore SA1101
+
             var summaryJson = System.Text.Json.JsonSerializer.Serialize(summary, new System.Text.Json.JsonSerializerOptions
             {
                 WriteIndented = true
@@ -519,9 +519,9 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
             CancellationToken cancellationToken)
         {
             var timestamp = DateTime.UtcNow.ToString("yyyyMMddHHmmss");
-#pragma warning disable SA1101
+
             var fileName = Path.Combine(OutputDirectory!, $"{timestamp}-{logType}Logs.json");
-#pragma warning restore SA1101
+
 
             using var stream = File.Create(fileName);
             using var processor = new HighPerformanceJsonProcessor();
@@ -531,93 +531,93 @@ namespace Microsoft.ExtractorSuite.Cmdlets.Identity
         }
     }
 
-#pragma warning disable SA1600
+
     public class EntraLogEntry
-#pragma warning restore SA1600
+
     {
-#pragma warning disable SA1600
+
         public string Id { get; set; } = string.Empty;
-#pragma warning restore SA1600
-#pragma warning disable SA1600
+
+
         public string LogType { get; set; } = string.Empty; // SignIn or Audit
-#pragma warning restore SA1600
-#pragma warning disable SA1600
+
+
         public string EventType { get; set; } = string.Empty;
-#pragma warning restore SA1600
-#pragma warning disable SA1600
-#pragma warning restore SA1600
-        #pragma warning disable SA1600
+
+
+
+
         public DateTime Timestamp { get; set; }
         public string UserPrincipalName { get; set; } = string.Empty;
-#pragma warning restore SA1600
-#pragma warning disable SA1600
+
+
         public string AppDisplayName { get; set; } = string.Empty;
-#pragma warning restore SA1600
-#pragma warning disable SA1600
+
+
         public string ClientAppUsed { get; set; } = string.Empty;
-#pragma warning restore SA1600
-#pragma warning disable SA1600
+
+
         public string IpAddress { get; set; } = string.Empty;
-#pragma warning restore SA1600
-#pragma warning disable SA1600
+
+
         public string Location { get; set; } = string.Empty;
-#pragma warning restore SA1600
-#pragma warning disable SA1600
+
+
         public string DeviceDetail { get; set; } = string.Empty;
-#pragma warning restore SA1600
-#pragma warning disable SA1600
+
+
         public string Status { get; set; } = string.Empty;
-#pragma warning restore SA1600
-#pragma warning disable SA1600
+
+
         public string RiskLevelDuringSignIn { get; set; } = string.Empty;
-#pragma warning restore SA1600
-#pragma warning disable SA1600
+
+
         public string RiskState { get; set; } = string.Empty;
-#pragma warning restore SA1600
-#pragma warning disable SA1600
+
+
         public string ConditionalAccessStatus { get; set; } = string.Empty;
-#pragma warning restore SA1600
-#pragma warning disable SA1600
+
+
         public string ActivityDisplayName { get; set; } = string.Empty;
-#pragma warning restore SA1600
-#pragma warning disable SA1600
+
+
         public string Category { get; set; } = string.Empty;
-#pragma warning restore SA1600
-#pragma warning disable SA1600
+
+
         public string Result { get; set; } = string.Empty;
-#pragma warning restore SA1600
-#pragma warning disable SA1600
+
+
         public string ResultReason { get; set; } = string.Empty;
-#pragma warning restore SA1600
-#pragma warning disable SA1600
+
+
         public string CorrelationId { get; set; } = string.Empty;
-#pragma warning restore SA1600
-#pragma warning disable SA1600
+
+
         public string Details { get; set; } = string.Empty;
-#pragma warning restore SA1600
+
     }
 
-#pragma warning disable SA1600
+
     public class EntraLogSummary
-#pragma warning restore SA1600
+
     {
-#pragma warning disable SA1600
-#pragma warning restore SA1600
-        #pragma warning disable SA1600
+
+
+
         public DateTime StartTime { get; set; }
-#pragma warning restore SA1600
-        #pragma warning disable SA1600
+
+
         public TimeSpan ProcessingTime { get; set; }
-#pragma warning restore SA1600
-        #pragma warning disable SA1600
+
+
         public int TotalRecords { get; set; }
-#pragma warning restore SA1600
-        #pragma warning disable SA1600
+
+
         public int SignInRecords { get; set; }
-#pragma warning restore SA1600
-        #pragma warning disable SA1600
+
+
         public int AuditRecords { get; set; }
         public List<string> EventTypesProcessed { get; set; } = new();
-#pragma warning restore SA1600
+
     }
 }

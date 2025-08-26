@@ -14,57 +14,57 @@ namespace Microsoft.ExtractorSuite.Core.Graph
     using Newtonsoft.Json;
 
 
-#pragma warning disable SA1600
+
     public class GraphApiClient
-#pragma warning restore SA1600
+
     {
-#pragma warning disable SA1309
+
         private readonly GraphServiceClient _graphClient;
-#pragma warning restore SA1309
-#pragma warning disable SA1309
-#pragma warning disable SA1600
+
+
+
         private readonly HttpClient _httpClient;
-#pragma warning restore SA1600
-#pragma warning disable SA1309
+
+
         private readonly Microsoft.ExtractorSuite.Core.Logging.ILogger? _logger;
-#pragma warning restore SA1309
+
 
         public GraphApiClient(string tenantId, string clientId, string clientSecret, Microsoft.ExtractorSuite.Core.Logging.ILogger? logger = null)
         {
-#pragma warning disable SA1101
+
             _logger = logger;
-#pragma warning restore SA1101
 
-#pragma warning disable SA1600
+
+
             var credential = new ClientSecretCredential(tenantId, clientId, clientSecret);
-#pragma warning restore SA1600
-#pragma warning disable SA1101
-            _graphClient = new GraphServiceClient(credential);
-#pragma warning restore SA1101
 
-#pragma warning disable SA1101
+
+            _graphClient = new GraphServiceClient(credential);
+
+
+
             _httpClient = new HttpClient();
-#pragma warning restore SA1101
+
         }
 
         public GraphApiClient(GraphServiceClient graphClient, Microsoft.ExtractorSuite.Core.Logging.ILogger? logger = null)
-#pragma warning disable SA1600
+
         {
-#pragma warning restore SA1600
-#pragma warning disable SA1101
+
+
             _graphClient = graphClient ?? throw new ArgumentNullException(nameof(graphClient));
-#pragma warning restore SA1101
-#pragma warning disable SA1101
+
+
             _logger = logger;
-#pragma warning restore SA1101
-#pragma warning disable SA1101
+
+
             _httpClient = new HttpClient();
-#pragma warning restore SA1101
+
         }
 
-#pragma warning disable SA1101
+
         public GraphServiceClient Client => _graphClient;
-#pragma warning restore SA1101
+
 
         /// <summary>
         /// Check if the Graph client is authenticated and connected
@@ -73,9 +73,9 @@ namespace Microsoft.ExtractorSuite.Core.Graph
         {
             try
             {
-#pragma warning disable SA1101
+
                 await _graphClient.Me.GetAsync();
-#pragma warning restore SA1101
+
                 return true;
             }
             catch
@@ -91,16 +91,16 @@ namespace Microsoft.ExtractorSuite.Core.Graph
         {
             try
             {
-#pragma warning disable SA1101
+
                 var applications = await _graphClient.Applications.GetAsync();
-#pragma warning restore SA1101
+
                 return applications?.Value ?? new List<Application>();
             }
             catch (Exception ex)
             {
-#pragma warning disable SA1101
+
                 _logger?.WriteErrorWithTimestamp("Error getting applications", ex);
-#pragma warning restore SA1101
+
                 return new List<Application>();
             }
         }
@@ -112,16 +112,16 @@ namespace Microsoft.ExtractorSuite.Core.Graph
         {
             try
             {
-#pragma warning disable SA1101
+
                 var servicePrincipals = await _graphClient.ServicePrincipals.GetAsync();
-#pragma warning restore SA1101
+
                 return servicePrincipals?.Value ?? new List<ServicePrincipal>();
             }
             catch (Exception ex)
             {
-#pragma warning disable SA1101
+
                 _logger?.WriteErrorWithTimestamp("Error getting service principals", ex);
-#pragma warning restore SA1101
+
                 return new List<ServicePrincipal>();
             }
         }
@@ -133,7 +133,7 @@ namespace Microsoft.ExtractorSuite.Core.Graph
         {
             try
             {
-#pragma warning disable SA1101
+
                 var grants = await _graphClient.Oauth2PermissionGrants.GetAsync(requestConfig =>
                 {
                     if (!string.IsNullOrEmpty(filter))
@@ -141,14 +141,14 @@ namespace Microsoft.ExtractorSuite.Core.Graph
                         requestConfig.QueryParameters.Filter = filter;
                     }
                 });
-#pragma warning restore SA1101
+
                 return grants?.Value ?? new List<OAuth2PermissionGrant>();
             }
             catch (Exception ex)
             {
-#pragma warning disable SA1101
+
                 _logger?.WriteErrorWithTimestamp("Error getting OAuth2 permission grants", ex);
-#pragma warning restore SA1101
+
                 return new List<OAuth2PermissionGrant>();
             }
         }
@@ -160,16 +160,16 @@ namespace Microsoft.ExtractorSuite.Core.Graph
         {
             try
             {
-#pragma warning disable SA1101
+
                 var assignments = await _graphClient.ServicePrincipals[servicePrincipalId].AppRoleAssignments.GetAsync();
-#pragma warning restore SA1101
+
                 return assignments?.Value ?? new List<AppRoleAssignment>();
             }
             catch (Exception ex)
             {
-#pragma warning disable SA1101
+
                 _logger?.WriteErrorWithTimestamp($"Error getting app role assignments for {servicePrincipalId}", ex);
-#pragma warning restore SA1101
+
                 return new List<AppRoleAssignment>();
             }
         }
@@ -181,16 +181,16 @@ namespace Microsoft.ExtractorSuite.Core.Graph
         {
             try
             {
-#pragma warning disable SA1101
+
                 var users = await _graphClient.Users.GetAsync();
-#pragma warning restore SA1101
+
                 return users?.Value ?? new List<User>();
             }
             catch (Exception ex)
             {
-#pragma warning disable SA1101
+
                 _logger?.WriteErrorWithTimestamp("Error getting users", ex);
-#pragma warning restore SA1101
+
                 return new List<User>();
             }
         }
@@ -202,7 +202,7 @@ namespace Microsoft.ExtractorSuite.Core.Graph
         {
             try
             {
-#pragma warning disable SA1101
+
                 return await _graphClient.Users[userId].GetAsync(requestConfig =>
                 {
                     if (selectProperties != null && selectProperties.Length > 0)
@@ -210,13 +210,13 @@ namespace Microsoft.ExtractorSuite.Core.Graph
                         requestConfig.QueryParameters.Select = selectProperties;
                     }
                 });
-#pragma warning restore SA1101
+
             }
             catch (Exception ex)
             {
-#pragma warning disable SA1101
+
                 _logger?.WriteErrorWithTimestamp($"Error getting user {userId}", ex);
-#pragma warning restore SA1101
+
                 return null;
             }
         }
@@ -228,16 +228,16 @@ namespace Microsoft.ExtractorSuite.Core.Graph
         {
             try
             {
-#pragma warning disable SA1101
+
                 var groups = await _graphClient.Groups.GetAsync();
-#pragma warning restore SA1101
+
                 return groups?.Value ?? new List<Group>();
             }
             catch (Exception ex)
             {
-#pragma warning disable SA1101
+
                 _logger?.WriteErrorWithTimestamp("Error getting groups", ex);
-#pragma warning restore SA1101
+
                 return new List<Group>();
             }
         }
@@ -249,16 +249,16 @@ namespace Microsoft.ExtractorSuite.Core.Graph
         {
             try
             {
-#pragma warning disable SA1101
+
                 var policies = await _graphClient.Identity.ConditionalAccess.Policies.GetAsync();
-#pragma warning restore SA1101
+
                 return policies?.Value ?? new List<ConditionalAccessPolicy>();
             }
             catch (Exception ex)
             {
-#pragma warning disable SA1101
+
                 _logger?.WriteErrorWithTimestamp("Error getting conditional access policies", ex);
-#pragma warning restore SA1101
+
                 return new List<ConditionalAccessPolicy>();
             }
         }
@@ -270,16 +270,16 @@ namespace Microsoft.ExtractorSuite.Core.Graph
         {
             try
             {
-#pragma warning disable SA1101
+
                 var devices = await _graphClient.Devices.GetAsync();
-#pragma warning restore SA1101
+
                 return devices?.Value ?? new List<Device>();
             }
             catch (Exception ex)
             {
-#pragma warning disable SA1101
+
                 _logger?.WriteErrorWithTimestamp("Error getting devices", ex);
-#pragma warning restore SA1101
+
                 return new List<Device>();
             }
         }
@@ -291,16 +291,16 @@ namespace Microsoft.ExtractorSuite.Core.Graph
         {
             try
             {
-#pragma warning disable SA1101
+
                 var roles = await _graphClient.DirectoryRoles.GetAsync();
-#pragma warning restore SA1101
+
                 return roles?.Value ?? new List<DirectoryRole>();
             }
             catch (Exception ex)
             {
-#pragma warning disable SA1101
+
                 _logger?.WriteErrorWithTimestamp("Error getting directory roles", ex);
-#pragma warning restore SA1101
+
                 return new List<DirectoryRole>();
             }
         }
@@ -312,16 +312,16 @@ namespace Microsoft.ExtractorSuite.Core.Graph
         {
             try
             {
-#pragma warning disable SA1101
+
                 var alerts = await _graphClient.Security.Alerts.GetAsync();
-#pragma warning restore SA1101
+
                 return alerts?.Value ?? new List<Alert>();
             }
             catch (Exception ex)
             {
-#pragma warning disable SA1101
+
                 _logger?.WriteErrorWithTimestamp("Error getting security alerts", ex);
-#pragma warning restore SA1101
+
                 return new List<Alert>();
             }
         }
@@ -333,16 +333,16 @@ namespace Microsoft.ExtractorSuite.Core.Graph
         {
             try
             {
-#pragma warning disable SA1101
+
                 var skus = await _graphClient.SubscribedSkus.GetAsync();
-#pragma warning restore SA1101
+
                 return skus?.Value ?? new List<SubscribedSku>();
             }
             catch (Exception ex)
             {
-#pragma warning disable SA1101
+
                 _logger?.WriteErrorWithTimestamp("Error getting subscribed SKUs", ex);
-#pragma warning restore SA1101
+
                 return new List<SubscribedSku>();
             }
         }
@@ -354,20 +354,20 @@ namespace Microsoft.ExtractorSuite.Core.Graph
         {
             try
             {
-#pragma warning disable SA1101
+
                 var users = await _graphClient.Users.GetAsync(requestConfig =>
                 {
                     requestConfig.QueryParameters.Filter = "assignedLicenses/$count ne 0";
                     requestConfig.QueryParameters.Select = new[] { "id", "displayName", "userPrincipalName", "assignedLicenses" };
                 });
-#pragma warning restore SA1101
+
                 return users?.Value ?? new List<User>();
             }
             catch (Exception ex)
             {
-#pragma warning disable SA1101
+
                 _logger?.WriteErrorWithTimestamp("Error getting users with licenses", ex);
-#pragma warning restore SA1101
+
                 return new List<User>();
             }
         }
@@ -379,9 +379,9 @@ namespace Microsoft.ExtractorSuite.Core.Graph
         {
             try
             {
-#pragma warning disable SA1101
+
                 var me = await _graphClient.Me.GetAsync();
-#pragma warning restore SA1101
+
                 return new {
                     UserId = me?.Id,
                     UserPrincipalName = me?.UserPrincipalName,
@@ -390,9 +390,9 @@ namespace Microsoft.ExtractorSuite.Core.Graph
             }
             catch (Exception ex)
             {
-#pragma warning disable SA1101
+
                 _logger?.WriteErrorWithTimestamp("Error getting authentication info", ex);
-#pragma warning restore SA1101
+
                 return new { Error = ex.Message };
             }
         }
@@ -404,19 +404,19 @@ namespace Microsoft.ExtractorSuite.Core.Graph
         {
             try
             {
-#pragma warning disable SA1101
+
                 var riskyUsers = await _graphClient.IdentityProtection.RiskyUsers.GetAsync(requestConfig =>
                 {
                     requestConfig.QueryParameters.Filter = $"userId eq '{userId}'";
                 });
-#pragma warning restore SA1101
+
                 return riskyUsers?.Value?.FirstOrDefault();
             }
             catch (Exception ex)
             {
-#pragma warning disable SA1101
+
                 _logger?.WriteErrorWithTimestamp($"Error getting risky user {userId}", ex);
-#pragma warning restore SA1101
+
                 return null;
             }
         }
@@ -428,16 +428,16 @@ namespace Microsoft.ExtractorSuite.Core.Graph
         {
             try
             {
-#pragma warning disable SA1101
+
                 var riskyUsers = await _graphClient.IdentityProtection.RiskyUsers.GetAsync();
-#pragma warning restore SA1101
+
                 return riskyUsers?.Value ?? new List<RiskyUser>();
             }
             catch (Exception ex)
             {
-#pragma warning disable SA1101
+
                 _logger?.WriteErrorWithTimestamp("Error getting risky users", ex);
-#pragma warning restore SA1101
+
                 return new List<RiskyUser>();
             }
         }
@@ -449,7 +449,7 @@ namespace Microsoft.ExtractorSuite.Core.Graph
         {
             try
             {
-#pragma warning disable SA1101
+
                 var detections = await _graphClient.IdentityProtection.RiskDetections.GetAsync(requestConfig =>
                 {
                     if (!string.IsNullOrEmpty(filter))
@@ -457,14 +457,14 @@ namespace Microsoft.ExtractorSuite.Core.Graph
                         requestConfig.QueryParameters.Filter = filter;
                     }
                 });
-#pragma warning restore SA1101
+
                 return detections?.Value ?? new List<RiskDetection>();
             }
             catch (Exception ex)
             {
-#pragma warning disable SA1101
+
                 _logger?.WriteErrorWithTimestamp("Error getting risk detections", ex);
-#pragma warning restore SA1101
+
                 return new List<RiskDetection>();
             }
         }
@@ -476,16 +476,16 @@ namespace Microsoft.ExtractorSuite.Core.Graph
         {
             try
             {
-#pragma warning disable SA1101
+
                 var members = await _graphClient.DirectoryRoles[roleId].Members.GetAsync();
-#pragma warning restore SA1101
+
                 return members?.Value ?? new List<DirectoryObject>();
             }
             catch (Exception ex)
             {
-#pragma warning disable SA1101
+
                 _logger?.WriteErrorWithTimestamp($"Error getting directory role members for {roleId}", ex);
-#pragma warning restore SA1101
+
                 return new List<DirectoryObject>();
             }
         }
@@ -498,16 +498,16 @@ namespace Microsoft.ExtractorSuite.Core.Graph
             try
             {
                 // This is a placeholder - actual PIM endpoints may vary
-#pragma warning disable SA1101
+
                 _logger?.WriteWarningWithTimestamp("PIM active assignments not implemented - returning empty list");
-#pragma warning restore SA1101
+
                 return new List<object>();
             }
             catch (Exception ex)
             {
-#pragma warning disable SA1101
+
                 _logger?.WriteErrorWithTimestamp("Error getting PIM active assignments", ex);
-#pragma warning restore SA1101
+
                 return new List<object>();
             }
         }
@@ -520,16 +520,16 @@ namespace Microsoft.ExtractorSuite.Core.Graph
             try
             {
                 // This is a placeholder - actual PIM endpoints may vary
-#pragma warning disable SA1101
+
                 _logger?.WriteWarningWithTimestamp("PIM eligible assignments not implemented - returning empty list");
-#pragma warning restore SA1101
+
                 return new List<object>();
             }
             catch (Exception ex)
             {
-#pragma warning disable SA1101
+
                 _logger?.WriteErrorWithTimestamp("Error getting PIM eligible assignments", ex);
-#pragma warning restore SA1101
+
                 return new List<object>();
             }
         }
@@ -541,18 +541,18 @@ namespace Microsoft.ExtractorSuite.Core.Graph
         {
             try
             {
-#pragma warning disable SA1101
+
                 var members = await _graphClient.Groups[groupId].Members.GetAsync();
-#pragma warning restore SA1101
+
                 return members?.Value ?? new List<DirectoryObject>();
             }
             catch (Exception ex)
-#pragma warning disable SA1600
+
             {
-#pragma warning restore SA1600
-#pragma warning disable SA1101
+
+
                 _logger?.WriteErrorWithTimestamp($"Error getting group members for {groupId}", ex);
-#pragma warning restore SA1101
+
                 return new List<DirectoryObject>();
             }
         }
@@ -561,21 +561,21 @@ namespace Microsoft.ExtractorSuite.Core.Graph
         {
             try
             {
-#pragma warning disable SA1101
+
                 var response = await _httpClient.GetAsync($"https://graph.microsoft.com/v1.0/{endpoint}");
-#pragma warning restore SA1101
+
                 response.EnsureSuccessStatusCode();
 
                 var content = await response.Content.ReadAsStringAsync();
                 return JsonConvert.DeserializeObject<T>(content) ?? throw new InvalidOperationException("Failed to deserialize response");
             }
             catch (Exception ex)
-#pragma warning disable SA1600
+
             {
-#pragma warning restore SA1600
-#pragma warning disable SA1101
+
+
                 _logger?.WriteErrorWithTimestamp($"Error calling Graph API endpoint: {endpoint}", ex);
-#pragma warning restore SA1101
+
                 throw;
             }
         }
@@ -587,9 +587,9 @@ namespace Microsoft.ExtractorSuite.Core.Graph
 
             while (!string.IsNullOrEmpty(nextLink))
             {
-#pragma warning disable SA1101
+
                 var response = await _httpClient.GetAsync(nextLink);
-#pragma warning restore SA1101
+
                 response.EnsureSuccessStatusCode();
 
                 var content = await response.Content.ReadAsStringAsync();

@@ -7,13 +7,13 @@ using Microsoft.ExtractorSuite.Cmdlets.MLPipeline;
 
 namespace Microsoft.ExtractorSuite.Core.MLPipeline
 {
-#pragma warning disable SA1600
+
     public class DataQualityAnalyzer
-#pragma warning restore SA1600
+
     {
-#pragma warning disable SA1600
+
         public async Task<DataQualityMetrics> AnalyzeDataQualityAsync(
-#pragma warning restore SA1600
+
             List<MLTrainingRecord> data,
             CancellationToken cancellationToken)
         {
@@ -32,35 +32,35 @@ namespace Microsoft.ExtractorSuite.Core.MLPipeline
             try
             {
                 // Analyze completeness
-#pragma warning disable SA1101
+
                 await AnalyzeCompletenessAsync(data, metrics, cancellationToken);
-#pragma warning restore SA1101
+
 
                 // Analyze data types
-#pragma warning disable SA1101
+
                 await AnalyzeDataTypesAsync(data, metrics, cancellationToken);
-#pragma warning restore SA1101
+
 
                 // Analyze value distributions
-#pragma warning disable SA1101
+
                 await AnalyzeValueDistributionsAsync(data, metrics, cancellationToken);
-#pragma warning restore SA1101
+
 
                 // Detect anomalies
-#pragma warning disable SA1101
+
                 await DetectAnomaliesAsync(data, metrics, cancellationToken);
-#pragma warning restore SA1101
+
 
                 // Calculate overall quality score
-#pragma warning disable SA1101
+
                 metrics.CompletenessScore = CalculateCompletenessScore(metrics);
-#pragma warning restore SA1101
+
                 metrics.CompleteRecords = data.Count - metrics.IncompleteRecords;
 
                 // Generate quality recommendations
-#pragma warning disable SA1101
+
                 await GenerateQualityRecommendationsAsync(metrics, cancellationToken);
-#pragma warning restore SA1101
+
             }
             catch (Exception ex)
             {
@@ -136,15 +136,15 @@ namespace Microsoft.ExtractorSuite.Core.MLPipeline
 
                 if (values.Any())
                 {
-#pragma warning disable SA1101
+
                     var dataType = DetermineDataType(values);
-#pragma warning restore SA1101
+
                     metrics.DataTypesByFeature[feature] = dataType;
 
                     // Check for type consistency
-#pragma warning disable SA1101
+
                     var inconsistentTypes = values.Where(v => !IsConsistentType(v, dataType)).ToList();
-#pragma warning restore SA1101
+
                     if (inconsistentTypes.Any())
                     {
                         var percentage = (double)inconsistentTypes.Count / values.Count * 100;
@@ -231,9 +231,9 @@ namespace Microsoft.ExtractorSuite.Core.MLPipeline
             }
 
             // Detect feature value anomalies
-#pragma warning disable SA1101
+
             await DetectFeatureAnomaliesAsync(data, metrics, cancellationToken);
-#pragma warning restore SA1101
+
 
             await Task.CompletedTask;
         }
@@ -244,12 +244,12 @@ namespace Microsoft.ExtractorSuite.Core.MLPipeline
             CancellationToken cancellationToken)
         {
             // Check for suspicious IP addresses
-#pragma warning disable SA1101
+
             var suspiciousIPs = data.Where(r =>
                 r.Features.ContainsKey("ipAddress") &&
                 r.Features["ipAddress"] != null &&
                 IsSuspiciousIP(r.Features["ipAddress"].ToString())).ToList();
-#pragma warning restore SA1101
+
 
             if (suspiciousIPs.Any())
             {
@@ -380,11 +380,11 @@ namespace Microsoft.ExtractorSuite.Core.MLPipeline
             return privateRanges.Any(range => ipAddress.StartsWith(range, StringComparison.OrdinalIgnoreCase));
         }
 
-#pragma warning disable SA1600
+
         public Dictionary<string, object> GenerateQualityReport(DataQualityMetrics metrics)
-#pragma warning restore SA1600
+
         {
-#pragma warning disable SA1101
+
             var report = new Dictionary<string, object>
             {
                 ["Summary"] = new
@@ -401,7 +401,7 @@ namespace Microsoft.ExtractorSuite.Core.MLPipeline
                 ["Issues"] = metrics.QualityIssues,
                 ["Recommendations"] = GenerateRecommendations(metrics)
             };
-#pragma warning restore SA1101
+
 
             return report;
         }

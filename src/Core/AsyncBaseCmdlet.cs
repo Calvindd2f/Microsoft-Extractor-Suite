@@ -20,15 +20,15 @@ namespace Microsoft.ExtractorSuite.Core
     /// </summary>
     public abstract class AsyncBaseCmdlet : PSCmdlet, IDisposable
     {
-#pragma warning disable SA1309
+
         private CancellationTokenSource? _cancellationTokenSource;
-#pragma warning restore SA1309
+
         private AsyncTaskManager? _taskManager;
-#pragma warning disable SA1600
-#pragma warning restore SA1600
+
+
         private bool _disposed;
-#pragma warning disable SA1202
-#pragma warning restore SA1202
+
+
         private readonly ConcurrentQueue<Action> _pendingWrites = new();
         private readonly object _writeLock = new();
 
@@ -47,9 +47,9 @@ namespace Microsoft.ExtractorSuite.Core
         public SwitchParameter Async { get; set; }
 
         protected AuthenticationManager AuthManager => AuthenticationManager.Instance;
-#pragma warning disable SA1101
+
         protected CancellationToken CancellationToken => _cancellationTokenSource?.Token ?? CancellationToken.None;
-#pragma warning restore SA1101
+
         protected AsyncTaskManager TaskManager => _taskManager ??= new AsyncTaskManager();
 
         protected override void BeginProcessing()

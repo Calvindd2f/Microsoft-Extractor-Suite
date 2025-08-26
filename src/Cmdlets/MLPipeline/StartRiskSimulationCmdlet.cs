@@ -12,99 +12,99 @@ namespace Microsoft.ExtractorSuite.Cmdlets.MLPipeline
 {
     [Cmdlet(VerbsLifecycle.Start, "RiskSimulation")]
     [OutputType(typeof(RiskSimulationResult))]
-#pragma warning disable SA1600
+
     public class StartRiskSimulationCmdlet : AsyncBaseCmdlet
-#pragma warning restore SA1600
+
     {
         [Parameter(Mandatory = true, HelpMessage = "Type of risk to simulate")]
         [ValidateSet("AnonymousIP", "UnfamiliarSignIn", "AtypicalTravel", "LeakedCredentials", "ImpossibleTravel")]
-#pragma warning disable SA1600
+
         public string RiskType { get; set; } = string.Empty;
-#pragma warning restore SA1600
+
 
         [Parameter(HelpMessage = "Number of simulation attempts to perform")]
         [ValidateRange(1, 100)]
-#pragma warning disable SA1600
+
         public int SimulationAttempts { get; set; } = 5;
-#pragma warning restore SA1600
+
 
         [Parameter(HelpMessage = "Delay between simulation attempts in seconds")]
         [ValidateRange(1, 300)]
-#pragma warning disable SA1600
+
         public int DelayBetweenAttempts { get; set; } = 30;
-#pragma warning restore SA1600
+
 
         [Parameter(HelpMessage = "Test account to use for simulation (must not have MFA enabled)")]
-#pragma warning disable SA1600
+
         public string? TestAccount { get; set; }
-#pragma warning restore SA1600
+
 
         [Parameter(HelpMessage = "Output directory for simulation results")]
-#pragma warning disable SA1600
+
         public string? OutputDirectory { get; set; }
-#pragma warning restore SA1600
+
 
         [Parameter(HelpMessage = "Include detailed simulation steps")]
-#pragma warning disable SA1600
-#pragma warning restore SA1600
+
+
         public SwitchParameter IncludeDetailedSteps { get; set; }
 
         [Parameter(HelpMessage = "Simulate using Tor browser (requires Tor to be installed)")]
-#pragma warning disable SA1600
-#pragma warning restore SA1600
+
+
         public SwitchParameter UseTorBrowser { get; set; }
 
         [Parameter(HelpMessage = "Simulate using VPN connection")]
-#pragma warning disable SA1600
-#pragma warning restore SA1600
+
+
         public SwitchParameter UseVPN { get; set; }
 
         [Parameter(HelpMessage = "Simulate using different user agent")]
-#pragma warning disable SA1600
-#pragma warning restore SA1600
+
+
         public SwitchParameter ChangeUserAgent { get; set; }
 
         [Parameter(HelpMessage = "Simulate using different IP address")]
-#pragma warning disable SA1600
-#pragma warning restore SA1600
-        #pragma warning disable SA1309
+
+
+
         public SwitchParameter ChangeIPAddress { get; set; }
-#pragma warning disable S4487
+
 removed
-#pragma warning disable SA1201
+
         private readonly RiskSimulationEngine _simulationEngine;
-#pragma warning restore SA1201
-#pragma warning restore S4487
+
+
 removed
-#pragma warning disable SA1600
-#pragma warning restore SA1309
+
+
 
         public StartRiskSimulationCmdlet()
         {
-#pragma warning disable SA1101
+
             _simulationEngine = new RiskSimulationEngine();
-#pragma warning restore SA1101
-#pragma warning disable SA1600
+
+
         }
-#pragma warning restore SA1600
+
 
         protected override void ProcessRecord()
         {
-#pragma warning disable SA1101
+
             WriteWarning("⚠️  IMPORTANT: This tool is for legitimate security testing and research purposes only.");
-#pragma warning restore SA1101
-#pragma warning disable SA1101
+
+
             WriteWarning("⚠️  Only use on your own developer tenant with test accounts.");
-#pragma warning restore SA1101
-#pragma warning disable SA1101
+
+
             WriteWarning("⚠️  Do not use customer data or production environments.");
-#pragma warning restore SA1101
-#pragma warning disable SA1101
+
+
             WriteWarning("⚠️  Ensure compliance with Microsoft 365 terms of service and applicable laws.");
-#pragma warning restore SA1101
-#pragma warning disable SA1101
+
+
             WriteWarning("⚠️  This simulation may trigger security alerts in your tenant.");
-#pragma warning restore SA1101
+
 
             var result = RunAsyncOperation(
                 async (progress, cancellationToken) => await RunRiskSimulationAsync(progress, cancellationToken),
@@ -119,7 +119,7 @@ removed
             CancellationToken cancellationToken)
         {
             var startTime = DateTime.UtcNow;
-#pragma warning disable SA1101
+
             var summary = new RiskSimulationSummary
             {
                 StartTime = startTime,
@@ -127,25 +127,25 @@ removed
                 SimulationAttempts = SimulationAttempts,
                 Configuration = GetSimulationConfiguration()
             };
-#pragma warning restore SA1101
+
 
             try
             {
                 // Validate prerequisites
-#pragma warning disable SA1101
+
                 await ValidateSimulationPrerequisitesAsync(cancellationToken);
-#pragma warning restore SA1101
+
 
                 // Run simulation based on risk type
-#pragma warning disable SA1101
+
                 var simulationResult = await RunSpecificRiskSimulationAsync(progress, cancellationToken);
-#pragma warning restore SA1101
+
                 summary.SimulationResult = simulationResult;
 
                 // Generate report
-#pragma warning disable SA1101
+
                 var report = await GenerateSimulationReportAsync(summary, cancellationToken);
-#pragma warning restore SA1101
+
                 summary.Report = report;
 
                 summary.ProcessingTime = DateTime.UtcNow - startTime;
@@ -169,71 +169,71 @@ removed
 
         private async Task ValidateSimulationPrerequisitesAsync(CancellationToken cancellationToken)
         {
-#pragma warning disable SA1101
+
             if (!RequireGraphConnection())
                 throw new InvalidOperationException("Graph connection required for risk simulation");
-#pragma warning restore SA1101
+
 
             // Check if test account is provided and valid
-#pragma warning disable SA1101
+
             if (!string.IsNullOrEmpty(TestAccount))
             {
-#pragma warning disable SA1101
+
                 var isValid = await ValidateTestAccountAsync(TestAccount, cancellationToken);
-#pragma warning restore SA1101
+
                 if (!isValid)
                 {
-#pragma warning disable SA1101
+
                     WriteWarning($"Test account '{TestAccount}' may not be suitable for simulation. Ensure it doesn't have MFA enabled.");
-#pragma warning restore SA1101
+
                 }
             }
-#pragma warning restore SA1101
+
 
             // Validate simulation-specific prerequisites
-#pragma warning disable SA1101
+
             switch (RiskType.ToLower())
             {
                 case "anonymousip":
-#pragma warning disable SA1101
+
                     if (!UseTorBrowser && !UseVPN)
                     {
-#pragma warning disable SA1101
+
                         WriteWarning("AnonymousIP simulation requires either Tor browser or VPN connection for realistic results.");
-#pragma warning restore SA1101
+
                     }
-#pragma warning restore SA1101
+
                     break;
 
                 case "unfamiliarsignin":
-#pragma warning disable SA1101
+
                     if (!UseVPN && !ChangeIPAddress)
                     {
-#pragma warning disable SA1101
+
                         WriteWarning("UnfamiliarSignIn simulation works best with VPN or IP address changes.");
-#pragma warning restore SA1101
+
                     }
-#pragma warning restore SA1101
+
                     break;
 
                 case "atypicaltravel":
-#pragma warning disable SA1101
+
                     if (!ChangeIPAddress && !ChangeUserAgent)
                     {
-#pragma warning disable SA1101
+
                         WriteWarning("AtypicalTravel simulation requires IP address changes and user agent modifications.");
-#pragma warning restore SA1101
+
                     }
-#pragma warning restore SA1101
+
                     break;
 
                 case "leakedcredentials":
-#pragma warning disable SA1101
+
                     WriteWarning("LeakedCredentials simulation requires manual steps with GitHub and application registration.");
-#pragma warning restore SA1101
+
                     break;
             }
-#pragma warning restore SA1101
+
 
             await Task.CompletedTask;
         }
@@ -242,9 +242,9 @@ removed
         {
             try
             {
-#pragma warning disable SA1101
+
                 var graphClient = AuthManager.GraphClient;
-#pragma warning restore SA1101
+
                 if (graphClient == null) return false;
 
                 // Check if account exists and get basic info
@@ -256,9 +256,9 @@ removed
                 if (users?.Value?.Any() == true)
                 {
                     var user = users.Value.First();
-#pragma warning disable SA1101
+
                     WriteVerbose($"Test account found: {user.DisplayName} ({user.UserPrincipalName})");
-#pragma warning restore SA1101
+
                     return true;
                 }
 
@@ -266,9 +266,9 @@ removed
             }
             catch (Exception ex)
             {
-#pragma warning disable SA1101
+
                 WriteWarning($"Error validating test account: {ex.Message}");
-#pragma warning restore SA1101
+
                 return false;
             }
         }
@@ -279,45 +279,45 @@ removed
         {
             var simulationResult = new RiskSimulationResult();
 
-#pragma warning disable SA1101
+
             switch (RiskType.ToLower())
             {
                 case "anonymousip":
-#pragma warning disable SA1101
+
                     simulationResult = await SimulateAnonymousIPAsync(progress, cancellationToken);
-#pragma warning restore SA1101
+
                     break;
 
                 case "unfamiliarsignin":
-#pragma warning disable SA1101
+
                     simulationResult = await SimulateUnfamiliarSignInAsync(progress, cancellationToken);
-#pragma warning restore SA1101
+
                     break;
 
                 case "atypicaltravel":
-#pragma warning disable SA1101
+
                     simulationResult = await SimulateAtypicalTravelAsync(progress, cancellationToken);
-#pragma warning restore SA1101
+
                     break;
 
                 case "leakedcredentials":
-#pragma warning disable SA1101
+
                     simulationResult = await SimulateLeakedCredentialsAsync(progress, cancellationToken);
-#pragma warning restore SA1101
+
                     break;
 
                 case "impossibletravel":
-#pragma warning disable SA1101
+
                     simulationResult = await SimulateImpossibleTravelAsync(progress, cancellationToken);
-#pragma warning restore SA1101
+
                     break;
 
                 default:
-#pragma warning disable SA1101
+
                     throw new ArgumentException($"Unknown risk type: {RiskType}");
-#pragma warning restore SA1101
+
             }
-#pragma warning restore SA1101
+
 
             return simulationResult;
         }
@@ -349,19 +349,19 @@ removed
                 "5. Check Microsoft Entra ID Protection dashboard"
             });
 
-#pragma warning disable SA1101
+
             if (UseTorBrowser)
             {
                 result.Steps.Add("Note: Using Tor Browser for realistic anonymous IP simulation");
             }
-#pragma warning restore SA1101
 
-#pragma warning disable SA1101
+
+
             if (UseVPN)
             {
                 result.Steps.Add("Note: Using VPN connection for anonymous IP simulation");
             }
-#pragma warning restore SA1101
+
 
             result.ExpectedRiskLevel = "Medium";
             result.ExpectedDetectionTime = "10-15 minutes";
@@ -521,7 +521,7 @@ removed
             RiskSimulationSummary summary,
             CancellationToken cancellationToken)
         {
-#pragma warning disable SA1101
+
             var report = new Dictionary<string, object>
             {
                 ["SimulationType"] = summary.RiskType,
@@ -542,7 +542,7 @@ removed
                     ComplianceStatus = "Compliant when used appropriately"
                 }
             };
-#pragma warning restore SA1101
+
 
             return await Task.FromResult(report);
         }
@@ -591,7 +591,7 @@ removed
 
         private Dictionary<string, object> GetSimulationConfiguration()
         {
-#pragma warning disable SA1101
+
             return new Dictionary<string, object>
             {
                 ["RiskType"] = RiskType,
@@ -604,94 +604,94 @@ removed
                 ["ChangeIPAddress"] = ChangeIPAddress,
                 ["IncludeDetailedSteps"] = IncludeDetailedSteps
             };
-#pragma warning restore SA1101
-        }
-#pragma warning disable SA1600
-    }
-#pragma warning restore SA1600
 
-#pragma warning disable SA1600
+        }
+
+    }
+
+
+
     public class RiskSimulationResult
-#pragma warning restore SA1600
-#pragma warning disable SA1600
+
+
     {
-#pragma warning restore SA1600
-#pragma warning disable SA1600
+
+
         public string RiskType { get; set; } = string.Empty;
-#pragma warning restore SA1600
-#pragma warning disable SA1600
+
+
         public string Description { get; set; } = string.Empty;
-#pragma warning restore SA1600
-#pragma warning disable SA1600
+
+
         public List<string> Steps { get; set; } = new();
-#pragma warning restore SA1600
-#pragma warning disable SA1600
+
+
         public List<string> Prerequisites { get; set; } = new();
-#pragma warning restore SA1600
-#pragma warning disable SA1600
+
+
         public string ExpectedOutcome { get; set; } = string.Empty;
-#pragma warning restore SA1600
-#pragma warning disable SA1600
+
+
         public string ExpectedRiskLevel { get; set; } = string.Empty;
-#pragma warning restore SA1600
+
         public string ExpectedDetectionTime { get; set; } = string.Empty;
         public string Difficulty { get; set; } = "Standard";
-#pragma warning disable SA1600
-    }
-#pragma warning restore SA1600
 
-#pragma warning disable SA1600
+    }
+
+
+
     public class RiskSimulationSummary
-#pragma warning restore SA1600
-#pragma warning disable SA1600
+
+
     {
-#pragma warning restore SA1600
-#pragma warning disable SA1600
-#pragma warning restore SA1600
-        #pragma warning disable SA1600
+
+
+
+
         public DateTime StartTime { get; set; }
-#pragma warning restore SA1600
-        #pragma warning disable SA1600
+
+
         public TimeSpan ProcessingTime { get; set; }
         public string RiskType { get; set; } = string.Empty;
-#pragma warning restore SA1600
-#pragma warning disable SA1600
-#pragma warning restore SA1600
-        #pragma warning disable SA1600
+
+
+
+
         public int SimulationAttempts { get; set; }
         public Dictionary<string, object> Configuration { get; set; } = new();
-#pragma warning restore SA1600
-#pragma warning disable SA1600
-        public RiskSimulationResult? SimulationResult { get; set; }
-#pragma warning restore SA1600
-#pragma warning disable SA1600
-        public Dictionary<string, object>? Report { get; set; }
-#pragma warning restore SA1600
-        public bool Success { get; set; }public string? ErrorMessage { get; set; }
-#pragma warning disable SA1600
-    }
-#pragma warning restore SA1600
 
-#pragma warning disable SA1600
+
+        public RiskSimulationResult? SimulationResult { get; set; }
+
+
+        public Dictionary<string, object>? Report { get; set; }
+
+        public bool Success { get; set; }public string? ErrorMessage { get; set; }
+
+    }
+
+
+
     public class RiskSimulationResult
-#pragma warning restore SA1600
-#pragma warning disable SA1600
+
+
     {
-#pragma warning restore SA1600
-#pragma warning disable SA1600
+
+
         public RiskSimulationSummary Summary { get; set; } = new();
-#pragma warning restore SA1600
+
         public RiskSimulationResult? SimulationResult { get; set; }
         public Dictionary<string, object>? Report { get; set; }
     }
 }
-#pragma warning disable SA1600
 
-#pragma warning restore SA1600
+
+
 // Helper class for risk simulation engine
-#pragma warning disable SA1600
+
 public class RiskSimulationEngine
-#pragma warning restore SA1600
+
 {
     public async Task<bool> ValidateSimulationEnvironmentAsync(CancellationToken cancellationToken)
     {

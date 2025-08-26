@@ -26,48 +26,48 @@ namespace Microsoft.ExtractorSuite.Core.Exchange
     /// </summary>
     public class ExchangeRestClient : IDisposable
     {
-#pragma warning disable SA1309
+
         private readonly HttpClient _httpClient;
-#pragma warning restore SA1309
-#pragma warning disable SA1309
+
+
         private readonly Core.Authentication.AuthenticationManager _authManager;
-#pragma warning restore SA1309
-#pragma warning disable SA1309
+
+
         private readonly IAsyncPolicy<HttpResponseMessage> _retryPolicy;
-#pragma warning restore SA1309
-#pragma warning disable SA1309
+
+
         private readonly JsonSerializerSettings _jsonOptions;
-#pragma warning restore SA1309
-#pragma warning disable SA1309
+
+
         private readonly SemaphoreSlim _rateLimitSemaphore;
-#pragma warning restore SA1309
+
 
         // Exchange Online REST API endpoints
         private const string ExchangeRestBaseUrl = "https://outlook.office365.com/api/v2.0";
-#pragma warning disable SA1600
+
         private const string ExchangeAdminApiUrl = "https://outlook.office365.com/adminapi/beta";
-#pragma warning restore SA1600
+
         private const string ComplianceApiUrl = "https://compliance.microsoft.com/api";
         private const string EwsUrl = "https://outlook.office365.com/EWS/Exchange.asmx";
 
         // Rate limiting
         private const int MaxConcurrentRequests = 20;
         private const int RequestsPerMinute = 300;
-#pragma warning disable SA1309
+
         private readonly Queue<DateTime> _requestTimestamps = new();
-#pragma warning restore SA1309
-#pragma warning disable SA1309
+
+
         private readonly object _rateLimitLock = new();
-#pragma warning restore SA1309
+
 
         public ExchangeRestClient(Core.Authentication.AuthenticationManager authManager)
         {
-#pragma warning disable SA1101
+
             _authManager = authManager;
-#pragma warning restore SA1101
-#pragma warning disable SA1101
+
+
             _rateLimitSemaphore = new SemaphoreSlim(MaxConcurrentRequests, MaxConcurrentRequests);
-#pragma warning restore SA1101
+
 
             // Configure HttpClient with optimal settings
             var handler = new HttpClientHandler
@@ -77,7 +77,7 @@ namespace Microsoft.ExtractorSuite.Core.Exchange
                 UseProxy = false
             };
 
-#pragma warning disable SA1101
+
             _httpClient = new HttpClient(handler)
             {
                 Timeout = TimeSpan.FromMinutes(5), // Long timeout for large operations
@@ -87,10 +87,10 @@ namespace Microsoft.ExtractorSuite.Core.Exchange
                     UserAgent = { new ProductInfoHeaderValue("Microsoft-Extractor-Suite", "4.0.0") }
                 }
             };
-#pragma warning restore SA1101
+
 
             // Configure retry policy with exponential backoff
-#pragma warning disable SA1101
+
             _retryPolicy = HttpPolicyExtensions
                 .HandleTransientHttpError()
                 .OrResult(msg => msg.StatusCode == (HttpStatusCode)429)
@@ -102,10 +102,10 @@ namespace Microsoft.ExtractorSuite.Core.Exchange
                         var reason = outcome.Result?.StatusCode.ToString() ?? outcome.Exception?.Message;
                         Console.WriteLine($"Retry {retryCount} after {timespan}s: {reason}");
                     });
-#pragma warning restore SA1101
+
 
             // Configure System.Text.Json for optimal performance
-#pragma warning disable SA1101
+
             _jsonOptions = new JsonSerializerSettings
             {
                 ContractResolver = new CamelCasePropertyNamesContractResolver(),
@@ -115,7 +115,7 @@ namespace Microsoft.ExtractorSuite.Core.Exchange
                     new DateTimeOffsetConverter()
                 }
             };
-#pragma warning restore SA1101
+
         }
 
         #region Unified Audit Log via REST API
@@ -129,9 +129,9 @@ namespace Microsoft.ExtractorSuite.Core.Exchange
             Dictionary<string, object>? parameters = null,
             CancellationToken cancellationToken = default)
         {
-#pragma warning disable SA1101
+
             await ThrottleRequestAsync(cancellationToken);
-#pragma warning restore SA1101
+
 
             // Generate connection ID for this session (similar to PowerShell script)
             var connectionId = Guid.NewGuid().ToString();
@@ -145,9 +145,9 @@ namespace Microsoft.ExtractorSuite.Core.Exchange
                 }
             };
 
-#pragma warning disable SA1101
+
             var url = $"{ExchangeAdminApiUrl}/{_authManager.CurrentTenantId}/InvokeCommand";
-#pragma warning restore SA1101
+
 
             // Build friendly command string for logging (like PowerShell script)
             var commandFriendly = cmdlet;
@@ -161,16 +161,16 @@ namespace Microsoft.ExtractorSuite.Core.Exchange
             }
 
             Console.WriteLine($"Executing: {commandFriendly}");
-#pragma warning disable SA1101
-            Console.WriteLine($"Request body: {JsonConvert.SerializeObject(requestBody, _jsonOptions)}");
-#pragma warning restore SA1101
 
-#pragma warning disable SA1101
+            Console.WriteLine($"Request body: {JsonConvert.SerializeObject(requestBody, _jsonOptions)}");
+
+
+
             using var content = new StringContent(
                 JsonConvert.SerializeObject(requestBody, _jsonOptions),
                 Encoding.UTF8,
                 "application/json");
-#pragma warning restore SA1101
+
 
             // Set up request with proper headers (replicating PowerShell script)
             var request = new HttpRequestMessage(HttpMethod.Post, url)
@@ -180,9 +180,9 @@ namespace Microsoft.ExtractorSuite.Core.Exchange
 
             // Add headers that match the PowerShell script
             request.Headers.Add("x-serializationlevel", "Partial");
-#pragma warning disable SA1101
+
             request.Headers.Add("X-AnchorMailbox", $"UPN:SystemMailbox{{bb558c35-97f1-4cb9-8ff7-d53741dc928c}}@{_authManager.CurrentTenantId}");
-#pragma warning restore SA1101
+
             request.Headers.Add("X-prefer", "odata.maxpagesize=1000");
             request.Headers.Add("X-ResponseFormat", "json");
             request.Headers.Add("connection-id", connectionId);
@@ -190,9 +190,9 @@ namespace Microsoft.ExtractorSuite.Core.Exchange
             request.Headers.Add("warningaction", "");
 
             // Get Exchange token for authorization
-#pragma warning disable SA1101
+
             var token = await _authManager.GetExchangeOnlineTokenAsync(cancellationToken);
-#pragma warning restore SA1101
+
             if (string.IsNullOrEmpty(token))
             {
                 throw new InvalidOperationException(
@@ -203,11 +203,11 @@ namespace Microsoft.ExtractorSuite.Core.Exchange
 
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
-#pragma warning disable SA1101
+
             var response = await ExecuteWithRetryAsync(
                 () => _httpClient.SendAsync(request, cancellationToken),
                 cancellationToken);
-#pragma warning restore SA1101
+
 
             var responseContent = await response.Content.ReadAsStringAsync();
 
@@ -227,9 +227,9 @@ namespace Microsoft.ExtractorSuite.Core.Exchange
 
             try
             {
-#pragma warning disable SA1101
+
                 return JsonConvert.DeserializeObject<InvokeCommandResult>(responseContent, _jsonOptions)!;
-#pragma warning restore SA1101
+
             }
             catch (JsonException ex)
             {
@@ -271,9 +271,9 @@ namespace Microsoft.ExtractorSuite.Core.Exchange
             if (userIds != null && userIds.Length > 0)
                 parameters["UserIds"] = userIds;
 
-#pragma warning disable SA1101
+
             var result = await InvokeCommandAsync("Search-UnifiedAuditLog", parameters, cancellationToken);
-#pragma warning restore SA1101
+
 
             // Parse the result and convert to UnifiedAuditLogResult
             if (result.Results != null && result.Results.Length > 0)
@@ -287,9 +287,9 @@ namespace Microsoft.ExtractorSuite.Core.Exchange
                         var outputJson = firstResult.Output.ToString();
                         if (!string.IsNullOrEmpty(outputJson))
                         {
-#pragma warning disable SA1101
+
                             return JsonConvert.DeserializeObject<UnifiedAuditLogResult>(outputJson, _jsonOptions)!;
-#pragma warning restore SA1101
+
                         }
                     }
                     catch (JsonException ex)
@@ -347,9 +347,9 @@ namespace Microsoft.ExtractorSuite.Core.Exchange
             if (userIds != null && userIds.Length > 0)
                 parameters["UserIds"] = userIds;
 
-#pragma warning disable SA1101
+
             var result = await InvokeCommandAsync("Search-UnifiedAuditLog", parameters, cancellationToken);
-#pragma warning restore SA1101
+
 
             // Parse the result and convert to UnifiedAuditLogResult
             if (result.Results != null && result.Results.Length > 0)
@@ -363,9 +363,9 @@ namespace Microsoft.ExtractorSuite.Core.Exchange
                         var outputJson = firstResult.Output.ToString();
                         if (!string.IsNullOrEmpty(outputJson))
                         {
-#pragma warning disable SA1101
+
                             return JsonConvert.DeserializeObject<UnifiedAuditLogResult>(outputJson, _jsonOptions)!;
-#pragma warning restore SA1101
+
                         }
                     }
                     catch (JsonException ex)
@@ -374,9 +374,9 @@ namespace Microsoft.ExtractorSuite.Core.Exchange
                     }
                 }
             }
-#pragma warning disable SA1600
 
-#pragma warning restore SA1600
+
+
             // Fallback: return empty result
             return new UnifiedAuditLogResult
             {
@@ -403,9 +403,9 @@ namespace Microsoft.ExtractorSuite.Core.Exchange
             bool hasMoreData;
 
             {
-#pragma warning disable SA1101
+
                 await ThrottleRequestAsync(cancellationToken);
-#pragma warning restore SA1101
+
 
                 var parameters = new Dictionary<string, object>
                 {
@@ -422,9 +422,9 @@ namespace Microsoft.ExtractorSuite.Core.Exchange
                 if (!string.IsNullOrEmpty(messageId))
                     parameters["MessageId"] = messageId;
 
-#pragma warning disable SA1101
+
                 var result = await InvokeCommandAsync("Get-MessageTrace", parameters, cancellationToken);
-#pragma warning restore SA1101
+
 
                 // Parse the result and convert to MessageTraceResult
                 MessageTraceResult? messageTraceResult = null;
@@ -438,9 +438,9 @@ namespace Microsoft.ExtractorSuite.Core.Exchange
                             var outputJson = firstResult.Output.ToString();
                             if (!string.IsNullOrEmpty(outputJson))
                             {
-#pragma warning disable SA1101
+
                                 messageTraceResult = JsonConvert.DeserializeObject<MessageTraceResult>(outputJson, _jsonOptions);
-#pragma warning restore SA1101
+
                             }
                         }
                         catch (JsonException ex)
@@ -457,9 +457,9 @@ namespace Microsoft.ExtractorSuite.Core.Exchange
                     {
                         Value = Array.Empty<MessageTrace>()
                     };
-#pragma warning disable SA1600
+
                 }
-#pragma warning restore SA1600
+
 
                 hasMoreData = messageTraceResult.Value?.Length == pageSize;
                 page++;
@@ -475,15 +475,15 @@ namespace Microsoft.ExtractorSuite.Core.Exchange
 
         public async Task<MailboxInfo> GetMailboxAsync(string userPrincipalName, CancellationToken cancellationToken = default)
         {
-#pragma warning disable SA1101
+
             await ThrottleRequestAsync(cancellationToken);
-#pragma warning restore SA1101
+
 
             // Use Graph API for mailbox info (more reliable than EXO REST)
-#pragma warning disable SA1101
+
             var graphClient = _authManager.GraphClient
                 ?? throw new InvalidOperationException("Graph client not initialized");
-#pragma warning restore SA1101
+
 
             var user = await graphClient.Users[userPrincipalName]
                 .GetAsync(requestConfiguration => {
@@ -491,20 +491,20 @@ namespace Microsoft.ExtractorSuite.Core.Exchange
                 }, cancellationToken);
 
             // Get additional Exchange-specific info via REST
-#pragma warning disable SA1101
-            var url = $"{ExchangeAdminApiUrl}/{_authManager.CurrentTenantId}/Mailbox('{userPrincipalName}')";
-#pragma warning restore SA1101
 
-#pragma warning disable SA1101
+            var url = $"{ExchangeAdminApiUrl}/{_authManager.CurrentTenantId}/Mailbox('{userPrincipalName}')";
+
+
+
             var response = await ExecuteWithRetryAsync(
                 () => _httpClient.GetAsync(url, cancellationToken),
                 cancellationToken);
-#pragma warning restore SA1101
+
 
             var json = await response.Content.ReadAsStringAsync();
-#pragma warning disable SA1600
+
             var exchangeData = JsonConvert.DeserializeObject<Dictionary<string, JToke
-#pragma warning restore SA1600
+
 _jsonOptions);
 
             return new MailboxInfo
@@ -531,9 +531,9 @@ _jsonOptions);
             bool hasMoreData;
 
             {
-#pragma warning disable SA1101
+
                 await ThrottleRequestAsync(cancellationToken);
-#pragma warning restore SA1101
+
 
                 var parameters = new Dictionary<string, object>
                 {
@@ -550,9 +550,9 @@ _jsonOptions);
                 if (!string.IsNullOrEmpty(resultSetId))
                     parameters["ResultSetId"] = resultSetId;
 
-#pragma warning disable SA1101
+
                 var result = await InvokeCommandAsync("Search-MailboxAuditLog", parameters, cancellationToken);
-#pragma warning restore SA1101
+
 
                 // Parse the result and convert to MailboxAuditLogResult
                 MailboxAuditLogResult? mailboxAuditLogResult = null;
@@ -566,9 +566,9 @@ _jsonOptions);
                             var outputJson = firstResult.Output.ToString();
                             if (!string.IsNullOrEmpty(outputJson))
                             {
-#pragma warning disable SA1101
+
                                 mailboxAuditLogResult = JsonConvert.DeserializeObject<MailboxAuditLogResult>(outputJson, _jsonOptions);
-#pragma warning restore SA1101
+
                             }
                         }
                         catch (JsonException ex)
@@ -592,9 +592,9 @@ _jsonOptions);
                 {
                     foreach (var record in mailboxAuditLogResult.Records)
                     {
-#pragma warning disable SA1600
+
                         yield return record;
-#pragma warning restore SA1600
+
                     }
                 }
 
@@ -610,13 +610,13 @@ _jsonOptions);
 
         public async Task<TransportRule[]> GetTransportRulesTypedAsync(CancellationToken cancellationToken = default)
         {
-#pragma warning disable SA1101
-            await ThrottleRequestAsync(cancellationToken);
-#pragma warning restore SA1101
 
-#pragma warning disable SA1101
+            await ThrottleRequestAsync(cancellationToken);
+
+
+
             var result = await InvokeCommandAsync("Get-TransportRule", cancellationToken: cancellationToken);
-#pragma warning restore SA1101
+
 
             // Parse the result and convert to TransportRule[]
             if (result.Results != null && result.Results.Length > 0)
@@ -629,16 +629,16 @@ _jsonOptions);
                         var outputJson = firstResult.Output.ToString();
                         if (!string.IsNullOrEmpty(outputJson))
                         {
-#pragma warning disable SA1101
+
                             var transportRuleResult = JsonConvert.DeserializeObject<TransportRuleResult>(outputJson, _jsonOptions);
-#pragma warning restore SA1101
+
                             return transportRuleResult?.Value ?? Array.Empty<TransportRule>();
                         }
                     }
                     catch (JsonException ex)
-#pragma warning disable SA1600
+
                     {
-#pragma warning restore SA1600
+
                         Console.WriteLine($"Warning: Failed to parse Get-TransportRule output: {ex.Message}");
                     }
                 }
@@ -656,18 +656,18 @@ _jsonOptions);
             string userPrincipalName,
             CancellationToken cancellationToken = default)
         {
-#pragma warning disable SA1101
+
             await ThrottleRequestAsync(cancellationToken);
-#pragma warning restore SA1101
+
 
             var parameters = new Dictionary<string, object>
             {
                 ["Mailbox"] = userPrincipalName
             };
 
-#pragma warning disable SA1101
+
             var result = await InvokeCommandAsync("Get-InboxRule", parameters, cancellationToken);
-#pragma warning restore SA1101
+
 
             // Parse the result and convert to InboxRule[]
             if (result.Results != null && result.Results.Length > 0)
@@ -680,12 +680,12 @@ _jsonOptions);
                         var outputJson = firstResult.Output.ToString();
                         if (!string.IsNullOrEmpty(outputJson))
                         {
-#pragma warning disable SA1101
+
                             var inboxRuleResult = JsonConvert.DeserializeObject<InboxRuleResult>(outputJson, _jsonOptions);
-#pragma warning restore SA1101
-#pragma warning disable SA1600
+
+
                             return inboxRuleResult?.Value ?? Array.Empty<Inbox
-#pragma warning restore SA1600
+
 documentedRule>();
                         }
                     }
@@ -707,9 +707,9 @@ documentedRule>();
             [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             // Get list of mailboxes to process
-#pragma warning disable SA1101
+
             var mailboxes = specificUsers ?? await GetAllMailboxesAsync(cancellationToken);
-#pragma warning restore SA1101
+
             var totalMailboxes = mailboxes.Length;
             var processedCount = 0;
 
@@ -725,9 +725,9 @@ documentedRule>();
                     try
                     {
                         progress?.Report((Interlocked.Increment(ref processedCount), totalMailboxes, mailbox));
-#pragma warning disable SA1101
+
                         var rules = await GetInboxRulesAsync(mailbox, cancellationToken);
-#pragma warning restore SA1101
+
                         return (mailbox, rules);
                     }
                     finally
@@ -770,13 +770,13 @@ documentedRule>();
 
         private async Task<string[]> GetAllMailboxesAsync(CancellationToken cancellationToken)
         {
-#pragma warning disable SA1101
-            await ThrottleRequestAsync(cancellationToken);
-#pragma warning restore SA1101
 
-#pragma warning disable SA1101
+            await ThrottleRequestAsync(cancellationToken);
+
+
+
             var result = await InvokeCommandAsync("Get-Mailbox", cancellationToken: cancellationToken);
-#pragma warning restore SA1101
+
 
             var users = new List<string>();
 
@@ -791,9 +791,9 @@ documentedRule>();
                         var outputJson = firstResult.Output.ToString();
                         if (!string.IsNullOrEmpty(outputJson))
                         {
-#pragma warning disable SA1101
+
                             var mailboxes = JsonConvert.DeserializeObject<ExchangeMailbox[]>(outputJson, _jsonOptions);
-#pragma warning restore SA1101
+
                             if (mailboxes != null)
                             {
                                 users.AddRange(mailboxes.Select(m => m.UserPrincipalName).Where(u => !string.IsNullOrEmpty(u)));
@@ -807,10 +807,10 @@ documentedRule>();
                         // Fallback to Graph API if InvokeCommand fails
                         try
                         {
-#pragma warning disable SA1101
+
                             var graphClient = _authManager.GraphClient
                                 ?? throw new InvalidOperationException("Graph client not initialized");
-#pragma warning restore SA1101
+
 
                             var response = await graphClient.Users
                                 .GetAsync(requestConfiguration => {
@@ -844,9 +844,9 @@ documentedRule>();
         /// </summary>
         public async Task<string[]> GetMailboxesAsync(CancellationToken cancellationToken = default)
         {
-#pragma warning disable SA1101
+
             return await GetAllMailboxesAsync(cancellationToken);
-#pragma warning restore SA1101
+
         }
 
         /// <summary>
@@ -854,18 +854,18 @@ documentedRule>();
         /// </summary>
         public async Task<object[]> GetMailboxPermissionsAsync(string mailbox, CancellationToken cancellationToken = default)
         {
-#pragma warning disable SA1101
+
             await ThrottleRequestAsync(cancellationToken);
-#pragma warning restore SA1101
+
 
             var parameters = new Dictionary<string, object>
             {
                 ["Identity"] = mailbox
             };
 
-#pragma warning disable SA1101
+
             var result = await InvokeCommandAsync("Get-MailboxPermission", parameters, cancellationToken);
-#pragma warning restore SA1101
+
 
             // Parse the result and return as object array
             if (result.Results != null && result.Results.Length > 0)
@@ -878,9 +878,9 @@ documentedRule>();
                         var outputJson = firstResult.Output.ToString();
                         if (!string.IsNullOrEmpty(outputJson))
                         {
-#pragma warning disable SA1101
+
                             var parsedResult = JsonConvert.DeserializeObject<Dictionary<string, JToken>>(outputJson, _jsonOptions);
-#pragma warning restore SA1101
+
                             return parsedResult?["value"].ToObject<object[]>() ?? Array.Empty<object>();
                         }
                     }
@@ -900,18 +900,18 @@ documentedRule>();
         /// </summary>
         public async Task<object[]> GetRecipientPermissionsAsync(string recipient, CancellationToken cancellationToken = default)
         {
-#pragma warning disable SA1101
+
             await ThrottleRequestAsync(cancellationToken);
-#pragma warning restore SA1101
+
 
             var parameters = new Dictionary<string, object>
             {
                 ["Identity"] = recipient
             };
 
-#pragma warning disable SA1101
+
             var result = await InvokeCommandAsync("Get-RecipientPermission", parameters, cancellationToken);
-#pragma warning restore SA1101
+
 
             // Parse the result and return as object array
             if (result.Results != null && result.Results.Length > 0)
@@ -924,9 +924,9 @@ documentedRule>();
                         var outputJson = firstResult.Output.ToString();
                         if (!string.IsNullOrEmpty(outputJson))
                         {
-#pragma warning disable SA1101
+
                             var parsedResult = JsonConvert.DeserializeObject<Dictionary<string, JToken>>(outputJson, _jsonOptions);
-#pragma warning restore SA1101
+
                             return parsedResult?["value"].ToObject<object[]>() ?? Array.Empty<object>();
                         }
                     }
@@ -946,18 +946,18 @@ documentedRule>();
         /// </summary>
         public async Task<object[]> GetSendAsPermissionsAsync(string mailbox, CancellationToken cancellationToken = default)
         {
-#pragma warning disable SA1101
+
             await ThrottleRequestAsync(cancellationToken);
-#pragma warning restore SA1101
+
 
             var parameters = new Dictionary<string, object>
             {
                 ["Identity"] = mailbox
             };
 
-#pragma warning disable SA1101
+
             var result = await InvokeCommandAsync("Get-SendAsPermission", parameters, cancellationToken);
-#pragma warning restore SA1101
+
 
             // Parse the result and return as object array
             if (result.Results != null && result.Results.Length > 0)
@@ -970,9 +970,9 @@ documentedRule>();
                         var outputJson = firstResult.Output.ToString();
                         if (!string.IsNullOrEmpty(outputJson))
                         {
-#pragma warning disable SA1101
+
                             var parsedResult = JsonConvert.DeserializeObject<Dictionary<string, JToken>>(outputJson, _jsonOptions);
-#pragma warning restore SA1101
+
                             return parsedResult?["value"].ToObject<object[]>() ?? Array.Empty<object>();
                         }
                     }
@@ -992,9 +992,9 @@ documentedRule>();
         /// </summary>
         public async Task<object[]> GetMailboxRulesAsync(string mailbox, CancellationToken cancellationToken = default)
         {
-#pragma warning disable SA1101
+
             var rules = await GetInboxRulesAsync(mailbox, cancellationToken);
-#pragma warning restore SA1101
+
             return rules.Cast<object>().ToArray();
         }
 
@@ -1003,17 +1003,17 @@ documentedRule>();
         /// </summary>
         public async Task<object[]> GetTransportRulesAsync(CancellationToken cancellationToken = default)
         {
-#pragma warning disable SA1101
+
             var rules = await GetTransportRulesInternalAsync(cancellationToken);
-#pragma warning restore SA1101
+
             return rules.Cast<object>().ToArray();
         }
 
         private async Task<TransportRule[]> GetTransportRulesInternalAsync(CancellationToken cancellationToken = default)
         {
-#pragma warning disable SA1101
+
             return await GetTransportRulesTypedAsync(cancellationToken);
-#pragma warning restore SA1101
+
         }
 
         /// <summary>
@@ -1027,12 +1027,12 @@ documentedRule>();
             string? messageId = null,
             [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
-#pragma warning disable SA1101
+
             await foreach (var result in GetMessageTraceAsync(startDate, endDate, senderAddress, recipientAddress, messageId, cancellationToken: cancellationToken))
             {
                 yield return result;
             }
-#pragma warning restore SA1101
+
         }
 
         /// <summary>
@@ -1044,9 +1044,9 @@ documentedRule>();
             string[]? operations = null,
             [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
-#pragma warning disable SA1101
+
             await ThrottleRequestAsync(cancellationToken);
-#pragma warning restore SA1101
+
 
             var parameters = new Dictionary<string, object>
             {
@@ -1058,9 +1058,9 @@ documentedRule>();
             if (operations != null && operations.Length > 0)
                 parameters["Operations"] = operations;
 
-#pragma warning disable SA1101
+
             var result = await InvokeCommandAsync("Search-AdminAuditLog", parameters, cancellationToken);
-#pragma warning restore SA1101
+
 
             // Parse the result and yield entries
             if (result.Results != null && result.Results.Length > 0)
@@ -1073,9 +1073,9 @@ documentedRule>();
                         var outputJson = firstResult.Output.ToString();
                         if (!string.IsNullOrEmpty(outputJson))
                         {
-#pragma warning disable SA1101
+
                             var parsedResult = JsonConvert.DeserializeObject<Dictionary<string, JToken>>(outputJson, _jsonOptions);
-#pragma warning restore SA1101
+
                             if (parsedResult?["value"].ToObject<JArray>() != null)
                             {
                                 foreach (var entry in parsedResult["value"].ToObject<JArray>())
@@ -1103,12 +1103,12 @@ documentedRule>();
             string[]? operations = null,
             [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
-#pragma warning disable SA1101
+
             await foreach (var record in GetMailboxAuditLogAsync(mailbox, startDate, endDate, operations, cancellationToken))
             {
                 yield return record;
             }
-#pragma warning restore SA1101
+
         }
 
         #endregion
@@ -1125,10 +1125,10 @@ documentedRule>();
             try
             {
                 // Use Graph API directly instead of PowerShell cmdlet
-#pragma warning disable SA1101
+
                 var graphClient = _authManager.GraphClient
                     ?? throw new InvalidOperationException("Graph client not initialized");
-#pragma warning restore SA1101
+
 
                 var users = new List<object>();
 
@@ -1207,10 +1207,10 @@ documentedRule>();
         {
             try
             {
-#pragma warning disable SA1101
+
                 var graphClient = _authManager.GraphClient
                     ?? throw new InvalidOperationException("Graph client not initialized");
-#pragma warning restore SA1101
+
 
                 var roles = new List<object>();
 
@@ -1283,10 +1283,10 @@ documentedRule>();
         {
             try
             {
-#pragma warning disable SA1101
+
                 var graphClient = _authManager.GraphClient
                     ?? throw new InvalidOperationException("Graph client not initialized");
-#pragma warning restore SA1101
+
 
                 var permissions = new List<object>();
 
@@ -1370,9 +1370,9 @@ documentedRule>();
             {
                 try
                 {
-#pragma warning disable SA1101
+
                     var result = await InvokeCommandAsync(command, powerShellArgs, cancellationToken);
-#pragma warning restore SA1101
+
                     success = true;
                     return result;
                 }
@@ -1418,12 +1418,12 @@ documentedRule>();
                 Console.WriteLine("Begin Get Blocked List on O365");
 
                 // Get the default hosted content filter policy
-#pragma warning disable SA1101
+
                 var defaultPolicy = await ExecutePowerShellCommandAsync(
                     "Get-HostedContentFilterPolicy",
                     new Dictionary<string, object> { ["Identity"] = "Default" },
                     cancellationToken: cancellationToken);
-#pragma warning restore SA1101
+
 
                 if (defaultPolicy?.Results == null || defaultPolicy.Results.Length == 0)
                 {
@@ -1447,9 +1447,9 @@ documentedRule>();
 
                 try
                 {
-#pragma warning disable SA1101
+
                     var policyData = JsonConvert.DeserializeObject<Dictionary<string, JToken>>(outputJson, _jsonOptions);
-#pragma warning restore SA1101
+
 
                     var blockedSenders = policyData?.GetValueOrDefault("BlockedSenders")?.ToObject<object>();
                     var blockedDomains = policyData?.GetValueOrDefault("BlockedSenderDomains")?.ToObject<object>();
@@ -1494,12 +1494,12 @@ documentedRule>();
         {
             try
             {
-#pragma warning disable SA1101
+
                 var token = await _authManager.GetExchangeOnlineTokenAsync();
-#pragma warning restore SA1101
-#pragma warning disable SA1101
+
+
                 return !string.IsNullOrEmpty(token) && _authManager.IsGraphConnected;
-#pragma warning restore SA1101
+
             }
             catch
             {
@@ -1510,10 +1510,10 @@ documentedRule>();
         /// <summary>
         /// Synchronous check for Exchange connection
         /// </summary>
-#pragma warning disable SA1101
-#pragma warning disable SA1201
+
+
         public bool IsExchangeConnected => _authManager.IsGraphConnected;
-#pragma warning restore SA1201
+
 
         #endregion
 
@@ -1524,9 +1524,9 @@ documentedRule>();
             CancellationToken cancellationToken)
         {
             // Ensure we have a valid token
-#pragma warning disable SA1101
+
             var token = await _authManager.GetExchangeOnlineTokenAsync(cancellationToken);
-#pragma warning restore SA1101
+
             if (string.IsNullOrEmpty(token))
             {
                 throw new InvalidOperationException(
@@ -1535,14 +1535,14 @@ documentedRule>();
                     "Try running Connect-M365 with Exchange scopes or use Graph API alternatives.");
             }
 
-#pragma warning disable SA1101
+
             _httpClient.DefaultRequestHeaders.Authorization =
                 new AuthenticationHeaderValue("Bearer", token);
-#pragma warning restore SA1101
+
 
             try
             {
-#pragma warning disable SA1101
+
                 var response = await _retryPolicy.ExecuteAsync(async () =>
                 {
                     var result = await operation();
@@ -1597,7 +1597,7 @@ documentedRule>();
                     result.EnsureSuccessStatusCode();
                     return result;
                 });
-#pragma warning restore SA1101
+
 
                 return response;
             }
@@ -1612,54 +1612,54 @@ documentedRule>();
 
         private async Task ThrottleRequestAsync(CancellationToken cancellationToken)
         {
-#pragma warning disable SA1101
+
             await _rateLimitSemaphore.WaitAsync(cancellationToken);
-#pragma warning restore SA1101
+
 
             try
             {
-#pragma warning disable SA1101
+
                 lock (_rateLimitLock)
                 {
                     var now = DateTime.UtcNow;
                     var oneMinuteAgo = now.AddMinutes(-1);
 
                     // Remove timestamps older than 1 minute
-#pragma warning disable SA1101
+
                     while (_requestTimestamps.Count > 0 && _requestTimestamps.Peek() < oneMinuteAgo)
                     {
-#pragma warning disable SA1101
+
                         _requestTimestamps.Dequeue();
-#pragma warning restore SA1101
+
                     }
-#pragma warning restore SA1101
+
 
                     // If we're at the rate limit, wait
-#pragma warning disable SA1101
+
                     if (_requestTimestamps.Count >= RequestsPerMinute)
                     {
-#pragma warning disable SA1101
+
                         var oldestRequest = _requestTimestamps.Peek();
-#pragma warning restore SA1101
+
                         var waitTime = oldestRequest.AddMinutes(1) - now;
                         if (waitTime > TimeSpan.Zero)
                         {
                             Task.Delay(waitTime, cancellationToken).Wait(cancellationToken);
                         }
                     }
-#pragma warning restore SA1101
 
-#pragma warning disable SA1101
+
+
                     _requestTimestamps.Enqueue(now);
-#pragma warning restore SA1101
+
                 }
-#pragma warning restore SA1101
+
             }
             finally
             {
-#pragma warning disable SA1101
+
                 _rateLimitSemaphore.Release();
-#pragma warning restore SA1101
+
             }
         }
 
@@ -1681,13 +1681,13 @@ documentedRule>();
         /// </summary>
         public async Task<object[]> GetDistributionGroupsAsync(CancellationToken cancellationToken = default)
         {
-#pragma warning disable SA1101
-            await ThrottleRequestAsync(cancellationToken);
-#pragma warning restore SA1101
 
-#pragma warning disable SA1101
+            await ThrottleRequestAsync(cancellationToken);
+
+
+
             var result = await InvokeCommandAsync("Get-DistributionGroup", cancellationToken: cancellationToken);
-#pragma warning restore SA1101
+
 
             // Parse the result and return as object array
             if (result.Results != null && result.Results.Length > 0)
@@ -1700,9 +1700,9 @@ documentedRule>();
                         var outputJson = firstResult.Output.ToString();
                         if (!string.IsNullOrEmpty(outputJson))
                         {
-#pragma warning disable SA1101
+
                             var parsedResult = JsonConvert.DeserializeObject<Dictionary<string, JToken>>(outputJson, _jsonOptions);
-#pragma warning restore SA1101
+
                             return parsedResult?["value"].ToObject<object[]>() ?? Array.Empty<object>();
                         }
                     }
@@ -1722,13 +1722,13 @@ documentedRule>();
         /// </summary>
         public async Task<object[]> GetMailFlowRulesAsync(CancellationToken cancellationToken = default)
         {
-#pragma warning disable SA1101
-            await ThrottleRequestAsync(cancellationToken);
-#pragma warning restore SA1101
 
-#pragma warning disable SA1101
+            await ThrottleRequestAsync(cancellationToken);
+
+
+
             var result = await InvokeCommandAsync("Get-MailFlowRule", cancellationToken: cancellationToken);
-#pragma warning restore SA1101
+
 
             // Parse the result and return as object array
             if (result.Results != null && result.Results.Length > 0)
@@ -1741,9 +1741,9 @@ documentedRule>();
                         var outputJson = firstResult.Output.ToString();
                         if (!string.IsNullOrEmpty(outputJson))
                         {
-#pragma warning disable SA1101
+
                             var parsedResult = JsonConvert.DeserializeObject<Dictionary<string, JToken>>(outputJson, _jsonOptions);
-#pragma warning restore SA1101
+
                             return parsedResult?["value"].ToObject<object[]>() ?? Array.Empty<object>();
                         }
                     }
@@ -1763,13 +1763,13 @@ documentedRule>();
         /// </summary>
         public async Task<object[]> GetRetentionPoliciesAsync(CancellationToken cancellationToken = default)
         {
-#pragma warning disable SA1101
-            await ThrottleRequestAsync(cancellationToken);
-#pragma warning restore SA1101
 
-#pragma warning disable SA1101
+            await ThrottleRequestAsync(cancellationToken);
+
+
+
             var result = await InvokeCommandAsync("Get-RetentionPolicy", cancellationToken: cancellationToken);
-#pragma warning restore SA1101
+
 
             // Parse the result and return as object array
             if (result.Results != null && result.Results.Length > 0)
@@ -1782,9 +1782,9 @@ documentedRule>();
                         var outputJson = firstResult.Output.ToString();
                         if (!string.IsNullOrEmpty(outputJson))
                         {
-#pragma warning disable SA1101
+
                             var parsedResult = JsonConvert.DeserializeObject<Dictionary<string, JToken>>(outputJson, _jsonOptions);
-#pragma warning restore SA1101
+
                             return parsedResult?["value"].ToObject<object[]>() ?? Array.Empty<object>();
                         }
                     }
@@ -1807,9 +1807,9 @@ documentedRule>();
             Dictionary<string, object>? parameters = null,
             CancellationToken cancellationToken = default)
         {
-#pragma warning disable SA1101
+
             return await InvokeCommandAsync(cmdlet, parameters, cancellationToken);
-#pragma warning restore SA1101
+
         }
 
         #endregion
@@ -1905,19 +1905,19 @@ documentedRule>();
         /// <summary>
         /// Get product licenses directly through Graph API (alternative to Get-ProductLicenses cmdlet)
         /// </summary>
-#pragma warning disable SA1201
+
         public async Task<object[]> GetProductLicensesDirectAsync(
-#pragma warning restore SA1201
+
             string[]? userIds = null,
             CancellationToken cancellationToken = default)
         {
             try
             {
                 // Use Graph API directly instead of PowerShell cmdlet
-#pragma warning disable SA1101
+
                 var graphClient = _authManager.GraphClient
                     ?? throw new InvalidOperationException("Graph client not initialized");
-#pragma warning restore SA1101
+
 
                 var users = new List<object>();
 
@@ -1996,10 +1996,10 @@ documentedRule>();
         {
             try
             {
-#pragma warning disable SA1101
+
                 var graphClient = _authManager.GraphClient
                     ?? throw new InvalidOperationException("Graph client not initialized");
-#pragma warning restore SA1101
+
 
                 var roles = new List<object>();
 
@@ -2072,10 +2072,10 @@ documentedRule>();
         {
             try
             {
-#pragma warning disable SA1101
+
                 var graphClient = _authManager.GraphClient
                     ?? throw new InvalidOperationException("Graph client not initialized");
-#pragma warning restore SA1101
+
 
                 var permissions = new List<object>();
 
@@ -2150,9 +2150,9 @@ documentedRule>();
                 // If preferApi is true or if we're not in PowerShell context, use direct API
                 if (preferApi)
                 {
-#pragma warning disable SA1101
+
                     return await GetDataViaApiAsync(operation, parameters, cancellationToken);
-#pragma warning restore SA1101
+
                 }
 
                 // Try PowerShell cmdlet first
@@ -2169,9 +2169,9 @@ documentedRule>();
                             {
                                 try
                                 {
-#pragma warning disable SA1101
+
                                     var parsedResult = JsonConvert.DeserializeObject<Dictionary<string, JToken>>(outputJson, _jsonOptions);
-#pragma warning restore SA1101
+
                                     return parsedResult?["value"]?.ToObject<object[]>() ?? Array.Empty<object>();
                                 }
                                 catch (JsonException)
@@ -2189,9 +2189,9 @@ documentedRule>();
                 }
 
                 // Fall back to direct API call
-#pragma warning disable SA1101
+
                 return await GetDataViaApiAsync(operation, parameters, cancellationToken);
-#pragma warning restore SA1101
+
             }
             catch (Exception ex)
             {
@@ -2222,22 +2222,22 @@ documentedRule>();
                     return await GetOAuthPermissionsDirectAsync(cancellationToken);
 
                 case "get-mailbox":
-#pragma warning disable SA1101
+
                     return await GetMailboxesAsync(cancellationToken);
-#pragma warning restore SA1101
+
 
                 case "get-transportrule":
-#pragma warning disable SA1101
+
                     return await GetTransportRulesAsync(cancellationToken);
-#pragma warning restore SA1101
+
 
                 case "get-inboxrule":
                     var mailbox = parameters?.GetValueOrDefault("Mailbox") as string;
                     if (!string.IsNullOrEmpty(mailbox))
                     {
-#pragma warning disable SA1101
+
                         var rules = await GetInboxRulesAsync(mailbox, cancellationToken);
-#pragma warning restore SA1101
+
                         return rules.Cast<object>().ToArray();
                     }
                     return Array.Empty<object>();
@@ -2246,9 +2246,9 @@ documentedRule>();
                     var mailboxForPerms = parameters?.GetValueOrDefault("Identity") as string;
                     if (!string.IsNullOrEmpty(mailboxForPerms))
                     {
-#pragma warning disable SA1101
+
                         return await GetMailboxPermissionsAsync(mailboxForPerms, cancellationToken);
-#pragma warning restore SA1101
+
                     }
                     return Array.Empty<object>();
 
@@ -2256,9 +2256,9 @@ documentedRule>();
                     var recipient = parameters?.GetValueOrDefault("Identity") as string;
                     if (!string.IsNullOrEmpty(recipient))
                     {
-#pragma warning disable SA1101
+
                         return await GetRecipientPermissionsAsync(recipient, cancellationToken);
-#pragma warning restore SA1101
+
                     }
                     return Array.Empty<object>();
 
@@ -2266,34 +2266,34 @@ documentedRule>();
                     var mailboxForSendAs = parameters?.GetValueOrDefault("Identity") as string;
                     if (!string.IsNullOrEmpty(mailboxForSendAs))
                     {
-#pragma warning disable SA1101
+
                         return await GetSendAsPermissionsAsync(mailboxForSendAs, cancellationToken);
-#pragma warning restore SA1101
+
                     }
                     return Array.Empty<object>();
 
                 case "get-distributiongroup":
-#pragma warning disable SA1101
+
                     return await GetDistributionGroupsAsync(cancellationToken);
-#pragma warning restore SA1101
+
 
                 case "get-mailflowrule":
-#pragma warning disable SA1101
+
                     return await GetMailFlowRulesAsync(cancellationToken);
-#pragma warning restore SA1101
+
 
                 case "get-retentionpolicy":
-#pragma warning disable SA1101
+
                     return await GetRetentionPoliciesAsync(cancellationToken);
-#pragma warning restore SA1101
+
 
                 default:
                     // For unknown operations, try to execute as a generic cmdlet
                     try
                     {
-#pragma warning disable SA1101
+
                         var result = await InvokeCommandAsync(operation, parameters, cancellationToken);
-#pragma warning restore SA1101
+
                         if (result?.Results != null && result.Results.Length > 0)
                         {
                             var firstResult = result.Results[0];
@@ -2304,9 +2304,9 @@ documentedRule>();
                                 {
                                     try
                                     {
-#pragma warning disable SA1101
+
                                         var parsedResult = JsonConvert.DeserializeObject<Dictionary<string, JToken>>(outputJson, _jsonOptions);
-#pragma warning restore SA1101
+
                                         return parsedResult?["value"]?.ToObject<object[]>() ?? Array.Empty<object>();
                                     }
                                     catch (JsonException)
@@ -2422,9 +2422,9 @@ documentedRule>();
             /// Solution: Check Exchange Online permissions
             /// </summary>
             public static string PermissionIssueSolution =>
-#pragma warning disable SA1600
+
                 "Ensure your
-#pragma warning restore SA1600
+
 permissions. " +
                 "Try using Graph API alternatives for basic operations.";
 
@@ -2433,33 +2433,33 @@ permissions. " +
             /// Solution: The client automatically handles rate limiting
             /// </summary>
             public static string RateLimitSolution =>
-#pragma warning disable SA1600
+
                 "The client automatically handles rate limiting with exp
-#pragma warning restore SA1600
+
 backoff. " +
                 "If you encounter issues, increase the retry count or add delays between operations.";
-#pragma warning disable SA1600
+
         }
-#pragma warning restore SA1600
+
 
         #endregion
 
-#pragma warning disable SA1201
+
         public void Dispose()
-#pragma warning restore SA1201
+
         {
-#pragma warning disable SA1101
+
             _httpClient?.Dispose();
-#pragma warning restore SA1101
-#pragma warning disable SA1101
+
+
             _rateLimitSemaphore?.Dispose();
-#pragma warning restore SA1101
+
         }
     }
 
-#pragma warning disable SA1600
+
     // Custom DateTime converter for Newtonsoft.Json
-#pragma warning restore SA1600
+
     public class DateTimeOffsetConverter : JsonConverter<DateTimeOffset>
     {
         public override DateTimeOffset ReadJson(JsonReader reader, Type objectType, DateTimeOffset existingValue, bool hasExistingValue, JsonSerializer serializer)
