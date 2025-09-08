@@ -1,0 +1,7 @@
+"TestName","Iteration","ExecutionTime","Success"
+"Microsoft Graph PowerShell","1","0.3407797","True"
+"Graph.Fast Module","1","0.1379647","True"
+"Microsoft Graph PowerShell","2","0.079271","True"
+"Graph.Fast Module","2","0.0913544","True"
+"Microsoft Graph PowerShell","3","0.102216","True"
+"Graph.Fast Module","3","0.0734234","True"

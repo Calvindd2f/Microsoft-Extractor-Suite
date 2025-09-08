@@ -252,25 +252,6 @@ function Get-GraphAuthType {
         MissingScopes = $missingScopes
     }
 }
-$GlobalRoleId="62e90394-69f5-4237-9190-012177145e10";
-$ExchangeRoleId="29232cdf-9323-42fd-ade2-1d097af3e4de";
-$delegatedScopesExchange=@("$ExchangeRoleId")
-$applicationScopesExchange=@("full_access_as_app""Exchange.ManageAsApp")
-$delegated
-$application
-
-
-$delegatedScopesGraph
-$applicationScopesGraph
-
-
-$applicationScopesExchange;$delegatedScopesExchange;$ExchangeRoleId;$GlobalRoleId
-#Get-ManagementRole -RoleType ExchangeFullAccessApp
-#$Perms = Get-ManagementRole -Cmdlet Get-OrganizationConfig
-#$Perms | foreach {Get-ManagementRoleAssignment -Role $_.Name -Delegating $false | Format-Table -Auto Role,RoleAssigneeType,RoleAssigneeName}
-$me=(Get-ConnectionInformation).UserPrincipalName
-Get-ManagementRoleAssignment -RoleAssignee $me | Format-Table -Auto Role,RoleAssigneeName,RoleAssigneeType,Delegating
-$error_description="AADSTS700054: response_type 'id_token' is not enabled for the application. Trace ID: 276a464d-f9cf-42c1-9549-e0e52f510000 Correlation ID: 246df67a-b874-4ef3-aefc-9046fe6d0c5e Timestamp: 2024-11-19 1846Z"
 
 function private:Merge-OutputFiles {
     param (

@@ -1,0 +1,15 @@
+FGGetConditionalAccessPoliciess.ps1
+FGGetDevices.ps1
+FGGetGraphEntraAuditLogs.ps1
+FGGetOAuthApplications.ps1
+FGGetUALGraph.ps1
+FGGetMfa.ps1
+FGGetRoles.ps1
+FGGetRiskyUsers.ps1
+FGGetProductLicenses.ps1
+FGGetUsersInfo.ps1
+FGGetSecurityAlerts.ps1
+# --- Helpers ---- #
+Graph.Fast.psm1
+DeletegatedAccessTokenGraph.ps1
+
