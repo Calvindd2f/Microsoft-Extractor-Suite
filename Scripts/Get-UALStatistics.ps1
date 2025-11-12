@@ -28,7 +28,7 @@ function Get-UALStatistics
     Standard: Normal operational logging
 	Debug: Verbose logging for debugging purposes
     Default: Standard
-    
+
     .EXAMPLE
     Get-UALStatistics
 	Displays the total number of logs within the unified audit log.
@@ -50,7 +50,7 @@ function Get-UALStatistics
 	Init-Logging
     Init-OutputDir -Component "UnifiedAuditLog" -FilePostfix "Amount_Of_Audit_Logs" -CustomOutputDir $OutputDir
 
-    $results = @()
+    $results = [System.Collections.Generic.List[object]]::new()
     $summary = @{
         TotalCount = 0
         RecordsWithData = 0
@@ -63,7 +63,7 @@ function Get-UALStatistics
 	Write-LogFile -Message "Started: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -Level Standard
 
 	StartDateUAL -Quiet
-	EndDate -Quiet	
+	EndDate -Quiet
 
 	$dateRange = "$($script:StartDate.ToString('yyyy-MM-dd HH:mm:ss')) to $($script:EndDate.ToString('yyyy-MM-dd HH:mm:ss'))"
 	$recordTypes = "ExchangeAdmin","ExchangeItem","ExchangeItemGroup","SharePoint","SyntheticProbe","SharePointFileOperation","OneDrive","AzureActiveDirectory","AzureActiveDirectoryAccountLogon","DataCenterSecurityCmdlet","ComplianceDLPSharePoint","Sway","ComplianceDLPExchange","SharePointSharingOperation","AzureActiveDirectoryStsLogon","SkypeForBusinessPSTNUsage","SkypeForBusinessUsersBlocked","SecurityComplianceCenterEOPCmdlet","ExchangeAggregatedOperation","PowerBIAudit","CRM","Yammer","SkypeForBusinessCmdlets","Discovery","MicrosoftTeams","ThreatIntelligence","MailSubmission","MicrosoftFlow","AeD","MicrosoftStream","ComplianceDLPSharePointClassification","ThreatFinder","Project","SharePointListOperation","SharePointCommentOperation","DataGovernance","Kaizala","SecurityComplianceAlerts","ThreatIntelligenceUrl","SecurityComplianceInsights","MIPLabel","WorkplaceAnalytics","PowerAppsApp","PowerAppsPlan","ThreatIntelligenceAtpContent","LabelContentExplorer","TeamsHealthcare","ExchangeItemAggregated","HygieneEvent","DataInsightsRestApiAudit","InformationBarrierPolicyApplication","SharePointListItemOperation","SharePointContentTypeOperation","SharePointFieldOperation","MicrosoftTeamsAdmin","HRSignal","MicrosoftTeamsDevice","MicrosoftTeamsAnalytics","InformationWorkerProtection","Campaign","DLPEndpoint","AirInvestigation","Quarantine","MicrosoftForms","ApplicationAudit","ComplianceSupervisionExchange","CustomerKeyServiceEncryption","OfficeNative","MipAutoLabelSharePointItem","MipAutoLabelSharePointPolicyLocation","MicrosoftTeamsShifts","SecureScore","MipAutoLabelExchangeItem","CortanaBriefing","Search","WDATPAlerts","PowerPlatformAdminDlp","PowerPlatformAdminEnvironment","MDATPAudit","SensitivityLabelPolicyMatch","SensitivityLabelAction","SensitivityLabeledFileAction","AttackSim","AirManualInvestigation","SecurityComplianceRBAC","UserTraining","AirAdminActionInvestigation","MSTIC","PhysicalBadgingSignal","TeamsEasyApprovals","AipDiscover","AipSensitivityLabelAction","AipProtectionAction","AipFileDeleted","AipHeartBeat","MCASAlerts","OnPremisesFileShareScannerDlp","OnPremisesSharePointScannerDlp","ExchangeSearch","SharePointSearch","PrivacyDataMinimization","LabelAnalyticsAggregate","MyAnalyticsSettings","SecurityComplianceUserChange","ComplianceDLPExchangeClassification","ComplianceDLPEndpoint","MipExactDataMatch","MSDEResponseActions","MSDEGeneralSettings","MSDEIndicatorsSettings","MS365DCustomDetection","MSDERolesSettings","MAPGAlerts","MAPGPolicy","MAPGRemediation","PrivacyRemediationAction","PrivacyDigestEmail","MipAutoLabelSimulationProgress","MipAutoLabelSimulationCompletion","MipAutoLabelProgressFeedback","DlpSensitiveInformationType","MipAutoLabelSimulationStatistics","LargeContentMetadata","Microsoft365Group","CDPMlInferencingResult","FilteringMailMetadata","CDPClassificationMailItem","CDPClassificationDocument","OfficeScriptsRunAction","FilteringPostMailDeliveryAction","CDPUnifiedFeedback","TenantAllowBlockList","ConsumptionResource","HealthcareSignal","DlpImportResult","CDPCompliancePolicyExecution","MultiStageDisposition","PrivacyDataMatch","FilteringDocMetadata","FilteringEmailFeatures","PowerBIDlp","FilteringUrlInfo","FilteringAttachmentInfo","CoreReportingSettings","ComplianceConnector","PowerPlatformLockboxResourceAccessRequest","PowerPlatformLockboxResourceCommand","CDPPredictiveCodingLabel","CDPCompliancePolicyUserFeedback","WebpageActivityEndpoint","OMEPortal","CMImprovementActionChange","FilteringUrlClick","MipLabelAnalyticsAuditRecord","FilteringEntityEvent","FilteringRuleHits","FilteringMailSubmission","LabelExplorer","MicrosoftManagedServicePlatform","PowerPlatformServiceActivity","ScorePlatformGenericAuditRecord","FilteringTimeTravelDocMetadata","Alert","AlertStatus","AlertIncident","IncidentStatus","Case","CaseInvestigation","RecordsManagement","PrivacyRemediation","DataShareOperation","CdpDlpSensitive","EHRConnector","FilteringMailGradingResult","PublicFolder","PrivacyTenantAuditHistoryRecord","AipScannerDiscoverEvent","EduDataLakeDownloadOperation","M365ComplianceConnector","MicrosoftGraphDataConnectOperation","MicrosoftPurview","FilteringEmailContentFeatures","PowerPagesSite","PowerAppsResource","PlannerPlan","PlannerCopyPlan","PlannerTask","PlannerRoster","PlannerPlanList","PlannerTaskList","PlannerTenantSettings","ProjectForTheWebProject","ProjectForTheWebTask","ProjectForTheWebRoadmap","ProjectForTheWebRoadmapItem","ProjectForTheWebProjectSettings","ProjectForTheWebRoadmapSettings","QuarantineMetadata","MicrosoftTodoAudit","TimeTravelFilteringDocMetadata","TeamsQuarantineMetadata","SharePointAppPermissionOperation","MicrosoftTeamsSensitivityLabelAction","FilteringTeamsMetadata","FilteringTeamsUrlInfo","FilteringTeamsPostDeliveryAction","MDCAssessments","MDCRegulatoryComplianceStandards","MDCRegulatoryComplianceControls","MDCRegulatoryComplianceAssessments","MDCSecurityConnectors","MDADataSecuritySignal","VivaGoals","FilteringRuntimeInfo","AttackSimAdmin","MicrosoftGraphDataConnectConsent","FilteringAtpDetonationInfo","PrivacyPortal","ManagedTenants","UnifiedSimulationMatchedItem","UnifiedSimulationSummary","UpdateQuarantineMetadata","MS365DSuppressionRule","PurviewDataMapOperation","FilteringUrlPostClickAction","IrmUserDefinedDetectionSignal","TeamsUpdates","PlannerRosterSensitivityLabel","MS365DIncident","FilteringDelistingMetadata","ComplianceDLPSharePointClassificationExtended","MicrosoftDefenderForIdentityAudit","SupervisoryReviewDayXInsight","DefenderExpertsforXDRAdmin","CDPEdgeBlockedMessage","HostedRpa","CdpContentExplorerAggregateRecord","CDPHygieneAttachmentInfo","CDPHygieneSummary","CDPPostMailDeliveryAction","CDPEmailFeatures","CDPHygieneUrlInfo","CDPUrlClick","CDPPackageManagerHygieneEvent","FilteringDocScan","TimeTravelFilteringDocScan","MAPGOnboard","VfamCreatePolicy","VfamUpdatePolicy","VfamDeletePolicy","M365DAAD","CdpColdCrawlStatus","PowerPlatformAdministratorActivity","Windows365CustomerLockbox","CdpResourceScopeChangeEvent","ComplianceCCExchangeExecutionResult","CdpOcrCostEstimatorRecord","CopilotInteraction","CdpOcrBillingRecord","ComplianceDLPApplications","UAMOperation","VivaLearning","VivaLearningAdmin","PurviewPolicyOperation","PurviewMetadataPolicyOperation","PeopleAdminSettings","CdpComplianceDLPExchangeClassification","CdpComplianceDLPSharePointClassification","FilteringBulkSenderInsightData","FilteringBulkThresholdInsightData","PrivacyOpenAccess","OWAAuth","ComplianceDLPApplicationsClassification","SharePointESignature","Dynamics365BusinessCentral","MeshWorlds","VivaPulseResponse","VivaPulseOrganizer","VivaPulseAdmin","VivaPulseReport","AIAppInteraction","ComplianceDLMExchange","ComplianceDLMSharePoint","ProjectForTheWebAssignedToMeSettings","CPSOperation","ComplianceDLPExchangeDiscovery","PurviewMCRecommendation","ComplianceDLPEndpointDiscovery","InsiderRiskScopedUserInsights","MicrosoftTeamsRetentionLabelAction","AadRiskDetection","AuditSearch","AuditRetentionPolicy","AuditConfig","Microsoft365BackupBackupPolicy","Microsoft365BackupRestoreTask","Microsoft365BackupRestoreItem","Microsoft365BackupBackupItem","URBACAssignment","URBACRole","URBACEnableState","IRMSecurityAlert","PurviewInsiderRiskCases","PurviewInsiderRiskAlerts","InsiderRiskScopedUsers","CdpConsumptionResource","CreateCopilotPlugin","UpdateCopilotPlugin","DeleteCopilotPlugin","EnableCopilotPlugin","DisableCopilotPlugin","CreateCopilotWorkspace","UpdateCopilotWorkspace","DeleteCopilotWorkspace","EnableCopilotWorkspace","DisableCopilotWorkspace","CreateCopilotPromptBook","UpdateCopilotPromptBook","DeleteCopilotPromptBook","EnableCopilotPromptBook","DisableCopilotPromptBook","UpdateCopilotSettings","P4AIAssessmentRecord","P4AIAssessmentLocationResultRecord","ConnectedAIAppInteraction","PrivaPrivacyConsentOperation","PrivaPrivacyAssessmentOperation","DataCatalogAccessRequests","ComplianceSettingsChange","DataSecurityInvestigation","TeamCopilotInteraction","IRMActivityAuditTrail","SharePointContentSecurityPolicy","CloudUpdateProfileConfig","CloudUpdateTenantConfig","CloudUpdateDeviceConfig","DefenderPreviewFeatures","DeviceDiscoverySettingsExclusion","DeviceDiscoverySettingsAuthenticatedScans","CriticalAssetManagementClassification","DeviceDiscoverySettings","USXWorkspaceOnboarding","VivaGlintAdvancedConfiguration","VivaGlintPulseProgram","VivaGlintPulseProgramRespondentRate","VivaGlintQuestion","VivaGlintRole","VivaGlintRubicon","VivaGlintSupportAccess","VivaGlintSystem","VivaGlintUser","VivaGlintUserGroup","VivaGlintFeedbackProgram"
@@ -78,26 +78,26 @@ function Get-UALStatistics
 		$maxRetries = 3
 		$retryCount = 0
 		$totalCount = 0
-		
+
 		while ($retryCount -lt $maxRetries -and $totalCount -eq 0) {
 			if ($retryCount -gt 0) {
 				Write-LogFile -Message "[INFO] No events found... retrying, attempt $($retryCount+1)/$maxRetries after 15 second delay..." -Level Standard
 				Start-Sleep -Seconds 15
 			}
-			
+
 			try {
 				if ($isDebugEnabled) {
 					Write-LogFile -Message "[DEBUG] Executing total count query..." -Level Debug
 					$performance = Measure-Command {
-						$totalCount = Search-UnifiedAuditLog -Userids $UserIds -StartDate $script:StartDate -EndDate $script:EndDate -ResultSize 1 | 
+						$totalCount = Search-UnifiedAuditLog -Userids $UserIds -StartDate $script:StartDate -EndDate $script:EndDate -ResultSize 1 |
 									  Select-Object -First 1 -ExpandProperty ResultCount
 					}
 					Write-LogFile -Message "[DEBUG] Total count query took $([math]::round($performance.TotalSeconds, 2)) seconds" -Level Debug
 				} else {
-					$totalCount = Search-UnifiedAuditLog -Userids $UserIds -StartDate $script:StartDate -EndDate $script:EndDate -ResultSize 1 | 
+					$totalCount = Search-UnifiedAuditLog -Userids $UserIds -StartDate $script:StartDate -EndDate $script:EndDate -ResultSize 1 |
 								  Select-Object -First 1 -ExpandProperty ResultCount
 				}
-				
+
 				if ($null -eq $totalCount) {
 					$totalCount = 0
 				}
@@ -112,16 +112,16 @@ function Get-UALStatistics
 				}
 				$totalCount = 0
 			}
-			
+
 			$retryCount++
 		}
-		
+
 		if ($totalCount -eq 0) {
 			Write-LogFile -Message "[WARNING] No Unified Audit Log entries found after $maxRetries attempts" -Color "Yellow" -Level Standard
 			Write-LogFile -Message "[INFO] Aborting script since there are no audit logs to analyze" -Level Standard
 			return
 		}
-		
+
 		$summary.TotalCount = $totalCount
 		Write-LogFile -Message "[INFO] Found a total of $totalCount Unified Audit Log entries" -Level Standard
 	}
@@ -142,7 +142,7 @@ function Get-UALStatistics
 			Write-LogFile -Message "[DEBUG] Processing record type: $record ($processedCount/$totalRecords)" -Level Debug
 		}
 
-		if ($processedCount % 25 -eq 0) {			
+		if ($processedCount % 25 -eq 0) {
 			Write-LogFile -Message "[INFO] Processed $processedCount of $totalRecords record types" -Level Standard
 		}
 
@@ -163,11 +163,11 @@ function Get-UALStatistics
 				Write-LogFile -Message "[DEBUG] $record : $specificResult events ($percentage%)" -Level Debug
 			}
 
-			$results += [PSCustomObject]@{
+			$results.Add([PSCustomObject]@{
 				RecordType = $record
 				Count = $specificResult
 				Percentage = $percentage
-			}
+			})
 
 			#Write-LogFile -Message "$($record):$($specificResult)" -Level Standard
 			Write-Output "$record,$specificResult,$percentage" | Out-File $script:outputFile -Append
@@ -186,10 +186,11 @@ function Get-UALStatistics
 
 		$summary.ProcessingTime = (Get-Date) - $summary.StartTime
 
-		$results | Sort-Object Count -Descending | ForEach-Object {
-			$formattedCount = "{0,15:N0}" -f $_.Count
-			$formattedPercentage = "{0,4:f1}" -f $_.Percentage
-			Write-LogFile -Message ("{0,-40} {1} ({2,4}%)" -f $_.RecordType, $formattedCount, $formattedPercentage) -Level Standard
+		$sortedResults = $results | Sort-Object Count -Descending
+		foreach ($result in $sortedResults) {
+			$formattedCount = "{0,15:N0}" -f $result.Count
+			$formattedPercentage = "{0,4:f1}" -f $result.Percentage
+			Write-LogFile -Message ("{0,-40} {1} ({2,4}%)" -f $result.RecordType, $formattedCount, $formattedPercentage) -Level Standard
 		}
 
 		Write-LogFile -Message "----------------------------------------" -Level Standard
@@ -209,7 +210,7 @@ function Get-UALStatistics
 
 		Write-Summary -Summary $summaryOutput -Title "UAL Statistics Analysis Summary"
 	}
-	
+
 	else {
 		Write-LogFile -Message "[INFO] No records found in the Unified Audit Log." -Level Minimal
 	}

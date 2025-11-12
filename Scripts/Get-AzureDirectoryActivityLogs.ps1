@@ -34,7 +34,7 @@ function Get-DirectoryActivityLogs {
     Standard: Normal operational logging
     Debug: Verbose logging for debugging purposes
     Default: Standard
-	
+
     .EXAMPLE
     Get-DirectoryActivityLogs
 	Get all the Directory Activity logs for the last 90 days.
@@ -55,7 +55,7 @@ function Get-DirectoryActivityLogs {
 		[string]$OutputDir,
 		[string]$encoding = "UTF8",
         [ValidateSet('None', 'Minimal', 'Standard', 'Debug')]
-        [string]$LogLevel = 'Standard'	
+        [string]$LogLevel = 'Standard'
 	)
 
     Init-Logging
@@ -79,7 +79,7 @@ function Get-DirectoryActivityLogs {
 
         if ($isDebugEnabled) {
             Write-LogFile -Message "[DEBUG] Azure access token acquired successfully" -Level Debug
-            
+
             try {
                 $azContext = Get-AzContext
                 if ($azContext) {
@@ -108,7 +108,7 @@ function Get-DirectoryActivityLogs {
 
     Write-LogFile -Message "[INFO] Retrieving Directory Activity logs..." -Level Standard
     $uriBase = "https://management.azure.com/providers/microsoft.insights/eventtypes/management/values?api-version=2015-04-01&`$filter=eventTimestamp ge '$script:StartDate' and eventTimestamp le '$script:endDate'"
-    $events = @()
+    $events = [System.Collections.Generic.List[object]]::new()
 
     if ($isDebugEnabled) {
         Write-LogFile -Message "[DEBUG] API configuration:" -Level Debug
@@ -129,21 +129,24 @@ function Get-DirectoryActivityLogs {
         }
 
         $response = Invoke-RestMethod @listOperations
-        $events += $response.value
+        if ($response.value -and $response.value.Count -gt 0) {
+            $events.AddRange($response.value)
+        }
         $uriBase = $response.nextLink
     } while ($null -ne $uriBase)
 
-    $processedEvents = $events | ForEach-Object {
+    $processedEvents = [System.Collections.Generic.List[object]]::new($events.Count)
+    foreach ($event in $events) {
         $eventProps = @{}
-        foreach ($prop in $_.PSObject.Properties) {
+        foreach ($prop in $event.PSObject.Properties) {
             $eventProps[$prop.Name] = $prop.Value
         }
-        [PSCustomObject]$eventProps
+        $processedEvents.Add([PSCustomObject]$eventProps)
     }
 
     $date = [datetime]::Now.ToString('yyyyMMddHHmmss')
     if ($output -eq "JSON") {
-        $processedEvents | ConvertTo-Json -Depth 100 | Set-Content -Path "$OutputDir/DirectoryActivityLogs.JSON"   
+        $processedEvents | ConvertTo-Json -Depth 100 | Set-Content -Path "$OutputDir/DirectoryActivityLogs.JSON"
     }
     elseif ($output -eq "JSONL") {
         $processedEvents | ConvertTo-Json -Depth 100 | Out-File -FilePath "$OutputDir/$($date)-DirectoryActivityLogs.jsonl" -Encoding $Encoding

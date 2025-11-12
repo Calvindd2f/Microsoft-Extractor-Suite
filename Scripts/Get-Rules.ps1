@@ -7,12 +7,12 @@ function Show-TransportRules
 
     .DESCRIPTION
     Shows the transport rules in your organization.
-    
+
     .Example
     Show-TransportRules
 #>
 	$transportRules = Get-TransportRule | Select-Object -Property Name,Description,CreatedBy,@{Name="WhenChanged";Expression={(Get-Date $_.WhenChanged).ToUniversalTime()}},State
-	
+
 	if ($null -ne $transportRules) {
 		write-LogFile -Message "[INFO] Checking all TransportRules"
 		foreach ($rule in $transportRules) {
@@ -51,7 +51,7 @@ function Get-TransportRules
     Standard: Normal operational logging
 	Debug: Verbose logging for debugging purposes
     Default: Standard
-    
+
     .Example
     Get-TransportRules
 #>
@@ -90,23 +90,23 @@ function Get-TransportRules
 	$enabledCount = 0
 	$disabledCount = 0
 
-	$transportRules | ForEach-Object {
+	foreach ($rule in $transportRules) {
 		if ($isDebugEnabled) {
-			Write-LogFile -Message "[DEBUG] Processing rule: $($_.Name)" -Level Debug
-			Write-LogFile -Message "[DEBUG]   State: $($_.State)" -Level Debug
-			Write-LogFile -Message "[DEBUG]   Priority: $($_.Priority)" -Level Debug
-			Write-LogFile -Message "[DEBUG]   Mode: $($_.Mode)" -Level Debug
-			Write-LogFile -Message "[DEBUG]   Created By: $($_.CreatedBy)" -Level Debug
-			Write-LogFile -Message "[DEBUG]   When Changed: $($_.WhenChanged)" -Level Debug
+			Write-LogFile -Message "[DEBUG] Processing rule: $($rule.Name)" -Level Debug
+			Write-LogFile -Message "[DEBUG]   State: $($rule.State)" -Level Debug
+			Write-LogFile -Message "[DEBUG]   Priority: $($rule.Priority)" -Level Debug
+			Write-LogFile -Message "[DEBUG]   Mode: $($rule.Mode)" -Level Debug
+			Write-LogFile -Message "[DEBUG]   Created By: $($rule.CreatedBy)" -Level Debug
+			Write-LogFile -Message "[DEBUG]   When Changed: $($rule.WhenChanged)" -Level Debug
 		}
-		if ($_.State -eq "Enabled") {
+		if ($rule.State -eq "Enabled") {
 			$enabledCount++
 		}
-		elseif ($_.State -eq "Disabled") {
+		elseif ($rule.State -eq "Disabled") {
 			$disabledCount++
 		}
 		else {
-			Write-LogFile -Message "[DEBUG] Unknown state value: $($_.State) for rule: $($_.Name)" -Level Standard
+			Write-LogFile -Message "[DEBUG] Unknown state value: $($rule.State) for rule: $($rule.Name)" -Level Standard
 		}
 	}
 
@@ -131,10 +131,10 @@ function Show-MailboxRules
 
     .DESCRIPTION
     Shows the mailbox rules in your organization.
-	
+
 	.Parameter UserIds
     UserIds is the Identity parameter specifies the Inbox rule that you want to view.
-    
+
     .Example
     Show-MailboxRules -UserIds "HR@invictus-ir.com,Test@Invictus-ir.com"
 #>
@@ -142,19 +142,19 @@ function Show-MailboxRules
 	param(
 		[string]$UserIds
 	)
-		
+
 	$amountofRules = 0
-	if ($UserIds -eq "") {		
-		Get-mailbox -resultsize unlimited  |
-		ForEach-Object {
-			write-LogFile -Message "[INFO] Checking $($_.UserPrincipalName)..."
-			
-			$inboxrule = Get-inboxrule -Mailbox $_.UserPrincipalName  
+	if ($UserIds -eq "") {
+		$mailboxes = Get-mailbox -resultsize unlimited
+		foreach ($mailbox in $mailboxes) {
+			write-LogFile -Message "[INFO] Checking $($mailbox.UserPrincipalName)..."
+
+			$inboxrule = Get-inboxrule -Mailbox $mailbox.UserPrincipalName
 			if ($inboxrule) {
-				write-LogFile -Message "[INFO] Found InboxRule(s) for: $($_.UserPrincipalName)..." -Color "Green"
+				write-LogFile -Message "[INFO] Found InboxRule(s) for: $($mailbox.UserPrincipalName)..." -Color "Green"
 				foreach($rule in $inboxrule){
 					$amountofRules = $amountofRules + 1
-					write-LogFile -Message "Username: $($_.UserPrincipalName)" -Color "Yellow"
+					write-LogFile -Message "Username: $($mailbox.UserPrincipalName)" -Color "Yellow"
 					write-LogFile -Message "RuleName: $($rule.name)" -Color "Yellow"
 					write-LogFile -Message "RuleEnabled: $($rule.Enabled)" -Color "Yellow"
 					write-LogFile -Message "CopytoFolder: $($rule.CopyToFolder)" -Color "Yellow"
@@ -170,13 +170,13 @@ function Show-MailboxRules
 		}
 	}
 
-	else {	
+	else {
 		if ($UserIds -match ",") {
-			$UserIds.Split(",") | ForEach-Object {
-				$user = $_
+			$userList = $UserIds.Split(",")
+			foreach ($user in $userList) {
 				Write-Output ('[INFO] Checking {0}...' -f $user)
-				
-				$inboxrule = get-inboxrule -Mailbox $user 
+
+				$inboxrule = get-inboxrule -Mailbox $user
 				if ($inboxrule) {
 					write-LogFile -Message "[INFO] Found InboxRule(s) for: $UserIds..." -Color "Green"
 					foreach($rule in $inboxrule){
@@ -196,10 +196,10 @@ function Show-MailboxRules
 				}
 			}
 		}
-				
+
 		else {
 			Write-Output ('[INFO] Checking {0}...' -f $UserIds)
-			$inboxrule = get-inboxrule -Mailbox $UserIds 
+			$inboxrule = get-inboxrule -Mailbox $UserIds
 			if ($inboxrule) {
 				write-LogFile -Message "[INFO] Found InboxRule(s) for: $UserIds..." -Color "Green"
 				foreach($rule in $inboxrule){
@@ -226,8 +226,8 @@ function Show-MailboxRules
 	else {
 		write-LogFile -Message "[INFO] No Inbox Rules found!" -Color "Yellow"
 	}
-		
-	
+
+
 }
 
 function Get-MailboxRules
@@ -239,7 +239,7 @@ function Get-MailboxRules
     .DESCRIPTION
     Collects all the mailbox rules in your organization.
 	The output will be written to a CSV file called "InboxRules.csv".
-	
+
 	.Parameter UserIds
     UserIds is the Identity parameter specifies the Inbox rule that you want to view.
 
@@ -258,7 +258,7 @@ function Get-MailboxRules
 	.PARAMETER Encoding
 	Encoding is the parameter specifying the encoding of the CSV output file.
 	Default: UTF8
-    
+
     .Example
 	Get-MailboxRules -UserIds Test@Invictus-ir.com
     Get-MailboxRules -UserIds "HR@invictus-ir.com,Test@Invictus-ir.com"
@@ -290,8 +290,8 @@ function Get-MailboxRules
         StopProcessingRules = 0
         HighImportanceRules = 0
 	}
-	
-	if ($null -eq $UserIds -or $UserIds.Count -eq 0 -or [string]::IsNullOrWhiteSpace($UserIds -join '')) {	
+
+	if ($null -eq $UserIds -or $UserIds.Count -eq 0 -or [string]::IsNullOrWhiteSpace($UserIds -join '')) {
 		if ($isDebugEnabled) {
 			Write-LogFile -Message "[DEBUG] Processing scenario: All mailboxes" -Level Debug
 			$performance = Measure-Command {
@@ -307,7 +307,7 @@ function Get-MailboxRules
 		foreach ($mailbox in $mailboxes) {
 			Write-LogFile -Message "[INFO] Checking rules for: $($mailbox.UserPrincipalName)" -Level Standard
             $rules = Get-InboxRule -Mailbox $mailbox.UserPrincipalName
-			
+
 			if ($rules) {
 				$summary.UsersWithRules++
 				foreach ($rule in $rules) {
@@ -361,7 +361,7 @@ function Get-MailboxRules
 			}
 		}
 	}
-	else {	
+	else {
 		$userList = $UserIds -split ','
         $summary.TotalUsers = $userList.Count
 
@@ -384,7 +384,7 @@ function Get-MailboxRules
 			} else {
 				$rules = Get-InboxRule -Mailbox $trimmedUser
 			}
-			
+
 			if ($rules) {
 				$summary.UsersWithRules++
 				if ($isDebugEnabled) {

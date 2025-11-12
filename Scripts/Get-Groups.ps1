@@ -21,19 +21,19 @@ Function Get-Groups {
     Standard: Normal operational logging
     Debug: Verbose logging for debugging purposes
     Default: Standard
-    
+
     .EXAMPLE
     Get-Groups
     Retrieves all groups and exports the output to a CSV file.
-    
+
     .EXAMPLE
     Get-Groups -Encoding utf32
     Retrieves all groups and exports the output to a CSV file with UTF-32 encoding.
-        
+
     .EXAMPLE
     Get-Groups -OutputDir C:\Windows\Temp
-    Retrieves all groups and saves the output to the C:\Windows\Temp folder.	
-#>    
+    Retrieves all groups and saves the output to the C:\Windows\Temp folder.
+#>
 
     [CmdletBinding()]
     param(
@@ -65,52 +65,61 @@ Function Get-Groups {
 
         Write-LogFile -Message "[INFO] Found $($allGroups.Count) groups" -Level Standard -Color "Green"
 
-        $results = $allGroups | ForEach-Object {
+        $results = [System.Collections.Generic.List[object]]::new($allGroups.Count)
+        foreach ($group in $allGroups) {
             if ($isDebugEnabled) {
-                Write-LogFile -Message "[DEBUG] Processing group: $($_.DisplayName)" -Level Debug
-                if ($_.MembershipRule) {
-                    Write-LogFile -Message "[DEBUG]   Rule length: $($_.MembershipRule.Length) characters" -Level Debug
-                    Write-LogFile -Message "[DEBUG]   Processing state: $($_.MembershipRuleProcessingState)" -Level Debug
+                Write-LogFile -Message "[DEBUG] Processing group: $($group.DisplayName)" -Level Debug
+                if ($group.MembershipRule) {
+                    Write-LogFile -Message "[DEBUG]   Rule length: $($group.MembershipRule.Length) characters" -Level Debug
+                    Write-LogFile -Message "[DEBUG]   Processing state: $($group.MembershipRuleProcessingState)" -Level Debug
                 }
-                Write-LogFile -Message "[DEBUG]   Security enabled: $($_.SecurityEnabled)" -Level Debug
-                Write-LogFile -Message "[DEBUG]   Mail enabled: $($_.MailEnabled)" -Level Debug
+                Write-LogFile -Message "[DEBUG]   Security enabled: $($group.SecurityEnabled)" -Level Debug
+                Write-LogFile -Message "[DEBUG]   Mail enabled: $($group.MailEnabled)" -Level Debug
             }
 
-            [PSCustomObject]@{
-                GroupId = $_.Id
-                DisplayName = $_.DisplayName
-                Description = $_.Description
-                Mail = $_.Mail
-                MailEnabled = $_.MailEnabled
-                MailNickname = $_.MailNickname
-                SecurityEnabled = $_.SecurityEnabled
-                GroupTypes = $_.GroupTypes -join ','
-                CreatedDateTime = $_.CreatedDateTime
-                RenewedDateTime = $_.RenewedDateTime
-                ExpirationDateTime = $_.ExpirationDateTime
-                Visibility = $_.Visibility
-                OnPremisesSyncEnabled = $_.OnPremisesSyncEnabled
-                OnPremisesLastSyncDateTime = $_.OnPremisesLastSyncDateTime
-                SecurityIdentifier = $_.SecurityIdentifier
-                IsManagementRestricted = $_.IsManagementRestricted
-                MembershipRule = $_.MembershipRule
-                MembershipRuleProcessingState = $_.MembershipRuleProcessingState
-                Classification = $_.Classification
-                HideFromAddressLists = $_.HideFromAddressLists
-                HideFromOutlookClients = $_.HideFromOutlookClients
-                IsAssignableToRole = $_.IsAssignableToRole
-                PreferredDataLocation = $_.PreferredDataLocation
-                ProxyAddresses = $_.ProxyAddresses -join ';'
-            }
+            $results.Add([PSCustomObject]@{
+                GroupId = $group.Id
+                DisplayName = $group.DisplayName
+                Description = $group.Description
+                Mail = $group.Mail
+                MailEnabled = $group.MailEnabled
+                MailNickname = $group.MailNickname
+                SecurityEnabled = $group.SecurityEnabled
+                GroupTypes = $group.GroupTypes -join ','
+                CreatedDateTime = $group.CreatedDateTime
+                RenewedDateTime = $group.RenewedDateTime
+                ExpirationDateTime = $group.ExpirationDateTime
+                Visibility = $group.Visibility
+                OnPremisesSyncEnabled = $group.OnPremisesSyncEnabled
+                OnPremisesLastSyncDateTime = $group.OnPremisesLastSyncDateTime
+                SecurityIdentifier = $group.SecurityIdentifier
+                IsManagementRestricted = $group.IsManagementRestricted
+                MembershipRule = $group.MembershipRule
+                MembershipRuleProcessingState = $group.MembershipRuleProcessingState
+                Classification = $group.Classification
+                HideFromAddressLists = $group.HideFromAddressLists
+                HideFromOutlookClients = $group.HideFromOutlookClients
+                IsAssignableToRole = $group.IsAssignableToRole
+                PreferredDataLocation = $group.PreferredDataLocation
+                ProxyAddresses = $group.ProxyAddresses -join ';'
+            })
         }
 
         $results | Export-Csv -Path $script:outputFile -NoTypeInformation -Encoding $Encoding
+        $securityEnabledCount = 0
+        $mailEnabledCount = 0
+        $onPremisesSyncedCount = 0
+        foreach ($result in $results) {
+            if ($result.SecurityEnabled -eq $true) { $securityEnabledCount++ }
+            if ($result.MailEnabled -eq $true) { $mailEnabledCount++ }
+            if ($result.OnPremisesSyncEnabled -eq $true) { $onPremisesSyncedCount++ }
+        }
         $summaryData = [ordered]@{
             "Group Summary" = [ordered]@{
                 "Total Groups" = $results.Count
-                "Security Enabled" = ($results | Where-Object { $_.SecurityEnabled -eq $true }).Count
-                "Mail Enabled" = ($results | Where-Object { $_.MailEnabled -eq $true }).Count
-                "On-Premises Synced" = ($results | Where-Object { $_.OnPremisesSyncEnabled -eq $true }).Count
+                "Security Enabled" = $securityEnabledCount
+                "Mail Enabled" = $mailEnabledCount
+                "On-Premises Synced" = $onPremisesSyncedCount
             }
         }
         Write-Summary -Summary $summaryData -Title "Group Analysis Summary"
@@ -191,7 +200,7 @@ Function Get-GroupMembers {
             Write-LogFile -Message "[DEBUG] Starting member enumeration for $($allGroups.Count) groups..." -Level Debug
         }
 
-        $results = @()
+        $results = [System.Collections.Generic.List[object]]::new()
         foreach ($group in $allGroups) {
             Write-LogFile -Message "[INFO] Processing group: $($group.DisplayName)" -Level Standard
 
@@ -205,19 +214,18 @@ Function Get-GroupMembers {
             }
 
             try {
-                $members = Get-MgGroupMember -GroupId $group.Id -All | ForEach-Object {
-                    [PSCustomObject]@{
+                $members = Get-MgGroupMember -GroupId $group.Id -All
+                foreach ($member in $members) {
+                    $results.Add([PSCustomObject]@{
                         GroupName = $group.DisplayName
                         GroupId = $group.Id
-                        MemberId = $_.Id
-                        DisplayName = $_.AdditionalProperties.displayName
-                        Email = $_.AdditionalProperties.mail
-                        UserPrincipalName = $_.AdditionalProperties.userPrincipalName
-                        GroupCreated = $_.CreatedDateTime
-                    }
+                        MemberId = $member.Id
+                        DisplayName = $member.AdditionalProperties.displayName
+                        Email = $member.AdditionalProperties.mail
+                        UserPrincipalName = $member.AdditionalProperties.userPrincipalName
+                        GroupCreated = $member.CreatedDateTime
+                    })
                 }
-
-                $results += $members
             }
             catch {
                 Write-LogFile -Message "[ERROR] Failed to retrieve members for group: $($group.DisplayName) Error: $($_.Exception.Message)" -Color "Red" -Level Minimal
@@ -306,14 +314,23 @@ Function Get-DynamicGroups {
 
         Write-LogFile -Message "[INFO] Found $($allGroups.Count) total groups" -Level Standard
 
+        $dynamicGroups = [System.Collections.Generic.List[object]]::new()
         if ($isDebugEnabled) {
             Write-LogFile -Message "[DEBUG] Analyzing groups for dynamic membership rules..." -Level Debug
             $filterPerformance = Measure-Command {
-                $dynamicGroups = $allGroups | Where-Object { $_.MembershipRule -ne $null }
+                foreach ($group in $allGroups) {
+                    if ($group.MembershipRule -ne $null) {
+                        $dynamicGroups.Add($group)
+                    }
+                }
             }
             Write-LogFile -Message "[DEBUG] Dynamic groups filtering completed in $([math]::round($filterPerformance.TotalSeconds, 2)) seconds" -Level Debug
         } else {
-            $dynamicGroups = $allGroups | Where-Object { $_.MembershipRule -ne $null }
+            foreach ($group in $allGroups) {
+                if ($group.MembershipRule -ne $null) {
+                    $dynamicGroups.Add($group)
+                }
+            }
         }
 
         Write-LogFile -Message "[INFO] Found $($dynamicGroups.Count) dynamic groups" -Level Standard
@@ -325,39 +342,44 @@ Function Get-DynamicGroups {
             Write-LogFile -Message "[DEBUG]   Dynamic percentage: $([math]::Round(($dynamicGroups.Count / [math]::Max($allGroups.Count, 1)) * 100, 2))%" -Level Debug
         }
 
-        $results = $dynamicGroups | ForEach-Object {
+        $results = [System.Collections.Generic.List[object]]::new($dynamicGroups.Count)
+        foreach ($group in $dynamicGroups) {
             if ($isDebugEnabled) {
-                Write-LogFile -Message "[DEBUG] Processing dynamic group: $($_.DisplayName)" -Level Debug
-                Write-LogFile -Message "[DEBUG]   Rule length: $($_.MembershipRule.Length) characters" -Level Debug
-                Write-LogFile -Message "[DEBUG]   Processing state: $($_.MembershipRuleProcessingState)" -Level Debug
-                Write-LogFile -Message "[DEBUG]   Security enabled: $($_.SecurityEnabled)" -Level Debug
-                Write-LogFile -Message "[DEBUG]   Mail enabled: $($_.MailEnabled)" -Level Debug
+                Write-LogFile -Message "[DEBUG] Processing dynamic group: $($group.DisplayName)" -Level Debug
+                Write-LogFile -Message "[DEBUG]   Rule length: $($group.MembershipRule.Length) characters" -Level Debug
+                Write-LogFile -Message "[DEBUG]   Processing state: $($group.MembershipRuleProcessingState)" -Level Debug
+                Write-LogFile -Message "[DEBUG]   Security enabled: $($group.SecurityEnabled)" -Level Debug
+                Write-LogFile -Message "[DEBUG]   Mail enabled: $($group.MailEnabled)" -Level Debug
             }
-            
-            [PSCustomObject]@{
-                GroupId = $_.Id
-                DisplayName = $_.DisplayName
-                Description = $_.Description
-                Mail = $_.Mail
-                MailEnabled = $_.MailEnabled
-                MailNickname = $_.MailNickname
-                SecurityEnabled = $_.SecurityEnabled
-                GroupTypes = $_.GroupTypes -join ','
-                CreatedDateTime = $_.CreatedDateTime
-                RenewedDateTime = $_.RenewedDateTime
-                MembershipRule = $_.MembershipRule
-                MembershipRuleProcessingState = $_.MembershipRuleProcessingState
-                OnPremisesSyncEnabled = $_.OnPremisesSyncEnabled
-                SecurityIdentifier = $_.SecurityIdentifier
-                Classification = $_.Classification
-                Visibility = $_.Visibility
-            }
+
+            $results.Add([PSCustomObject]@{
+                GroupId = $group.Id
+                DisplayName = $group.DisplayName
+                Description = $group.Description
+                Mail = $group.Mail
+                MailEnabled = $group.MailEnabled
+                MailNickname = $group.MailNickname
+                SecurityEnabled = $group.SecurityEnabled
+                GroupTypes = $group.GroupTypes -join ','
+                CreatedDateTime = $group.CreatedDateTime
+                RenewedDateTime = $group.RenewedDateTime
+                MembershipRule = $group.MembershipRule
+                MembershipRuleProcessingState = $group.MembershipRuleProcessingState
+                OnPremisesSyncEnabled = $group.OnPremisesSyncEnabled
+                SecurityIdentifier = $group.SecurityIdentifier
+                Classification = $group.Classification
+                Visibility = $group.Visibility
+            })
         }
 
         $results | Export-Csv -Path $script:outputFile -NoTypeInformation -Encoding $Encoding
-        $totalCount = if ($results) { @($results).Count } else { 0 }
-        $securityEnabledCount = @($results | Where-Object { $_.SecurityEnabled -eq $true }).Count
-        $mailEnabledCount = @($results | Where-Object { $_.MailEnabled -eq $true }).Count
+        $totalCount = $results.Count
+        $securityEnabledCount = 0
+        $mailEnabledCount = 0
+        foreach ($result in $results) {
+            if ($result.SecurityEnabled -eq $true) { $securityEnabledCount++ }
+            if ($result.MailEnabled -eq $true) { $mailEnabledCount++ }
+        }
 
         $processingStates = $results | Group-Object -Property MembershipRuleProcessingState
         $statesHashtable = [ordered]@{}

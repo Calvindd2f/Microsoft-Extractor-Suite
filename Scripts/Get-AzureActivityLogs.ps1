@@ -14,7 +14,7 @@ function Get-ActivityLogs {
 	.PARAMETER EndDate
     endDate is the parameter specifying the end date of the date range.
 	Default: Now
-	
+
 	.PARAMETER SubscriptionID
     SubscriptionID is the parameter specifies the subscription ID for which the collection of Activity logs is required.
     Default: All subscriptions
@@ -34,7 +34,7 @@ function Get-ActivityLogs {
     Standard: Normal operational logging
 	Debug: Verbose logging for debugging purposes
     Default: Standard
-	
+
     .EXAMPLE
     Get-ActivityLogs
 	Get all the activity logs for all subscriptions connected to the logged-in user account for the last 89 days.
@@ -46,7 +46,7 @@ function Get-ActivityLogs {
 	.EXAMPLE
     Get-ActivityLogs -StartDate 2025-04-12
 	Get all the activity logs after 2025-04-12.
-	
+
 	.EXAMPLE
     Get-ActivityLogs -SubscriptionID "4947f939-cf12-4329-960d-4dg68a3eb66f"
 	Get all the activity logs for the subscription 4947f939-cf12-4329-960d-4dg68a3eb66f
@@ -59,7 +59,7 @@ function Get-ActivityLogs {
 		[string]$OutputDir,
 		[string]$Encoding = "UTF8",
         [ValidateSet('None', 'Minimal', 'Standard', 'Debug')]
-        [string]$LogLevel = 'Standard'		
+        [string]$LogLevel = 'Standard'
 	)
 
 	Init-Logging
@@ -209,7 +209,7 @@ function Get-ActivityLogs {
 		$summary.SubscriptionsProcessed++
 		$subId = $sub.subscriptionId
 		write-logFile -Message "[INFO] Retrieving all Activity Logs for $subId" -Color "Green" -Level Standard
-        
+
         $apiCallCount = 0
         $totalApiTime = 0
 
@@ -220,11 +220,11 @@ function Get-ActivityLogs {
             $subscriptionProcessingStart = Get-Date
         }
 
-		$date = [datetime]::Now.ToString('yyyyMMddHHmmss') 
+		$date = [datetime]::Now.ToString('yyyyMMddHHmmss')
         $filePath = "$(Split-Path $script:outputFile -Parent)\$($date)-$subId-ActivityLog.json"
 
 		$uriBase = "https://management.azure.com/subscriptions/$subId/providers/Microsoft.Insights/eventtypes/management/values?api-version=2015-04-01&`$filter=eventTimestamp ge '$script:StartDate' and eventTimestamp le '$script:endDate'"
-		$events = @()
+		$events = [System.Collections.Generic.List[object]]::new()
 
 		if ($isDebugEnabled) {
             Write-LogFile -Message "[DEBUG] Activity Log API configuration:" -Level Debug
@@ -246,7 +246,9 @@ function Get-ActivityLogs {
 			}
 
 			$response = Invoke-RestMethod @listOperations
-			$events += $response.value
+			if ($response.value -and $response.value.Count -gt 0) {
+				$events.AddRange($response.value)
+			}
 			$uriBase = $response.nextLink
 
 			if ($isDebugEnabled) {

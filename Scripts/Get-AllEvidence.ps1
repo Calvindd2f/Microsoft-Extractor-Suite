@@ -11,7 +11,7 @@ $Global:CollectionTasks = @{
                     } else {
                         Get-RiskyUsers -LogLevel $LogLevel -UserIds $UserIds
                     }
-                    
+
                 } else {
                     if ($OutputDir) {
                         Get-RiskyUsers -OutputDir $OutputDir -LogLevel $LogLevel
@@ -53,7 +53,7 @@ $Global:CollectionTasks = @{
                         Get-MFA -OutputDir $OutputDir -LogLevel $LogLevel -UserIds $UserIds
                     } else {
                         Get-MFA -LogLevel $LogLevel -UserIds $UserIds
-                    } 
+                    }
                 } else {
                     if ($OutputDir) {
                         Get-MFA -OutputDir $OutputDir -LogLevel $LogLevel
@@ -106,7 +106,7 @@ $Global:CollectionTasks = @{
                         Get-Devices -OutputDir $OutputDir -LogLevel $LogLevel -UserIds $UserIds -Output $Output
                     } else {
                         Get-Devices -LogLevel $LogLevel -UserIds $UserIds -Output $Output
-                    }                    
+                    }
                 } else {
                     if ($OutputDir) {
                         Get-Devices -OutputDir $OutputDir -LogLevel $LogLevel -Output $Output
@@ -148,7 +148,7 @@ $Global:CollectionTasks = @{
 
                 if ($UserIds) {
                     Get-GraphEntraSignInLogs -OutputDir $OutputDirAudit -LogLevel $LogLevel -UserIds $UserIds -Output $Output -MergeOutput -EventTypes interactiveUser,nonInteractiveUser
-                    
+
                 } else {
                     Get-GraphEntraSignInLogs -OutputDir $OutputDirAudit -LogLevel $LogLevel -Output $Output -MergeOutput
                 }
@@ -421,9 +421,10 @@ function Write-TaskProgress {
         'InProgress'  { 'Yellow' }
     }
 
-    $message = "{0}{1}" -f $symbol, $TaskName
-    if ($Status -eq 'Failed' -and $ErrorMessage) {
-        $message += " - $ErrorMessage"
+    $message = if ($Status -eq 'Failed' -and $ErrorMessage) {
+        "{0}{1} - {2}" -f $symbol, $TaskName, $ErrorMessage
+    } else {
+        "{0}{1}" -f $symbol, $TaskName
     }
 
     Write-LogFile -Message $message -Level Minimal -Color $color
@@ -461,9 +462,10 @@ function Test-RequiredConnections {
         [ValidateSet('All', 'Azure', 'M365')]
         [string]$Platform = 'All'
     )
-    
+
     $allConnected = $true
-    $errorMessage = "[ERROR] Missing connections detected:`n"
+    $errorMessages = [System.Collections.Generic.List[string]]::new()
+    $errorMessages.Add("[ERROR] Missing connections detected:")
 
     # M365 Connection Tests
     if ($Platform -eq 'All' -or $Platform -eq 'M365') {
@@ -473,7 +475,7 @@ function Test-RequiredConnections {
         }
         catch {
             $allConnected = $false
-            $errorMessage += "- Exchange Online not connected. Run 'Connect-ExchangeOnline'.`n"
+            $errorMessages.Add("- Exchange Online not connected. Run 'Connect-ExchangeOnline'.")
         }
 
         # Check Unified Audit Log access
@@ -482,7 +484,7 @@ function Test-RequiredConnections {
         }
         catch {
             $allConnected = $false
-            $errorMessage += "- Unified Audit Log access not available. Ensure you have appropriate permissions and Exchange Online is connected.`n"
+            $errorMessages.Add("- Unified Audit Log access not available. Ensure you have appropriate permissions and Exchange Online is connected.")
         }
     }
 
@@ -493,16 +495,17 @@ function Test-RequiredConnections {
             $graphContext = Get-MgContext
             if ($null -eq $graphContext) {
                 $allConnected = $false
-                $errorMessage += "- Microsoft Graph not connected. Run 'Connect-MgGraph' with the appropriate Scopes.`n"
+                $errorMessages.Add("- Microsoft Graph not connected. Run 'Connect-MgGraph' with the appropriate Scopes.")
             }
         }
         catch {
             $allConnected = $false
-            $errorMessage += "- Microsoft Graph not connected. Run 'Connect-MgGraph' with the appropriate Scopes.`n"
+            $errorMessages.Add("- Microsoft Graph not connected. Run 'Connect-MgGraph' with the appropriate Scopes.")
         }
     }
 
     if (-not $allConnected) {
+        $errorMessage = $errorMessages -join "`n"
         Write-LogFile -Message $errorMessage -Color "Red"
         return $false
     }
@@ -534,7 +537,7 @@ function Show-CollectionMenu {
         [Parameter(Mandatory=$false)]
         [string]$Platform = "All",
         [Parameter(Mandatory=$false)]
-        [bool]$Refresh = $false 
+        [bool]$Refresh = $false
     )
 
     if (-not $Refresh) {
@@ -581,7 +584,7 @@ function Show-CollectionMenu {
     }
 
     $choice = Read-Host "`nEnter choice"
-    
+
     switch ($choice) {
         { $_ -match '^\d+$' -and $options.ContainsKey([int]$_) } {
             $opt = $options[[int]$_]
@@ -590,25 +593,33 @@ function Show-CollectionMenu {
         }
         'A' {
             if ($Platform -eq "All" -or $Platform -eq "Azure") {
-                $Global:CollectionTasks.Azure.GetEnumerator() | ForEach-Object { $_.Value.Enabled = $true }
+                foreach ($task in $Global:CollectionTasks.Azure.GetEnumerator()) {
+                    $task.Value.Enabled = $true
+                }
             }
             if ($Platform -eq "All" -or $Platform -eq "M365") {
-                $Global:CollectionTasks.M365.GetEnumerator() | ForEach-Object { $_.Value.Enabled = $true }
+                foreach ($task in $Global:CollectionTasks.M365.GetEnumerator()) {
+                    $task.Value.Enabled = $true
+                }
             }
             Show-CollectionMenu -Platform $Platform -Refresh $false
         }
         'N' {
             if ($Platform -eq "All" -or $Platform -eq "Azure") {
-                $Global:CollectionTasks.Azure.GetEnumerator() | ForEach-Object { $_.Value.Enabled = $false }
+                foreach ($task in $Global:CollectionTasks.Azure.GetEnumerator()) {
+                    $task.Value.Enabled = $false
+                }
             }
             if ($Platform -eq "All" -or $Platform -eq "M365") {
-                $Global:CollectionTasks.M365.GetEnumerator() | ForEach-Object { $_.Value.Enabled = $false }
+                foreach ($task in $Global:CollectionTasks.M365.GetEnumerator()) {
+                    $task.Value.Enabled = $false
+                }
             }
             Show-CollectionMenu -Platform $Platform -Refresh $false
         }
         'S' { return $true }
         'Q' { return $false }
-        default { 
+        default {
             Write-LogFile -Message "Invalid choice" -Color "Red" -Level Minimal
             Show-CollectionMenu -Platform $Platform -Refresh $true
         }
@@ -778,7 +789,7 @@ function Start-EvidenceCollection {
                 }
             }
         }
-    }    
+    }
 
     $summary.ProcessingTime = (Get-Date) - $summary.StartTime
     $summaryData = [ordered]@{

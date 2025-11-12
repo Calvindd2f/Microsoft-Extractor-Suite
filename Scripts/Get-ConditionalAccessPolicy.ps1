@@ -2,7 +2,7 @@
 Function Get-ConditionalAccessPolicies {
 <#
     .SYNOPSIS
-    Retrieves all the conditional access policies. 
+    Retrieves all the conditional access policies.
 
     .DESCRIPTION
     Retrieves all the conditional access policies.
@@ -22,7 +22,7 @@ Function Get-ConditionalAccessPolicies {
     Standard: Normal operational logging
     Debug: Verbose logging for debugging purposes
     Default: Standard
-    
+
     .EXAMPLE
     Get-ConditionalAccessPolicies
     Retrieves all the conditional access policies.
@@ -30,14 +30,14 @@ Function Get-ConditionalAccessPolicies {
     .EXAMPLE
     Get-ConditionalAccessPolicies -Application
     Retrieves all the conditional access policies via application authentication.
-    
+
     .EXAMPLE
     Get-ConditionalAccessPolicies -Encoding utf32
     Retrieves all the conditional access policies and exports the output to a CSV file with UTF-32 encoding.
-        
+
     .EXAMPLE
     Get-ConditionalAccessPolicies -OutputDir C:\Windows\Temp
-    Retrieves all the conditional access policies and saves the output to the C:\Windows\Temp folder.	
+    Retrieves all the conditional access policies and saves the output to the C:\Windows\Temp folder.
 #>
     [CmdletBinding()]
     param(
@@ -50,13 +50,13 @@ Function Get-ConditionalAccessPolicies {
     Init-Logging
     Init-OutputDir -Component "ConditionalAccessPolicies" -FilePostfix "ConditionalAccessPolicies" -CustomOutputDir $OutputDir
 
-    $results=@();
+    $results = [System.Collections.Generic.List[object]]::new()
     $requiredScopes = @("Policy.Read.All")
     $graphAuth = Get-GraphAuthType -RequiredScopes $RequiredScopes
 
     $OutputDir = Split-Path $script:outputFile -Parent
     Write-LogFile -Message "=== Starting Conditional Access Policy Collection ===" -Color "Cyan" -Level Standard
-    
+
     try {
         $policies = Get-MgIdentityConditionalAccessPolicy -All
         foreach ($policy in $policies) {
@@ -76,13 +76,13 @@ Function Get-ConditionalAccessPolicies {
             $excludeGroups = $policy.Conditions.Users.ExcludeGroups -join '; '
             $includeRoles = $policy.Conditions.Users.IncludeRoles -join '; '
             $excludeRoles = $policy.Conditions.Users.ExcludeRoles -join '; '
-            
+
             $includeApplications = $policy.Conditions.Applications.IncludeApplications -join '; '
             $excludeApplications = $policy.Conditions.Applications.ExcludeApplications -join '; '
-            
+
             $includePlatforms = $policy.Conditions.Platforms.IncludePlatforms -join '; '
             $excludePlatforms = $policy.Conditions.Platforms.ExcludePlatforms -join '; '
-            
+
             $includeLocations = $policy.Conditions.Locations.IncludeLocations -join '; '
             $excludeLocations = $policy.Conditions.Locations.ExcludeLocations -join '; '
 
@@ -127,7 +127,7 @@ Function Get-ConditionalAccessPolicies {
                 DeviceFilter = if ($policy.Conditions.Devices.DeviceFilter.Rule) {
                     "$($policy.Conditions.Devices.DeviceFilter.Mode): $($policy.Conditions.Devices.DeviceFilter.Rule)"
                 } else { "Not Configured" }
-                
+
                 # Grant Controls
                 BuiltInControls = ($policy.GrantControls.BuiltInControls -join '; ')
                 CustomAuthenticationFactors = ($policy.GrantControls.CustomAuthenticationFactors -join '; ')
@@ -151,7 +151,7 @@ Function Get-ConditionalAccessPolicies {
                 DeviceStates = ($policy.Conditions.Devices.DeviceStates -join '; ')
             }
 
-            $results+= $myObject;
+            $results.Add($myObject)
         }
     }
 
@@ -168,18 +168,25 @@ Function Get-ConditionalAccessPolicies {
     }
 
     $results | Export-Csv -Path $script:outputFile -NoTypeInformation -Encoding $Encoding
-    $reportOnlyCount = ($results | Where-Object { $_.State -eq 'enabledForReportingButNotEnforced' }).Count
-    if ($null -eq $reportOnlyCount) { $reportOnlyCount = 0 }
+    $enabledCount = 0
+    $disabledCount = 0
+    $reportOnlyCount = 0
+    foreach ($result in $results) {
+        switch ($result.State) {
+            'enabled' { $enabledCount++ }
+            'disabled' { $disabledCount++ }
+            'enabledForReportingButNotEnforced' { $reportOnlyCount++ }
+        }
+    }
 
     $summaryData = [ordered]@{
         "Policy Summary" = [ordered]@{
             "Total Policies" = $results.Count
-            "Enabled Policies" = ($results | Where-Object { $_.State -eq 'enabled' }).Count
-            "Disabled Policies" = ($results | Where-Object { $_.State -eq 'disabled' }).Count
+            "Enabled Policies" = $enabledCount
+            "Disabled Policies" = $disabledCount
             "Report Only" = $reportOnlyCount
         }
     }
 
     Write-Summary -Summary $summaryData -Title "Conditional Access Policy Summary"
 }
-        

@@ -31,7 +31,7 @@ function Start-MESTriage {
     Default: Now
 
     .PARAMETER Output
-    Output is the parameter specifying the CSV, JSON, JSONL, or SOF-ELK output type. 
+    Output is the parameter specifying the CSV, JSON, JSONL, or SOF-ELK output type.
     Note: JSONL format is only supported by specific functions (Get-UAL, Get-UALGraph).
     Other tasks automatically use JSON format regardless of this setting. The Operations from the Unified Audit Log will be collected in CSV and JSON.
     Default: CSV
@@ -50,7 +50,7 @@ function Start-MESTriage {
     .PARAMETER LogLevel
     Specifies the level of logging:
     None: No logging
-    Minimal: Critical errors only  
+    Minimal: Critical errors only
     Standard: Normal operational logging
     Debug: Verbose logging for debugging purposes
     Default: Minimal
@@ -102,16 +102,16 @@ function Start-MESTriage {
 
     $moduleRoot = (Get-Module Microsoft-Extractor-Suite).ModuleBase
     $templatesDir = Join-Path $moduleRoot "Templates"
-    
+
     # Get all available templates
     $availableTemplates = @()
     if (Test-Path $templatesDir) {
         $templateFiles = Get-ChildItem $templatesDir -Filter "*.psd1"
-        $availableTemplates = $templateFiles | ForEach-Object { 
-            [System.IO.Path]::GetFileNameWithoutExtension($_.Name) 
+        $availableTemplates = $templateFiles | ForEach-Object {
+            [System.IO.Path]::GetFileNameWithoutExtension($_.Name)
         }
     }
-    
+
     # Validate the template parameter
     if ($Template -notin $availableTemplates) {
         Write-LogFile -Message "[ERROR] Template '$Template' not found." -Color "Red" -Level Minimal
@@ -122,7 +122,7 @@ function Start-MESTriage {
 
     # Build template path
     $templatePath = Join-Path $templatesDir "$Template.psd1"
-    
+
     if (!(Test-Path $templatePath)) {
         Write-LogFile -Message "[ERROR] Template file not found: $templatePath" -Color "Red" -Level Minimal
         return
@@ -148,16 +148,16 @@ function Start-MESTriage {
         TemplateName = $Template
     }
 
-    $UserIdsArray = if ($UserIds -and $UserIds.ToString().Trim()) { 
-        $userString = if ($UserIds -is [array]) { 
-            $UserIds -join ',' 
-        } else { 
-            $UserIds.ToString() 
+    $UserIdsArray = if ($UserIds -and $UserIds.ToString().Trim()) {
+        $userString = if ($UserIds -is [array]) {
+            $UserIds -join ','
+        } else {
+            $UserIds.ToString()
         }
-        
-        @($userString -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ -and $_.Length -gt 0 }) 
-    } else { 
-        @() 
+
+        @($userString -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ -and $_.Length -gt 0 })
+    } else {
+        @()
     }
 
     Write-LogFile -Message "=== Starting Quick Triage ===" -Color "Cyan" -Level Minimal
@@ -165,9 +165,9 @@ function Start-MESTriage {
     Write-LogFile -Message "Template: $Template" -Level Minimal
 
     if ($UserIdsArray.Count -eq 0) {
-        Write-LogFile -Message "Target: All users" -Level Minimal 
+        Write-LogFile -Message "Target: All users" -Level Minimal
     } elseif ($UserIdsArray.Count -eq 1) {
-        Write-LogFile -Message "Target User: $($UserIdsArray)" -Level Minimal 
+        Write-LogFile -Message "Target User: $($UserIdsArray)" -Level Minimal
     } else {
         Write-LogFile -Message "Target Users:" -Level Minimal
         foreach ($user in $UserIdsArray) {
@@ -208,17 +208,17 @@ function Start-MESTriage {
 
     foreach ($task in $templateConfig.Tasks) {
         $triageSummary.TotalTasks++
-        
+
         if ($task -is [string]) {
             $willSkip = Test-TaskWillSkip -TaskName $task -UserIds $UserIdsArray
-    
+
             if (-not $willSkip) {
                 Write-TaskProgress -TaskName $task -Status 'InProgress'
             }
-            
+
             try {
                 $executed = Invoke-TriageTask -TaskName $task -OutputDir $OutputDir -LogLevel $LogLevel -UserIds $UserIdsArray -Output $Output -MergeOutput:$MergeOutput -StartDate $StartDate -EndDate $EndDate -Encoding $Encoding -JSONLSupportedFunctions $JSONLSupportedFunctions -SOFELKSupportedFunctions $SOFELKSupportedFunctions
-                
+
                 if ($executed -eq $true) {
                     $triageSummary.SuccessfulTasks++
                     Write-TaskProgress -TaskName $task -Status 'Complete'
@@ -249,13 +249,13 @@ function Start-MESTriage {
                     $userIdsString = if ($UserIdsArray.Count -gt 0) { $UserIdsArray -join ',' } else { $null }
                     $ualOutput = $Output
 
-                    if ($Output -eq "JSONL" -and "Get-UAL" -in $JSONLSupportedFunctions) { 
-                        $ualOutput = "JSONL" 
-                    } elseif ($Output -eq "SOF-ELK" -and "Get-UAL" -in $SOFELKSupportedFunctions) { 
-                        $ualOutput = "SOF-ELK" 
+                    if ($Output -eq "JSONL" -and "Get-UAL" -in $JSONLSupportedFunctions) {
+                        $ualOutput = "JSONL"
+                    } elseif ($Output -eq "SOF-ELK" -and "Get-UAL" -in $SOFELKSupportedFunctions) {
+                        $ualOutput = "SOF-ELK"
                     }
                     Get-QuickUALOperations -Operations $task.Operations -UserIds $userIdsString -OutputDir $OutputDir -LogLevel $LogLevel -Output $ualOutput -StartDate $StartDate -EndDate $EndDate
-                    
+
                     $triageSummary.SuccessfulTasks++
                     Write-TaskProgress -TaskName "UAL Operations" -Status 'Complete'
                 }
@@ -264,13 +264,13 @@ function Start-MESTriage {
                     Write-TaskProgress -TaskName "UAL Operations" -Status 'Failed' -ErrorMessage $_.Exception.Message
                     Write-LogFile -Message "[ERROR] UAL Operations failed: $($_.Exception.Message)" -Color "Red" -Level Minimal
                 }
-            }  
+            }
         }
     }
-    
+
 
     $triageSummary.ProcessingTime = (Get-Date) - $triageSummary.StartTime
-    
+
     Write-LogFile -Message "`n=== $Template Triage Summary ===" -Color "Cyan" -Level Minimal
     Write-LogFile -Message "Start Time: $($triageSummary.StartTime.ToString('yyyy-MM-dd HH:mm:ss'))" -Level Minimal
     Write-LogFile -Message "End Time: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')" -Level Minimal
@@ -280,11 +280,11 @@ function Start-MESTriage {
     Write-LogFile -Message "  Failed: $($triageSummary.FailedTasks)" -Level Minimal -Color $(if ($triageSummary.FailedTasks -gt 0) { "Red" } else { "Green" })
     Write-LogFile -Message "  Skipped: $($triageSummary.SkippedTasks)" -Level Minimal -Color "Yellow"
     Write-LogFile -Message "  Total: $($triageSummary.TotalTasks)" -Level Minimal
-    
+
     Write-LogFile -Message "`nOutput Location: $OutputDir" -Level Minimal
     Write-LogFile -Message "=============================================" -Color "Cyan" -Level Minimal
 }
-    
+
 
 function Invoke-TriageTask {
     param(
@@ -364,7 +364,7 @@ function Invoke-TriageTask {
         }
         "Get-GraphEntraSignInLogs" {
             $taskOutput = Get-TaskOutputFormat -TaskName $TaskName -RequestedOutput $Output -JSONLSupportedFunctions $JSONLSupportedFunctions -SOFELKSupportedFunctions $SOFELKSupportedFunctions
-            $finalOutput = if ($taskOutput -eq 'CSV') { 'JSON' } else { $taskOutput }            
+            $finalOutput = if ($taskOutput -eq 'CSV') { 'JSON' } else { $taskOutput }
             if ($UserIds.Count -gt 0) {
                 Get-GraphEntraSignInLogs -OutputDir $OutputDir -LogLevel $LogLevel -UserIds $UserIds -Output $finalOutput -MergeOutput -Encoding $Encoding -StartDate $StartDate -EndDate $EndDate
             } else {
@@ -374,9 +374,9 @@ function Invoke-TriageTask {
         }
         "Get-GraphEntraAuditLogs" {
             $taskOutput = Get-TaskOutputFormat -TaskName $TaskName -RequestedOutput $Output -JSONLSupportedFunctions $JSONLSupportedFunctions -SOFELKSupportedFunctions $SOFELKSupportedFunctions
-            $finalOutput = if ($taskOutput -eq 'CSV') { 'JSON' } else { $taskOutput }   
+            $finalOutput = if ($taskOutput -eq 'CSV') { 'JSON' } else { $taskOutput }
             $OutputDirAudit = "$OutputDir\Audit logs"
-            New-Item -ItemType Directory -Force -Path $OutputDirAudit > $null       
+            New-Item -ItemType Directory -Force -Path $OutputDirAudit > $null
 
             $useDateFilter = $true
             if ($StartDate) {
@@ -387,31 +387,31 @@ function Invoke-TriageTask {
                     $useDateFilter = $false
                 }
             }
-            
+
             $params = @{
                 OutputDir = $OutputDirAudit
                 LogLevel = $LogLevel
                 Output = $finalOutput
                 Encoding = $Encoding
             }
-            
+
             if ($UserIds.Count -gt 0) {
                 $params.UserIds = $UserIds
             }
-            
+
             if ($useDateFilter) {
                 $params.StartDate = $StartDate
                 $params.EndDate = $EndDate
             }
-            
-            Get-GraphEntraAuditLogs @params -MergeOutput 
+
+            Get-GraphEntraAuditLogs @params -MergeOutput
             return $true
         }
         "Get-UAL" {
             $OutputDirAudit = "$OutputDir\Unified Audit Logs"
             $taskOutput = Get-TaskOutputFormat -TaskName $TaskName -RequestedOutput $Output -JSONLSupportedFunctions $JSONLSupportedFunctions -SOFELKSupportedFunctions $SOFELKSupportedFunctions
             if ($UserIds.Count -gt 0) {
-                $userIdsString = $UserIds -join ',' 
+                $userIdsString = $UserIds -join ','
                 Get-UAL -OutputDir $OutputDirAudit -LogLevel $LogLevel -UserIds $userIdsString -Output $taskOutput -Encoding $Encoding -StartDate $StartDate -EndDate $EndDate -MergeOutput
             } else {
                 Get-UAL -OutputDir $OutputDirAudit -LogLevel $LogLevel -Output $taskOutput -Encoding $Encoding -StartDate $StartDate -EndDate $EndDate -MergeOutput
@@ -424,12 +424,12 @@ function Invoke-TriageTask {
                 Get-UALStatistics -OutputDir $OutputDir -LogLevel $LogLevel -UserIds $userIdsString -StartDate $StartDate -EndDate $EndDate -WarningAction SilentlyContinue
             } else {
                 Get-UALStatistics -OutputDir $OutputDir -LogLevel $LogLevel -StartDate $StartDate -EndDate $EndDate -WarningAction SilentlyContinue
-            }           
+            }
             return $true
         }
         "Get-MailboxAuditLog" {
             if ($UserIds.Count -gt 0) {
-                $userIdsString = $UserIds -join ',' 
+                $userIdsString = $UserIds -join ','
                 Get-MailboxAuditLog -OutputDir $OutputDir -LogLevel $LogLevel -UserIds $userIdsString -Encoding $Encoding -StartDate $StartDate -EndDate $EndDate
             } else {
                 Get-MailboxAuditLog -OutputDir $OutputDir -LogLevel $LogLevel -Encoding $Encoding -StartDate $StartDate -EndDate $EndDate
@@ -466,7 +466,7 @@ function Invoke-TriageTask {
         }
         "Get-Users" {
             if ($UserIds.Count -gt 0) {
-                $userIdsString = $UserIds -join ',' 
+                $userIdsString = $UserIds -join ','
                 Get-Users -OutputDir $OutputDir -LogLevel $LogLevel -UserIds $userIdsString -Encoding $Encoding
             } else {
                 Get-Users -OutputDir $OutputDir -LogLevel $LogLevel -Encoding $Encoding
@@ -479,7 +479,7 @@ function Invoke-TriageTask {
         }
         "Get-Devices" {
             if ($UserIds.Count -gt 0) {
-                $userIdsString = $UserIds -join ',' 
+                $userIdsString = $UserIds -join ','
                 Get-Devices -OutputDir $OutputDir -LogLevel $LogLevel -UserIds $userIdsString -Encoding $Encoding
             } else {
                 Get-Devices -OutputDir $OutputDir -LogLevel $LogLevel -Encoding $Encoding
@@ -550,7 +550,7 @@ function Invoke-TriageTask {
             if ($UserIds.Count -gt 0) {
                 return 'SKIP'
             }
-            Get-LicensesByUser -OutputDir $OutputDir -LogLevel $LogLevel 
+            Get-LicensesByUser -OutputDir $OutputDir -LogLevel $LogLevel
             return $true
         }
         "Get-Groups" {

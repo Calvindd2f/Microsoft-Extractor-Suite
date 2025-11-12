@@ -40,7 +40,7 @@ function Get-AdminAuditLog {
 
     .PARAMETER UserIds
     UserIds is the UserIds parameter filtering the log entries by the account of the user who performed the actions.
-    
+
     .EXAMPLE
     Get-AdminAuditLog
     Displays the total number of logs within the admin audit log.
@@ -93,4 +93,3 @@ function Get-AdminAuditLog {
 #     Call Get-UAL with the constructed parameters
     Get-UAL @params
 }
-    

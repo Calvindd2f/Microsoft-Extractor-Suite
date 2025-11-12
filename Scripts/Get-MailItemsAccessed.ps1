@@ -1,12 +1,12 @@
 Function Get-Sessions {
-<#
+    <#
     .SYNOPSIS
     Find SessionID(s) in the Audit Log.
 
     .DESCRIPTION
-    Find SessionID(s) in the Audit Log. You can filter based on IP address or Username. The first step is to identify what sessions belong to the threat actor. 
+    Find SessionID(s) in the Audit Log. You can filter based on IP address or Username. The first step is to identify what sessions belong to the threat actor.
     With this information you can go to the next step and find the MessageID(s) belonging to those sessions. Output is saved in: Output\MailItemsAccessed\
-    
+
     .PARAMETER UserIds
     The unique identifier of the user.
 
@@ -15,7 +15,7 @@ Function Get-Sessions {
 
     .PARAMETER EndDate
     endDate is the parameter specifying the end date of the date range.
-    
+
     .PARAMETER IP
     The IP address parameter is used to filter the logs by specifying the desired IP address.
 
@@ -42,15 +42,15 @@ Function Get-Sessions {
     .EXAMPLE
     Get-Sessions -StartDate 1/4/2025 -EndDate 5/4/2025
     Collects all sessions for all users between 1/4/2025 and 5/4/2025.
-    
+
     .EXAMPLE
     Get-Sessions -StartDate 1/4/2025 -EndDate 5/4/2025 -UserIds HR@invictus-ir.com
     Collects all sessions for the user HR@invictus-ir.com.
 #>
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory=$true)]$StartDate,
-        [Parameter(Mandatory=$true)]$EndDate,
+        [Parameter(Mandatory = $true)]$StartDate,
+        [Parameter(Mandatory = $true)]$EndDate,
         [string]$OutputDir,
         [string]$UserIds,
         [string]$IP,
@@ -61,322 +61,334 @@ Function Get-Sessions {
         [string]$LogLevel = 'Standard'
     )
 
-    Init-Logging
+    begin {
+        Init-Logging
 
-    $filePostfix = "Sessions"
-    if ($UserIds -and $IP) {
-        $filePostfix = "Sessions-$UserIds-$IP"
-    } elseif ($UserIds) {
-        $filePostfix = "Sessions-$UserIds"  
-    } elseif ($IP) {
-        $filePostfix = "Sessions-$IP"
-    }
-    
-    Init-OutputDir -Component "MailItemsAccessed" -FilePostfix $filePostfix -CustomOutputDir $OutputDir
+        $filePostfix = "Sessions"
+        if ($UserIds -and $IP) {
+            $filePostfix = "Sessions-$UserIds-$IP"
+        }
+        elseif ($UserIds) {
+            $filePostfix = "Sessions-$UserIds"
+        }
+        elseif ($IP) {
+            $filePostfix = "Sessions-$IP"
+        }
 
-    $OutputDir = Split-Path $script:outputFile -Parent
+        Init-OutputDir -Component "MailItemsAccessed" -FilePostfix $filePostfix -CustomOutputDir $OutputDir
+        $OutputDir = Split-Path $script:outputFile -Parent
 
-    $summary = @{
-        TotalEvents = 0
-        UniqueSessions = @{}
-        OperationCount = 0
-        StartTime = Get-Date
-        ProcessingTime = $null
-        QueryType = "All Events"
-    }
+        $summary = @{
+            TotalEvents    = 0
+            UniqueSessions = @{}
+            OperationCount = 0
+            StartTime      = Get-Date
+            ProcessingTime = $null
+            QueryType      = "All Events"
+        }
 
-    if ($UserIds -and $IP) {
-        $summary.QueryType = "User and IP Filter"
-        if ($isDebugEnabled) {
-            Write-LogFile -Message "[DEBUG] Query type: User and IP Filter" -Level Debug
-            Write-LogFile -Message "[DEBUG]   User: $UserIds" -Level Debug
-            Write-LogFile -Message "[DEBUG]   IP: $IP" -Level Debug
-        }
-    } elseif ($UserIds) {
-        $summary.QueryType = "User Filter"
-        if ($isDebugEnabled) {
-            Write-LogFile -Message "[DEBUG] Query type: User Filter" -Level Debug
-            Write-LogFile -Message "[DEBUG]   User: $UserIds" -Level Debug
-        }
-    } elseif ($IP) {
-        $summary.QueryType = "IP Filter"
-        if ($isDebugEnabled) {
-            Write-LogFile -Message "[DEBUG] Query type: IP Filter" -Level Debug
-            Write-LogFile -Message "[DEBUG]   IP: $IP" -Level Debug
-        }
-    } else {
-        if ($isDebugEnabled) {
-            Write-LogFile -Message "[DEBUG] Query type: All Events (no filter)" -Level Debug
-        }
-    }
-
-    Write-LogFile -Message "=== Starting Session Collection ===" -Color "Cyan" -Level Standard
-    
-    if ($UserIds -And !$IP){
-        try {
-            $amountResults = (Search-UnifiedAuditLog -StartDate $StartDate -UserIds $UserIds -EndDate $EndDate -Operations "MailItemsAccessed" -ResultSize 1 | Select-Object -First 1 -ExpandProperty ResultCount)
-        }
-        catch {
-            write-logFile -Message "[INFO] Ensure you are connected to M365 by running the Connect-M365 command before executing this script" -Color "Yellow" -Level Minimal
-            Write-logFile -Message "[ERROR] An error occurred: $($_.Exception.Message)" -Color "Red" -Level Minimal
+        if ($UserIds -and $IP) {
+            $summary.QueryType = "User and IP Filter"
             if ($isDebugEnabled) {
-                Write-LogFile -Message "[DEBUG] Connection error details:" -Level Debug
-                Write-LogFile -Message "[DEBUG]   Exception type: $($_.Exception.GetType().Name)" -Level Debug
-                Write-LogFile -Message "[DEBUG]   Full error: $($_.Exception.ToString())" -Level Debug
-                Write-LogFile -Message "[DEBUG]   Stack trace: $($_.ScriptStackTrace)" -Level Debug
+                Write-LogFile -Message "[DEBUG] Query type: User and IP Filter" -Level Debug
+                Write-LogFile -Message "[DEBUG]   User: $UserIds" -Level Debug
+                Write-LogFile -Message "[DEBUG]   IP: $IP" -Level Debug
             }
-            throw
         }
-
-        if($amountResults -gt 4999){
-            write-logFile -Message "[WARNING] A total of $amountResults events have been identified, surpassing the maximum limit of 5000 results for a single session. To refine your search, kindly provide more specific details, such as specifying a user or IP address." -Color "Red" -Level Minimal
-        }
-
-        else {   
+        elseif ($UserIds) {
+            $summary.QueryType = "User Filter"
             if ($isDebugEnabled) {
-                Write-LogFile -Message "[DEBUG] Retrieving audit logs for user: $UserIds" -Level Debug
+                Write-LogFile -Message "[DEBUG] Query type: User Filter" -Level Debug
+                Write-LogFile -Message "[DEBUG]   User: $UserIds" -Level Debug
             }
-            $mailItemRecords = (Search-UnifiedAuditLog -UserIds $UserIds -StartDate $StartDate -EndDate $EndDate -ResultSize 5000 -Operations "MailItemsAccessed")
-            $Results = @()
-            
-            foreach($rec in $mailItemRecords) {
-                $AuditData = ConvertFrom-Json $Rec.Auditdata
+        }
+        elseif ($IP) {
+            $summary.QueryType = "IP Filter"
+            if ($isDebugEnabled) {
+                Write-LogFile -Message "[DEBUG] Query type: IP Filter" -Level Debug
+                Write-LogFile -Message "[DEBUG]   IP: $IP" -Level Debug
+            }
+        }
+        else {
+            if ($isDebugEnabled) {
+                Write-LogFile -Message "[DEBUG] Query type: All Events (no filter)" -Level Debug
+            }
+        }
+
+        Write-LogFile -Message "=== Starting Session Collection ===" -Color "Cyan" -Level Standard
+    }
+
+    process {
+
+        if ($UserIds -And !$IP) {
+            try {
+                $amountResults = (Search-UnifiedAuditLog -StartDate $StartDate -UserIds $UserIds -EndDate $EndDate -Operations "MailItemsAccessed" -ResultSize 1 | Select-Object -First 1 -ExpandProperty ResultCount)
+            }
+            catch {
+                write-logFile -Message "[INFO] Ensure you are connected to M365 by running the Connect-M365 command before executing this script" -Color "Yellow" -Level Minimal
+                Write-logFile -Message "[ERROR] An error occurred: $($_.Exception.Message)" -Color "Red" -Level Minimal
+                if ($isDebugEnabled) {
+                    Write-LogFile -Message "[DEBUG] Connection error details:" -Level Debug
+                    Write-LogFile -Message "[DEBUG]   Exception type: $($_.Exception.GetType().Name)" -Level Debug
+                    Write-LogFile -Message "[DEBUG]   Full error: $($_.Exception.ToString())" -Level Debug
+                    Write-LogFile -Message "[DEBUG]   Stack trace: $($_.ScriptStackTrace)" -Level Debug
+                }
+                throw
+            }
+
+            if ($amountResults -gt 4999) {
+                write-logFile -Message "[WARNING] A total of $amountResults events have been identified, surpassing the maximum limit of 5000 results for a single session. To refine your search, kindly provide more specific details, such as specifying a user or IP address." -Color "Red" -Level Minimal
+            }
+
+            else {
+                if ($isDebugEnabled) {
+                    Write-LogFile -Message "[DEBUG] Retrieving audit logs for user: $UserIds" -Level Debug
+                }
+                $mailItemRecords = (Search-UnifiedAuditLog -UserIds $UserIds -StartDate $StartDate -EndDate $EndDate -ResultSize 5000 -Operations "MailItemsAccessed")
+                $Results = [System.Collections.Generic.List[object]]::new($mailItemRecords.Count)
+
+                foreach ($rec in $mailItemRecords) {
+                    $AuditData = ConvertFrom-Json $Rec.Auditdata
+
+                    if ($isDebugEnabled) {
+                        Write-LogFile -Message "[DEBUG] Processing audit record:" -Level Debug
+                        Write-LogFile -Message "[DEBUG]   CreationTime: $($AuditData.CreationTime)" -Level Debug
+                        Write-LogFile -Message "[DEBUG]   UserId: $($AuditData.UserId)" -Level Debug
+                        Write-LogFile -Message "[DEBUG]   Operation: $($AuditData.Operation)" -Level Debug
+                        Write-LogFile -Message "[DEBUG]   SessionId: $($AuditData.SessionId)" -Level Debug
+                        Write-LogFile -Message "[DEBUG]   ClientIPAddress: $($AuditData.ClientIPAddress)" -Level Debug
+                        Write-LogFile -Message "[DEBUG]   OperationCount: $($AuditData.OperationCount)" -Level Debug
+                    }
+
+                    $Line = [PSCustomObject]@{
+                        TimeStamp      = $AuditData.CreationTime
+                        User           = $AuditData.UserId
+                        Action         = $AuditData.Operation
+                        SessionId      = $AuditData.SessionId
+                        ClientIP       = $AuditData.ClientIPAddress
+                        OperationCount = $AuditData.OperationCount
+                    }
+
+                    $summary.TotalEvents++
+                    if ($AuditData.SessionId) {
+                        $summary.UniqueSessions[$AuditData.SessionId] = $true
+
+                        if ($isDebugEnabled) {
+                            Write-LogFile -Message "[DEBUG]   Added SessionId to unique sessions: $($AuditData.SessionId)" -Level Debug
+                        }
+                    }
+
+                    if ($AuditData.OperationCount) {
+                        $summary.OperationCount += $AuditData.OperationCount
+
+                        if ($isDebugEnabled) {
+                            Write-LogFile -Message "[DEBUG]   Added OperationCount: $($AuditData.OperationCount)" -Level Debug
+                        }
+                    }
+                    $Results.Add($Line)
+                }
+
+                $Results | Sort-Object SessionId, TimeStamp | Format-Table Timestamp, User, Action, SessionId, ClientIP, OperationCount -AutoSize
+            }
+
+            if (($Output -eq "Yes") -and $results.Count -gt 0) {
+                $Results | Export-Csv -Path $script:outputFile -NoTypeInformation -Encoding $Encoding
+                Write-logFile -Message "[INFO] Output written to $script:outputFile" -Color "Green" -Level Standard
+            }
+        }
+
+        elseif ($IP -And !$UserIds) {
+            try {
+                $amountResults = (Search-UnifiedAuditLog -StartDate $StartDate -EndDate $EndDate -FreeText $IP -Operations "MailItemsAccessed" -ResultSize 1 | Select-Object -First 1 -ExpandProperty ResultCount)
+            }
+            catch {
+                write-logFile -Message "[INFO] Ensure you are connected to M365 by running the Connect-M365 command before executing this script" -Color "Yellow" -Level Minimal
+                Write-logFile -Message "[ERROR] An error occurred: $($_.Exception.Message)" -Color "Red" -Level Minimal
+                throw
+            }
+            if ($amountResults -gt 4999) {
+                write-logFile -Message "[WARNING] A total of $amountResults events have been identified, surpassing the maximum limit of 5000 results for a single session. To refine your search, kindly provide more specific details, such as specifying a user." -Color "Red" -Level Minimal
+            }
+            else {
+                $MailItemRecords = (Search-UnifiedAuditLog -StartDate $StartDate -EndDate $EndDate -FreeText $IP -ResultSize 5000 -Operations "MailItemsAccessed")
+                $Results = [System.Collections.Generic.List[object]]::new()
+
+                ForEach ($Rec in $MailItemRecords) {
+                    $AuditData = ConvertFrom-Json $Rec.Auditdata
+
+                    if ($AuditData.ClientIPAddress -eq $IP) {
+                        $Line = [PSCustomObject]@{
+                            TimeStamp      = $AuditData.CreationTime
+                            User           = $AuditData.UserId
+                            Action         = $AuditData.Operation
+                            SessionId      = $AuditData.SessionId
+                            ClientIP       = $AuditData.ClientIPAddress
+                            OperationCount = $AuditData.OperationCount
+                        }
+
+                        $summary.TotalEvents++
+
+                        if ($AuditData.SessionId) {
+                            $summary.UniqueSessions[$AuditData.SessionId] = $true
+                        }
+
+                        if ($AuditData.OperationCount) {
+                            $summary.OperationCount += $AuditData.OperationCount
+                        }
+                        $Results.Add($Line)
+                    }
+                }
 
                 if ($isDebugEnabled) {
-                    Write-LogFile -Message "[DEBUG] Processing audit record:" -Level Debug
-                    Write-LogFile -Message "[DEBUG]   CreationTime: $($AuditData.CreationTime)" -Level Debug
-                    Write-LogFile -Message "[DEBUG]   UserId: $($AuditData.UserId)" -Level Debug
-                    Write-LogFile -Message "[DEBUG]   Operation: $($AuditData.Operation)" -Level Debug
-                    Write-LogFile -Message "[DEBUG]   SessionId: $($AuditData.SessionId)" -Level Debug
-                    Write-LogFile -Message "[DEBUG]   ClientIPAddress: $($AuditData.ClientIPAddress)" -Level Debug
-                    Write-LogFile -Message "[DEBUG]   OperationCount: $($AuditData.OperationCount)" -Level Debug
+                    Write-LogFile -Message "[DEBUG] Processing complete" -Level Debug
+                    Write-LogFile -Message "[DEBUG]   Total events processed: $($summary.TotalEvents)" -Level Debug
+                    Write-LogFile -Message "[DEBUG]   Unique sessions found: $($summary.UniqueSessions.Count)" -Level Debug
+                    Write-LogFile -Message "[DEBUG]   Total operation count: $($summary.OperationCount)" -Level Debug
                 }
 
-                $Line = [PSCustomObject]@{
-                    TimeStamp   = $AuditData.CreationTime
-                    User        = $AuditData.UserId
-                    Action      = $AuditData.Operation
-                    SessionId   = $AuditData.SessionId
-                    ClientIP    = $AuditData.ClientIPAddress
-                    OperationCount = $AuditData.OperationCount
-                }
-
-                $summary.TotalEvents++
-                if ($AuditData.SessionId) {
-                    $summary.UniqueSessions[$AuditData.SessionId] = $true
-
-                    if ($isDebugEnabled) {
-                        Write-LogFile -Message "[DEBUG]   Added SessionId to unique sessions: $($AuditData.SessionId)" -Level Debug
-                    }
-                }
-                
-                if ($AuditData.OperationCount) {
-                    $summary.OperationCount += $AuditData.OperationCount
-
-                    if ($isDebugEnabled) {
-                        Write-LogFile -Message "[DEBUG]   Added OperationCount: $($AuditData.OperationCount)" -Level Debug
-                    }
-                }                
-                $Results += $Line
+                $Results | Sort SessionId, TimeStamp | Format-Table Timestamp, User, Action, SessionId, ClientIP, OperationCount -AutoSize
             }
-            
-            $Results | Sort SessionId, TimeStamp | Format-Table Timestamp, User, Action, SessionId, ClientIP, OperationCount -AutoSize
-         }
 
-        if (($Output -eq "Yes") -and $results.Count -gt 0) {
-            $Results | Export-Csv -Path $script:outputFile -NoTypeInformation -Encoding $Encoding
-            Write-logFile -Message "[INFO] Output written to $script:outputFile" -Color "Green" -Level Standard
+            if (($Output -eq "Yes") -and $results.Count -gt 0) {
+                $filePath = "$OutputDir\Sessions-$IP.csv"
+                $Results | Export-Csv -Path $filePath -NoTypeInformation -Encoding $Encoding
+                Write-logFile -Message "[INFO] Output written to $filePath" -Color "Green" -Level Standard
+            }
         }
-    }
 
-    elseif($IP -And !$UserIds){
-        $Results = @()
-        try {
-            $amountResults = (Search-UnifiedAuditLog -StartDate $StartDate -EndDate $EndDate -FreeText $IP -Operations "MailItemsAccessed" -ResultSize 1 | Select-Object -First 1 -ExpandProperty ResultCount)
-        }
-        catch {
-            write-logFile -Message "[INFO] Ensure you are connected to M365 by running the Connect-M365 command before executing this script" -Color "Yellow" -Level Minimal
-            Write-logFile -Message "[ERROR] An error occurred: $($_.Exception.Message)" -Color "Red" -Level Minimal
-            throw
-        }
-        if($amountResults -gt 4999){
-            write-logFile -Message "[WARNING] A total of $amountResults events have been identified, surpassing the maximum limit of 5000 results for a single session. To refine your search, kindly provide more specific details, such as specifying a user." -Color "Red" -Level Minimal
-        }
-        else{              
-            $MailItemRecords = (Search-UnifiedAuditLog -StartDate $StartDate -EndDate $EndDate -FreeText $IP -ResultSize 5000 -Operations "MailItemsAccessed")
-            ForEach($Rec in $MailItemRecords){
-                $AuditData = ConvertFrom-Json $Rec.Auditdata
-                $Line = [PSCustomObject]@{
-                    TimeStamp   = $AuditData.CreationTime
-                    User        = $AuditData.UserId
-                    Action      = $AuditData.Operation
-                    SessionId   = $AuditData.SessionId
-                    ClientIP    = $AuditData.ClientIPAddress
-                    OperationCount = $AuditData.OperationCount
+        elseif ($IP -And $UserIds) {
+            try {
+                $amountResults = (Search-UnifiedAuditLog -UserIds $UserIds -FreeText $IP -StartDate $StartDate -EndDate $EndDate -Operations "MailItemsAccessed" -ResultSize 1 | Select-Object -First 1 -ExpandProperty ResultCount)
+            }
+            catch {
+                write-logFile -Message "[INFO] Ensure you are connected to M365 by running the Connect-M365 command before executing this script" -Color "Yellow" -Level Minimal
+                Write-logFile -Message "[ERROR] An error occurred: $($_.Exception.Message)" -Color "Red" -Level Minimal
+                break
+            }
+
+            if ($amountResults -gt 4999) {
+                write-logFile -Message "[WARNING] A total of $amountResults events have been identified, surpassing the maximum limit of 5000 results for a single session. To refine your search, kindly provide a more specific time window." -Color "Red" -Level Minimal
+            }
+            else {
+                $MailItemRecords = (Search-UnifiedAuditLog -UserIds $UserIds -FreeText $IP -StartDate $StartDate -EndDate $EndDate -ResultSize 5000 -Operations "MailItemsAccessed")
+                $Results = [System.Collections.Generic.List[object]]::new()
+
+                foreach ($Rec in $MailItemRecords) {
+                    $AuditData = ConvertFrom-Json $Rec.Auditdata
+
+                    if ($AuditData.ClientIPAddress -eq $IP) {
+                        $Line = [PSCustomObject]@{
+                            TimeStamp      = $AuditData.CreationTime
+                            User           = $AuditData.UserId
+                            Action         = $AuditData.Operation
+                            SessionId      = $AuditData.SessionId
+                            ClientIP       = $AuditData.ClientIPAddress
+                            OperationCount = $AuditData.OperationCount
+                        }
+
+                        $summary.TotalEvents++
+
+                        if ($AuditData.SessionId) {
+                            $summary.UniqueSessions[$AuditData.SessionId] = $true
+                        }
+
+                        if ($AuditData.OperationCount) {
+                            $summary.OperationCount += $AuditData.OperationCount
+                        }
+                        $Results.Add($Line)
+                    }
                 }
-                    
-                if($AuditData.ClientIPAddress -eq $IP){
+
+                if ($isDebugEnabled) {
+                    Write-LogFile -Message "[DEBUG] Processing complete" -Level Debug
+                    Write-LogFile -Message "[DEBUG]   Total events processed: $($summary.TotalEvents)" -Level Debug
+                    Write-LogFile -Message "[DEBUG]   Unique sessions found: $($summary.UniqueSessions.Count)" -Level Debug
+                    Write-LogFile -Message "[DEBUG]   Total operation count: $($summary.OperationCount)" -Level Debug
+                }
+
+                $Results | Sort SessionId, TimeStamp | Format-Table Timestamp, User, Action, SessionId, ClientIP, OperationCount -AutoSize
+            }
+            if (($Output -eq "Yes") -and $results.Count -gt 0) {
+                $Results | Export-Csv -Path $script:outputFile -NoTypeInformation -Encoding $Encoding
+                Write-logFile -Message "[INFO] Output written to $script:outputFile" -Color "Green" -Level Standard
+            }
+        }
+
+        else {
+            $Results = @()
+            try {
+                $amountResults = (Search-UnifiedAuditLog -StartDate $StartDate -EndDate $EndDate -Operations "MailItemsAccessed" -ResultSize 1 | Select-Object -First 1 -ExpandProperty ResultCount)
+            }
+            catch {
+                write-logFile -Message "[INFO] Ensure you are connected to M365 by running the Connect-M365 command before executing this script" -Color "Yellow" -Level Minimal
+                Write-logFile -Message "[ERROR] An error occurred: $($_.Exception.Message)" -Color "Red" -Level Minimal
+                throw
+            }
+            if ($amountResults -gt 4999) {
+                write-logFile -Message "[WARNING] A total of $amountResults events have been identified, surpassing the maximum limit of 5000 results for a single session. To refine your search, kindly provide more specific details, such as specifying a user." -Color "Red" -Level Minimal
+            }
+            else {
+                $MailItemRecords = (Search-UnifiedAuditLog -StartDate $StartDate -EndDate $EndDate -ResultSize 5000 -Operations "MailItemsAccessed")
+
+                foreach ($Rec in $MailItemRecords) {
+                    $AuditData = ConvertFrom-Json $Rec.Auditdata
+                    $Line = [PSCustomObject]@{
+                        TimeStamp      = $AuditData.CreationTime
+                        User           = $AuditData.UserId
+                        Action         = $AuditData.Operation
+                        SessionId      = $AuditData.SessionId
+                        ClientIP       = $AuditData.ClientIPAddress
+                        OperationCount = $AuditData.OperationCount
+                    }
+
                     $summary.TotalEvents++
-                    
                     if ($AuditData.SessionId) {
                         $summary.UniqueSessions[$AuditData.SessionId] = $true
                     }
-                    
+
                     if ($AuditData.OperationCount) {
                         $summary.OperationCount += $AuditData.OperationCount
                     }
+
                     $Results += $Line
                 }
-             }
 
-            if ($isDebugEnabled) {
-                Write-LogFile -Message "[DEBUG] Processing complete" -Level Debug
-                Write-LogFile -Message "[DEBUG]   Total events processed: $($summary.TotalEvents)" -Level Debug
-                Write-LogFile -Message "[DEBUG]   Unique sessions found: $($summary.UniqueSessions.Count)" -Level Debug
-                Write-LogFile -Message "[DEBUG]   Total operation count: $($summary.OperationCount)" -Level Debug
-            }
-                
-            $Results | Sort SessionId, TimeStamp | Format-Table Timestamp, User, Action, SessionId, ClientIP, OperationCount -AutoSize
-        }
-        
-        if (($Output -eq "Yes") -and $results.Count -gt 0) {
-            $filePath = "$OutputDir\Sessions-$IP.csv"
-            $Results | Export-Csv -Path $filePath -NoTypeInformation -Encoding $Encoding
-            Write-logFile -Message "[INFO] Output written to $filePath" -Color "Green" -Level Standard
-        }  
-    }
-        
-    elseif($IP -And $UserIds){
-        $Results = @()
-        try {
-            $amountResults = (Search-UnifiedAuditLog -UserIds $UserIds -FreeText $IP -StartDate $StartDate -EndDate $EndDate -Operations "MailItemsAccessed" -ResultSize 1 | Select-Object -First 1 -ExpandProperty ResultCount)
-        }
-        catch {
-            write-logFile -Message "[INFO] Ensure you are connected to M365 by running the Connect-M365 command before executing this script" -Color "Yellow" -Level Minimal
-            Write-logFile -Message "[ERROR] An error occurred: $($_.Exception.Message)" -Color "Red" -Level Minimal
-            break
-        }
-        
-        if($amountResults -gt 4999){
-            write-logFile -Message "[WARNING] A total of $amountResults events have been identified, surpassing the maximum limit of 5000 results for a single session. To refine your search, kindly provide a more specific time window." -Color "Red" -Level Minimal
-        }
-        else{
-            $MailItemRecords = (Search-UnifiedAuditLog -UserIds $UserIds -FreeText $IP -StartDate $StartDate -EndDate $EndDate -ResultSize 5000 -Operations "MailItemsAccessed")
-    
-            foreach($Rec in $MailItemRecords){
-                $AuditData = ConvertFrom-Json $Rec.Auditdata
-                $Line = [PSCustomObject]@{
-                    TimeStamp   = $AuditData.CreationTime
-                    User        = $AuditData.UserId
-                    Action      = $AuditData.Operation
-                    SessionId   = $AuditData.SessionId
-                    ClientIP    = $AuditData.ClientIPAddress
-                    OperationCount = $AuditData.OperationCount
+                if ($isDebugEnabled) {
+                    Write-LogFile -Message "[DEBUG] Processing complete" -Level Debug
+                    Write-LogFile -Message "[DEBUG]   Total events processed: $($summary.TotalEvents)" -Level Debug
+                    Write-LogFile -Message "[DEBUG]   Unique sessions found: $($summary.UniqueSessions.Count)" -Level Debug
+                    Write-LogFile -Message "[DEBUG]   Total operation count: $($summary.OperationCount)" -Level Debug
                 }
-                    
-                if($AuditData.ClientIPAddress -eq $IP){
-                    $summary.TotalEvents++
-                    
-                    if ($AuditData.SessionId) {
-                        $summary.UniqueSessions[$AuditData.SessionId] = $true
-                    }
-                    
-                    if ($AuditData.OperationCount) {
-                        $summary.OperationCount += $AuditData.OperationCount
-                    }
-                    $Results += $Line
+
+                $Results | Sort SessionId, TimeStamp | Format-Table Timestamp, User, Action, SessionId, ClientIP, OperationCount -AutoSize
+            }
+            if (($Output -eq "Yes") -and $results.Count -gt 0) {
+                $Results | Export-Csv -Path $script:outputFile -NoTypeInformation -Encoding $Encoding
+                Write-logFile -Message "[INFO] Output written to $script:outputFile" -Color "Green" -Level Standard
+            }
+        }
+
+        $summary.ProcessingTime = (Get-Date) - $summary.StartTime
+        if ($Results.Count -gt 0) {
+            $summaryData = [ordered]@{
+                "Query Information" = [ordered]@{
+                    "Filter Type" = $summary.QueryType
+                    "Time Range"  = "$StartDate to $EndDate"
+                }
+                "Event Statistics"  = [ordered]@{
+                    "Total Events"     = $summary.TotalEvents
+                    "Unique Sessions"  = $summary.UniqueSessions.Count
+                    "Total Operations" = $summary.OperationCount
                 }
             }
 
-            if ($isDebugEnabled) {
-                Write-LogFile -Message "[DEBUG] Processing complete" -Level Debug
-                Write-LogFile -Message "[DEBUG]   Total events processed: $($summary.TotalEvents)" -Level Debug
-                Write-LogFile -Message "[DEBUG]   Unique sessions found: $($summary.UniqueSessions.Count)" -Level Debug
-                Write-LogFile -Message "[DEBUG]   Total operation count: $($summary.OperationCount)" -Level Debug
-            }
-                
-            $Results | Sort SessionId, TimeStamp | Format-Table Timestamp, User, Action, SessionId, ClientIP, OperationCount -AutoSize
+            Write-Summary -Summary $summaryData -Title "Session Analysis Summary"
         }
-       if (($Output -eq "Yes") -and $results.Count -gt 0) {
-            $Results | Export-Csv -Path $script:outputFile -NoTypeInformation -Encoding $Encoding
-            Write-logFile -Message "[INFO] Output written to $script:outputFile" -Color "Green" -Level Standard
-        } 
-    }
-
-    else{
-        $Results = @()
-        try {
-            $amountResults = (Search-UnifiedAuditLog -StartDate $StartDate -EndDate $EndDate -Operations "MailItemsAccessed" -ResultSize 1 | Select-Object -First 1 -ExpandProperty ResultCount)
-        }
-        catch {
-            write-logFile -Message "[INFO] Ensure you are connected to M365 by running the Connect-M365 command before executing this script" -Color "Yellow" -Level Minimal
-            Write-logFile -Message "[ERROR] An error occurred: $($_.Exception.Message)" -Color "Red" -Level Minimal
-            throw
-        }
-        if($amountResults -gt 4999){
-            write-logFile -Message "[WARNING] A total of $amountResults events have been identified, surpassing the maximum limit of 5000 results for a single session. To refine your search, kindly provide more specific details, such as specifying a user." -Color "Red" -Level Minimal
-        }
-        else {   
-            $MailItemRecords = (Search-UnifiedAuditLog -StartDate $StartDate -EndDate $EndDate -ResultSize 5000 -Operations "MailItemsAccessed")
-            
-            foreach($Rec in $MailItemRecords) {
-                $AuditData = ConvertFrom-Json $Rec.Auditdata
-                $Line = [PSCustomObject]@{
-                    TimeStamp   = $AuditData.CreationTime
-                    User        = $AuditData.UserId
-                    Action      = $AuditData.Operation
-                    SessionId   = $AuditData.SessionId
-                    ClientIP    = $AuditData.ClientIPAddress
-                    OperationCount = $AuditData.OperationCount
-                }
-                    
-                $summary.TotalEvents++
-                if ($AuditData.SessionId) {
-                    $summary.UniqueSessions[$AuditData.SessionId] = $true
-                }
-                
-                if ($AuditData.OperationCount) {
-                    $summary.OperationCount += $AuditData.OperationCount
-                }
-                   
-                $Results += $Line
-            }
-
-            if ($isDebugEnabled) {
-                Write-LogFile -Message "[DEBUG] Processing complete" -Level Debug
-                Write-LogFile -Message "[DEBUG]   Total events processed: $($summary.TotalEvents)" -Level Debug
-                Write-LogFile -Message "[DEBUG]   Unique sessions found: $($summary.UniqueSessions.Count)" -Level Debug
-                Write-LogFile -Message "[DEBUG]   Total operation count: $($summary.OperationCount)" -Level Debug
-            }
-
-            $Results | Sort SessionId, TimeStamp | Format-Table Timestamp, User, Action, SessionId, ClientIP, OperationCount -AutoSize
-        }
-        if (($Output -eq "Yes") -and $results.Count -gt 0) {
-            $Results | Export-Csv -Path $script:outputFile -NoTypeInformation -Encoding $Encoding
-            Write-logFile -Message "[INFO] Output written to $script:outputFile" -Color "Green" -Level Standard
-        }
-    }
-
-    $summary.ProcessingTime = (Get-Date) - $summary.StartTime
-    if ($Results.Count -gt 0) {
-        $summaryData = [ordered]@{
-            "Query Information" = [ordered]@{
-                "Filter Type" = $summary.QueryType
-                "Time Range" = "$StartDate to $EndDate"
-            }
-            "Event Statistics" = [ordered]@{
-                "Total Events" = $summary.TotalEvents
-                "Unique Sessions" = $summary.UniqueSessions.Count
-                "Total Operations" = $summary.OperationCount
-            }
-        }
-
-        Write-Summary -Summary $summaryData -Title "Session Analysis Summary"
     }
 }
 
 function Get-MessageIDs {
-<#
+    <#
     .SYNOPSIS
     Find the InternetMessageID(s).
 
@@ -397,7 +409,7 @@ function Get-MessageIDs {
     .PARAMETER Encoding
     Encoding is the parameter specifying the encoding of the CSV output file.
     Default: UTF8
-    
+
     .PARAMETER Sessions
     The sessions parameter is used to filter the logs by specifying the desired session id.
 
@@ -422,7 +434,7 @@ function Get-MessageIDs {
     .EXAMPLE
     Get-MessageIDs -StartDate 1/4/2025 -EndDate 5/4/2025
     Collects all sessions for all users between 1/4/2025 and 5/4/2025.
-    
+
     .EXAMPLE
     Get-MessageIDs -StartDate 1/4/2025 -EndDate 5/4/2025 -IP 1.1.1.1
     Collects all sessions for the IP address 1.1.1.1.
@@ -433,8 +445,8 @@ function Get-MessageIDs {
 #>
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory=$true)]$StartDate,
-        [Parameter(Mandatory=$true)]$EndDate,
+        [Parameter(Mandatory = $true)]$StartDate,
+        [Parameter(Mandatory = $true)]$EndDate,
         [string]$OutputDir,
         [string]$IP,
         [string]$Encoding = "UTF8",
@@ -450,33 +462,36 @@ function Get-MessageIDs {
     $filePostfix = "MessageIDs"
     if ($IP -and $Sessions) {
         $filePostfix = "MessageIDs-$Sessions-$IP"
-    } elseif ($Sessions) {
-        $filePostfix = "MessageIDs-$Sessions"  
-    } elseif ($IP) {
+    }
+    elseif ($Sessions) {
+        $filePostfix = "MessageIDs-$Sessions"
+    }
+    elseif ($IP) {
         $filePostfix = "MessageIDs-$IP"
     }
 
     if ($OutputDir) {
-       Init-OutputDir -Component "MailItemsAccessed" -FilePostfix $filePostfix -CustomOutputDir $OutputDir
-    } else {
-       Init-OutputDir -Component "MailItemsAccessed" -FilePostfix $filePostfix
+        Init-OutputDir -Component "MailItemsAccessed" -FilePostfix $filePostfix -CustomOutputDir $OutputDir
+    }
+    else {
+        Init-OutputDir -Component "MailItemsAccessed" -FilePostfix $filePostfix
     }
     Write-LogFile -Message "=== Starting Message IDs Collection ===" -Color "Cyan" -Level Standard
     $OutputDir = Split-Path $script:outputFile -Parent
 
     $summary = @{
-        TotalEvents = 0
-        StartTime = Get-Date
+        TotalEvents    = 0
+        StartTime      = Get-Date
         ProcessingTime = $null
-        QueryType = "All Events"
+        QueryType      = "All Events"
     }
 
     if ($Download.IsPresent) {
         $requiredScopes = @("Mail.ReadWrite")
         $graphAuth = Get-GraphAuthType -RequiredScopes $requiredScopes
     }
-    
-    if (!$Sessions -And !$IP){
+
+    if (!$Sessions -And !$IP) {
         try {
             $amountResults = Search-UnifiedAuditLog -StartDate $StartDate -EndDate $EndDate -Operations "MailItemsAccessed" -ResultSize 1 | Select-Object -First 1 -ExpandProperty ResultCount
         }
@@ -486,16 +501,16 @@ function Get-MessageIDs {
             throw
         }
 
-        if ($amountResults -gt 4999){
+        if ($amountResults -gt 4999) {
             write-logFile -Message "[WARNING] A total of $amountResults events have been identified, surpassing the maximum limit of 5000 results for a single session. To refine your search, kindly lower the time window." -Color "Red" -Level Minimal
             return
         }
 
         else {
-            $results=@()
+            $results = [System.Collections.Generic.List[object]]::new()
             $MailItemRecords = Search-UnifiedAuditLog -StartDate $StartDate -EndDate $EndDate -ResultSize 5000 -Operations "MailItemsAccessed"
 
-            forEach ($Rec in $MailItemRecords){
+            forEach ($Rec in $MailItemRecords) {
                 $summary.TotalEvents++
                 $AuditData = ConvertFrom-Json $Rec.Auditdata
                 $InternetMessageId = $AuditData.Folders.FolderItems
@@ -504,61 +519,61 @@ function Get-MessageIDs {
                 $ClientIP = $AuditData.ClientIPAddress
                 $userId = $AuditData.UserId
                 $sizeInBytes = $AuditData.SizeInBytes
-                                
-                if ($AuditData.OperationCount -gt 1){
+
+                if ($AuditData.OperationCount -gt 1) {
                     $summary.OperationCount += $AuditData.OperationCount
-                    foreach ($message in $InternetMessageId){
+                    foreach ($message in $InternetMessageId) {
                         $iMessageID = $message.InternetMessageId
                         $sizeInBytes = $message.SizeInBytes
 
                         $resultObject = [PSCustomObject]@{
-                            Timestamp           = $TimeStamp
-                            User                = $userId
-                            IPaddress           = $ClientIP
-                            SessionID           = $SessionId
-                            InternetMessageId   = $iMessageID
-                            SizeInBytes         = $sizeInBytes
+                            Timestamp         = $TimeStamp
+                            User              = $userId
+                            IPaddress         = $ClientIP
+                            SessionID         = $SessionId
+                            InternetMessageId = $iMessageID
+                            SizeInBytes       = $sizeInBytes
                         }
-                        
-                        $results += $resultObject
-                        if ($Download.IsPresent){
+
+                        $results.Add($resultObject)
+                        if ($Download.IsPresent) {
                             if (![string]::IsNullOrWhiteSpace($iMessageID)) {
-                                DownloadMails($iMessageID,$userId)
+                                DownloadMails($iMessageID, $userId)
                             }
                         }
                     }
                 }
-                            
+
                 else {
                     $SessionID = ""
                     $iMessageID = $AuditData.Folders.FolderItems.InternetMessageId
-                    
+
                     $resultObject = [PSCustomObject]@{
-                        Timestamp           = $TimeStamp
-                        User                = $userId
-                        IPaddress           = $ClientIP
-                        SessionID           = $SessionId
-                        InternetMessageId   = $iMessageID
-                        SizeInBytes         = $sizeInBytes
+                        Timestamp         = $TimeStamp
+                        User              = $userId
+                        IPaddress         = $ClientIP
+                        SessionID         = $SessionId
+                        InternetMessageId = $iMessageID
+                        SizeInBytes       = $sizeInBytes
                     }
-                    
-                    $results += $resultObject
-                    if ($Download.IsPresent){
+
+                    $results.Add($resultObject)
+                    if ($Download.IsPresent) {
                         if (![string]::IsNullOrWhiteSpace($iMessageID)) {
-                            DownloadMails($iMessageID,$userId)
+                            DownloadMails($iMessageID, $userId)
                         }
                     }
                 }
             }
         }
         $results | Sort TimeStamp | Format-Table Timestamp, User, IPaddress, SessionID, InternetMessageId, SizeInBytes -AutoSize
-        
+
         if (($Output -eq "Yes") -and $results.Count -gt 0) {
             $results | Export-Csv -Path $script:outputFile -NoTypeInformation -Encoding $Encoding
-        } 
+        }
     }
 
-    elseif ($IP -And $Sessions){
+    elseif ($IP -And $Sessions) {
         try {
             $amountResults = Search-UnifiedAuditLog -StartDate $StartDate -EndDate $EndDate -FreeText $IP -Operations "MailItemsAccessed" -ResultSize 1 | Select-Object -First 1 -ExpandProperty ResultCount
         }
@@ -568,16 +583,16 @@ function Get-MessageIDs {
             throw
         }
 
-        if ($amountResults -gt 4999){
+        if ($amountResults -gt 4999) {
             write-logFile -Message "[WARNING] A total of $amountResults events have been identified, surpassing the maximum limit of 5000 results for a single session. To refine your search, kindly lower the time window." -Color "Red" -Level Minimal
             return
         }
 
         else {
-            $results=@()
+            $results = [System.Collections.Generic.List[object]]::new()
             $MailItemRecords = Search-UnifiedAuditLog -StartDate $StartDate -EndDate $EndDate -FreeText $IP -ResultSize 5000 -Operations "MailItemsAccessed"
-        
-            forEach ($Rec in $MailItemRecords){
+
+            forEach ($Rec in $MailItemRecords) {
                 $summary.TotalEvents++
                 $AuditData = ConvertFrom-Json $Rec.Auditdata
                 $InternetMessageId = $AuditData.Folders.FolderItems
@@ -586,58 +601,58 @@ function Get-MessageIDs {
                 $ClientIP = $AuditData.ClientIPAddress
                 $userId = $AuditData.UserId
                 $sizeInBytes = $AuditData.SizeInBytes
-        
-                if($SessionId){
-                    if($Sessions.Contains($SessionId)){
-                        if($ClientIP -eq $IP){
 
-                            if ($AuditData.OperationCount -gt 1){
-                                foreach ($message in $InternetMessageId){
+                if ($SessionId) {
+                    if ($Sessions.Contains($SessionId)) {
+                        if ($ClientIP -eq $IP) {
+
+                            if ($AuditData.OperationCount -gt 1) {
+                                foreach ($message in $InternetMessageId) {
                                     $iMessageID = $message.InternetMessageId
                                     $sizeInBytes = $message.SizeInBytes
-            
-                                    $resultObject = [PSCustomObject]@{
-                                        Timestamp           = $TimeStamp
-                                        User                = $userId
-                                        IPaddress           = $ClientIP
-                                        SessionID           = $SessionId
-                                        InternetMessageId   = $iMessageID
-                                        SizeInBytes         = $sizeInBytes
-                                    }
-                                    
-                                    $results += $resultObject
 
-                                    if ($Download.IsPresent){
+                                    $resultObject = [PSCustomObject]@{
+                                        Timestamp         = $TimeStamp
+                                        User              = $userId
+                                        IPaddress         = $ClientIP
+                                        SessionID         = $SessionId
+                                        InternetMessageId = $iMessageID
+                                        SizeInBytes       = $sizeInBytes
+                                    }
+
+                                    $results.Add($resultObject)
+
+                                    if ($Download.IsPresent) {
                                         if (![string]::IsNullOrWhiteSpace($iMessageID)) {
-                                            DownloadMails($iMessageID,$userId)
+                                            DownloadMails($iMessageID, $userId)
                                         }
                                     }
                                 }
                             }
-                                        
+
                             else {
                                 $SessionID = ""
                                 $iMessageID = $AuditData.Folders.FolderItems.InternetMessageId
-                                
-                                $resultObject = [PSCustomObject]@{
-                                    Timestamp           = $TimeStamp
-                                    User                = $userId
-                                    IPaddress           = $ClientIP
-                                    SessionID           = $SessionId
-                                    InternetMessageId   = $iMessageID
-                                    SizeInBytes         = $sizeInBytes
-                                }
-                                
-                                $results += $resultObject
 
-                                if ($Download.IsPresent){
+                                $resultObject = [PSCustomObject]@{
+                                    Timestamp         = $TimeStamp
+                                    User              = $userId
+                                    IPaddress         = $ClientIP
+                                    SessionID         = $SessionId
+                                    InternetMessageId = $iMessageID
+                                    SizeInBytes       = $sizeInBytes
+                                }
+
+                                $results.Add($resultObject)
+
+                                if ($Download.IsPresent) {
                                     if (![string]::IsNullOrWhiteSpace($iMessageID)) {
-                                        DownloadMails($iMessageID,$userId)
+                                        DownloadMails($iMessageID, $userId)
                                     }
                                 }
-                            }                               
+                            }
                         }
-                        
+
                     }
                 }
             }
@@ -649,7 +664,7 @@ function Get-MessageIDs {
         }
     }
 
-    elseif ($Sessions -And !$IP){
+    elseif ($Sessions -And !$IP) {
         try {
             $amountResults = Search-UnifiedAuditLog -StartDate $StartDate -EndDate $EndDate -FreeText $Sessions -Operations "MailItemsAccessed" -ResultSize 1 | Select-Object -First 1 -ExpandProperty ResultCount
         }
@@ -658,17 +673,17 @@ function Get-MessageIDs {
             Write-logFile -Message "[ERROR] An error occurred: $($_.Exception.Message)" -Color "Red" -Level Minimal
             throw
         }
-        
-        if ($amountResults -gt 4999){
+
+        if ($amountResults -gt 4999) {
             write-logFile -Message "[WARNING] A total of $amountResults events have been identified, surpassing the maximum limit of 5000 results for a single session. To refine your search, kindly lower the time window." -Color "Red" -Level Minimal
             return
         }
 
         else {
-            $results=@()
+            $results = [System.Collections.Generic.List[object]]::new()
             $MailItemRecords = Search-UnifiedAuditLog -StartDate $StartDate -EndDate $EndDate -ResultSize 5000 -FreeText $Sessions -Operations "MailItemsAccessed"
-        
-            forEach ($Rec in $MailItemRecords){
+
+            forEach ($Rec in $MailItemRecords) {
                 $summary.TotalEvents++
                 $AuditData = ConvertFrom-Json $Rec.Auditdata
                 $InternetMessageId = $AuditData.Folders.FolderItems
@@ -678,66 +693,66 @@ function Get-MessageIDs {
                 $userId = $AuditData.UserId
                 $sizeInBytes = $AuditData.SizeInBytes
 
-                if($SessionId){
-                    if($Sessions.Contains($SessionId)){
-                        if ($AuditData.OperationCount -gt 1){
-                            foreach ($message in $InternetMessageId){
+                if ($SessionId) {
+                    if ($Sessions.Contains($SessionId)) {
+                        if ($AuditData.OperationCount -gt 1) {
+                            foreach ($message in $InternetMessageId) {
                                 $iMessageID = $message.InternetMessageId
                                 $sizeInBytes = $message.SizeInBytes
-            
-                                $resultObject = [PSCustomObject]@{
-                                    Timestamp           = $TimeStamp
-                                    User                = $userId
-                                    IPaddress           = $ClientIP
-                                    SessionID           = $SessionId
-                                    InternetMessageId   = $iMessageID
-                                    SizeInBytes         = $sizeInBytes
-                                }
-                                
-                                $results += $resultObject
 
-                                if ($Download.IsPresent){
+                                $resultObject = [PSCustomObject]@{
+                                    Timestamp         = $TimeStamp
+                                    User              = $userId
+                                    IPaddress         = $ClientIP
+                                    SessionID         = $SessionId
+                                    InternetMessageId = $iMessageID
+                                    SizeInBytes       = $sizeInBytes
+                                }
+
+                                $results.Add($resultObject)
+
+                                if ($Download.IsPresent) {
                                     if (![string]::IsNullOrWhiteSpace($iMessageID)) {
-                                        DownloadMails($iMessageID,$userId)
+                                        DownloadMails($iMessageID, $userId)
                                     }
                                 }
                             }
                         }
-                                    
+
                         else {
                             $SessionID = ""
                             $iMessageID = $AuditData.Folders.FolderItems.InternetMessageId
-                            
-                            $resultObject = [PSCustomObject]@{
-                                Timestamp           = $TimeStamp
-                                User                = $userId
-                                IPaddress           = $ClientIP
-                                SessionID           = $SessionId
-                                InternetMessageId   = $iMessageID
-                                SizeInBytes         = $sizeInBytes
-                            }
-                            
-                            $results += $resultObject
 
-                            if ($Download.IsPresent){
+                            $resultObject = [PSCustomObject]@{
+                                Timestamp         = $TimeStamp
+                                User              = $userId
+                                IPaddress         = $ClientIP
+                                SessionID         = $SessionId
+                                InternetMessageId = $iMessageID
+                                SizeInBytes       = $sizeInBytes
+                            }
+
+                            $results.Add($resultObject)
+
+                            if ($Download.IsPresent) {
                                 if (![string]::IsNullOrWhiteSpace($iMessageID)) {
-                                    DownloadMails($iMessageID,$userId)
+                                    DownloadMails($iMessageID, $userId)
                                 }
                             }
-                        }                               
-                    }    
+                        }
+                    }
                 }
             }
         }
-        $results | Sort TimeStamp | Format-Table Timestamp, User, IPaddress, SessionID, InternetMessageId, SizeInBytes  
+        $results | Sort TimeStamp | Format-Table Timestamp, User, IPaddress, SessionID, InternetMessageId, SizeInBytes
 
         if (($Output -eq "Yes") -and $results.Count -gt 0) {
             $results | Export-Csv -Path $script:outputFile -NoTypeInformation -Encoding $Encoding
             Write-logFile -Message "[INFO] Output written to $script:outputFile" -Color "Green" -Level Standard
         }
     }
-        
-    elseif (!$Sessions -And $IP){
+
+    elseif (!$Sessions -And $IP) {
         try {
             $amountResults = Search-UnifiedAuditLog -StartDate $StartDate -EndDate $EndDate -FreeText $IP -Operations "MailItemsAccessed" -ResultSize 1 | Select-Object -First 1 -ExpandProperty ResultCount
         }
@@ -747,15 +762,15 @@ function Get-MessageIDs {
             throw
         }
 
-        if ($amountResults -gt 4999){
+        if ($amountResults -gt 4999) {
             write-logFile -Message "[WARNING] A total of $amountResults events have been identified, surpassing the maximum limit of 5000 results for a single session. To refine your search, kindly lower the time window." -Color "Red" -Level Minimal
         }
 
         else {
-            $results=@()
+            $results = [System.Collections.Generic.List[object]]::new()
             $MailItemRecords = Search-UnifiedAuditLog -StartDate $StartDate -EndDate $EndDate -FreeText $IP -ResultSize 5000 -Operations "MailItemsAccessed"
 
-            forEach ($Rec in $MailItemRecords){
+            forEach ($Rec in $MailItemRecords) {
                 $summary.TotalEvents++
                 $AuditData = ConvertFrom-Json $Rec.Auditdata
                 $InternetMessageId = $AuditData.Folders.FolderItems
@@ -765,84 +780,84 @@ function Get-MessageIDs {
                 $sizeInBytes = $AuditData.SizeInBytes
 
                 $userId = $AuditData.UserId
-                  
-                if($ClientIP -eq $IP){
-                    if ($AuditData.OperationCount -gt 1){
-                        foreach ($message in $InternetMessageId){
+
+                if ($ClientIP -eq $IP) {
+                    if ($AuditData.OperationCount -gt 1) {
+                        foreach ($message in $InternetMessageId) {
                             $iMessageID = $message.InternetMessageId
                             $sizeInBytes = $message.SizeInBytes
-            
-                            $resultObject = [PSCustomObject]@{
-                                Timestamp           = $TimeStamp
-                                User                = $userId
-                                IPaddress           = $ClientIP
-                                SessionID           = $SessionId
-                                InternetMessageId   = $iMessageID
-                                SizeInBytes         = $sizeInBytes
-                            }
-                            
-                            $results += $resultObject
 
-                            if ($Download.IsPresent){
+                            $resultObject = [PSCustomObject]@{
+                                Timestamp         = $TimeStamp
+                                User              = $userId
+                                IPaddress         = $ClientIP
+                                SessionID         = $SessionId
+                                InternetMessageId = $iMessageID
+                                SizeInBytes       = $sizeInBytes
+                            }
+
+                            $results.Add($resultObject)
+
+                            if ($Download.IsPresent) {
                                 if (![string]::IsNullOrWhiteSpace($iMessageID)) {
-                                    DownloadMails($iMessageID,$userId)
+                                    DownloadMails($iMessageID, $userId)
                                 }
                             }
                         }
                     }
-                                
+
                     else {
                         $SessionID = ""
                         $iMessageID = $AuditData.Folders.FolderItems.InternetMessageId
-                        
-                        $resultObject = [PSCustomObject]@{
-                            Timestamp           = $TimeStamp
-                            User                = $userId
-                            IPaddress           = $ClientIP
-                            SessionID           = $SessionId
-                            InternetMessageId   = $iMessageID
-                            SizeInBytes         = $sizeInBytes
-                        }
-                        
-                        $results += $resultObject
 
-                        if ($Download.IsPresent){
+                        $resultObject = [PSCustomObject]@{
+                            Timestamp         = $TimeStamp
+                            User              = $userId
+                            IPaddress         = $ClientIP
+                            SessionID         = $SessionId
+                            InternetMessageId = $iMessageID
+                            SizeInBytes       = $sizeInBytes
+                        }
+
+                        $results.Add($resultObject)
+
+                        if ($Download.IsPresent) {
                             if (![string]::IsNullOrWhiteSpace($iMessageID)) {
-                                DownloadMails($iMessageID,$userId)
+                                DownloadMails($iMessageID, $userId)
                             }
                         }
-                    }                               
-                }          
+                    }
+                }
             }
         }
-        $results | Sort TimeStamp | Format-Table Timestamp, User, IPaddress, SessionID, InternetMessageId, SizeInBytes  
+        $results | Sort TimeStamp | Format-Table Timestamp, User, IPaddress, SessionID, InternetMessageId, SizeInBytes
 
         if (($Output -eq "Yes") -and $results.Count -gt 0) {
-            $date = [datetime]::Now.ToString('yyyyMMddHHmmss') 
+            $date = [datetime]::Now.ToString('yyyyMMddHHmmss')
             $filePath = "$OutputDir\$date-MessageIDs.csv"
             $results | Export-Csv -Path $filePath -NoTypeInformation -Encoding $Encoding
         }
     }
-    
+
     $summary.ProcessingTime = (Get-Date) - $summary.StartTime
     if ($Results.Count -gt 0) {
         $summaryData = [ordered]@{
             "Collection Results" = [ordered]@{
-                "Time Range" = "$StartDate to $EndDate"
+                "Time Range"                     = "$StartDate to $EndDate"
                 "Total MailItemsAccessed Events" = $summary.TotalEvents
-                "Messages Collected" = $Results.Count
+                "Messages Collected"             = $Results.Count
             }
         }
 
         Write-Summary -Summary $summaryData -Title "Message IDs Collection Summary"
-        
+
         if ($Download.IsPresent) {
             Write-LogFile -Message "`nNote: Downloaded emails saved to: $outputDir\Emails" -Level Standard
         }
     }
 }
 
-function DownloadMails($iMessageID,$UserIds){
+function DownloadMails($iMessageID, $UserIds) {
     if ($iMessageID -is [array]) {
         $iMessageID = $iMessageID[0]
     }
@@ -853,7 +868,7 @@ function DownloadMails($iMessageID,$UserIds){
         Write-LogFile -Message "[DEBUG]   Input UserIds: '$UserIds'" -Level Debug
         Write-LogFile -Message "[DEBUG]   Current fileCounter: $script:fileCounter" -Level Debug
     }
-    
+
     if (-not (Get-Variable -Name fileCounter -ErrorAction SilentlyContinue)) {
         $script:fileCounter = 1
     }
@@ -863,7 +878,7 @@ function DownloadMails($iMessageID,$UserIds){
         return
     }
 
-    if ($outputDir -eq "" ){
+    if ($outputDir -eq "" ) {
         $outputDir = "Output\MailItemsAccessed\Emails"
         if (!(test-path $outputDir)) {
             New-Item -ItemType Directory -Force -Name $outputDir > $null
@@ -903,17 +918,19 @@ function DownloadMails($iMessageID,$UserIds){
             if ($messageId -match " ") {
                 $messageId = $messageId.Split(" ")[0]
             }
-            
+
             $messageId = $getMessage.Id
             $attachment = $getMessage.Attachments
-        } catch {
+        }
+        catch {
             Write-LogFile -Message "[WARNING] Error retrieving message with ID '$onlyMessageID': $($_.Exception.Message)" -Color "Yellow" -Level Minimal
             return
         }
 
         if ($getMessage.ReceivedDateTime -is [DateTime]) {
             $ReceivedDateTime = $getMessage.ReceivedDateTime.ToString("yyyyMMdd_HHmmss")
-        } else {
+        }
+        else {
             $ReceivedDateTime = "unabletogetdate"  # Fallback to custom string
         }
 
@@ -937,15 +954,17 @@ function DownloadMails($iMessageID,$UserIds){
 
 
             Write-logFile -Message "[INFO] Output written to $filePath" -Color "Green" -Level Standard
-        } catch {
+        }
+        catch {
             if ($_.Exception.Message -like "*Cannot bind argument to parameter 'MessageId' because it is an empty string*") {
                 Write-logFile -Message "[WARNING] Unable to download message with ID '$iMessageID' was likely deleted." -Color "Red" -Level minimal
-            } else {
+            }
+            else {
                 Write-logFile -Message "[WARNING] Unable to download message with ID '$iMessageID." -Color "Red" -Level minimal
             }
         }
 
-        if ($attachment -eq "True"){
+        if ($attachment -eq "True") {
             Write-logFile -Message "[INFO] Found Attachment file!" -Level Standard
             $attachment = Get-MgUserMessageAttachment -UserId $UserIds -MessageId $messageId
 
@@ -974,5 +993,4 @@ function DownloadMails($iMessageID,$UserIds){
         Write-logFile "[WARNING] Error Message: $($_.Exception.Message)"  -Level minimal
     }
 }
-    
-    
+

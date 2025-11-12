@@ -4,7 +4,7 @@ Function Get-SecurityAlerts {
     Retrieves security alerts.
 
     .DESCRIPTION
-    Retrieves security alerts from Microsoft Graph, choosing between Get-MgSecurityAlert and 
+    Retrieves security alerts from Microsoft Graph, choosing between Get-MgSecurityAlert and
     Get-MgSecurityAlertV2 based on the authentication type used.
 
     .PARAMETER OutputDir
@@ -68,7 +68,7 @@ Function Get-SecurityAlerts {
     Write-LogFile -Message "=== Starting Security Alerts Collection ===" -Color "Cyan" -Level Standard
 
     $requiredScopes = @("SecurityEvents.Read.All")
-    $graphAuth = Get-GraphAuthType -RequiredScopes $RequiredScopes       
+    $graphAuth = Get-GraphAuthType -RequiredScopes $RequiredScopes
     Write-LogFile -Message "[INFO] Analyzing security alerts..." -Level Standard
 
     try {
@@ -85,26 +85,26 @@ Function Get-SecurityAlerts {
         if ($AlertId) {
             Write-LogFile -Message "[INFO] Retrieving specific alert: $AlertId" -Level Standard
             $params.Add("AlertId", $AlertId)
-        } 
+        }
         else {
             if ($DaysBack -gt 0) {
                 $startDate = (Get-Date).AddDays(-$DaysBack).ToString("yyyy-MM-ddT00:00:00Z")
-                
+
                 if ($Filter) {
                     $timeFilter = "createdDateTime ge $startDate"
                     $params.Add("Filter", "($Filter) and ($timeFilter)")
                     Write-LogFile -Message "[INFO] Using combined filter: $($params.Filter)" -Level Standard
-                } 
+                }
                 else {
                     $params.Add("Filter", "createdDateTime ge $startDate")
                     Write-LogFile -Message "[INFO] Filtering alerts from $startDate" -Level Standard
                 }
-            } 
+            }
             elseif ($Filter) {
                 $params.Add("Filter", $Filter)
                 Write-LogFile -Message "[INFO] Using custom filter: $Filter" -Level Standard
             }
-            
+
             $params.Add("All", $true)
         }
 
@@ -135,17 +135,18 @@ Function Get-SecurityAlerts {
             StatusUnknown = 0
         }
 
-        $formattedAlerts = $alerts | ForEach-Object {
+        $formattedAlerts = [System.Collections.Generic.List[object]]::new($alerts.Count)
+        foreach ($alert in $alerts) {
             $alertSummary.TotalAlerts++
-            
-            switch ($_.Severity) {
+
+            switch ($alert.Severity) {
                 "high" { $alertSummary.SeverityHigh++ }
                 "medium" { $alertSummary.SeverityMedium++ }
                 "low" { $alertSummary.SeverityLow++ }
                 "informational" { $alertSummary.SeverityInformational++ }
             }
-            
-            switch ($_.Status) {
+
+            switch ($alert.Status) {
                 "newAlert" { $alertSummary.StatusNew++ }
                 "new" { $alertSummary.StatusNew++ }
                 "inProgress" { $alertSummary.StatusInProgress++ }
@@ -156,9 +157,9 @@ Function Get-SecurityAlerts {
 
             # Extract affected users, handling both null and populated UserStates
             $affectedUsers = ""
-            if ($_.UserStates -and $_.UserStates.Count -gt 0) {
-                $userDetails = @()
-                foreach ($userState in $_.UserStates) {
+            if ($alert.UserStates -and $alert.UserStates.Count -gt 0) {
+                $userDetails = [System.Collections.Generic.List[string]]::new()
+                foreach ($userState in $alert.UserStates) {
                     if ($userState.UserPrincipalName) {
                         $userInfo = $userState.UserPrincipalName
                         if ($userState.LogonIP) {
@@ -166,18 +167,18 @@ Function Get-SecurityAlerts {
                         } else {
                             $userInfo += "/null"
                         }
-                        $userDetails += $userInfo
+                        $userDetails.Add($userInfo)
                     } elseif ($userState.Name) {
-                        $userDetails += "$($userState.Name)/null"
+                        $userDetails.Add("$($userState.Name)/null")
                     }
                 }
                 $affectedUsers = $userDetails -join "; "
             }
 
             $affectedHosts = ""
-            if ($_.HostStates -and $_.HostStates.Count -gt 0) {
-                $hostDetails = @()
-                foreach ($hostState in $_.HostStates) {
+            if ($alert.HostStates -and $alert.HostStates.Count -gt 0) {
+                $hostDetails = [System.Collections.Generic.List[string]]::new()
+                foreach ($hostState in $alert.HostStates) {
                     $hostInfo = ""
                     if ($hostState.NetBiosName) {
                         $hostInfo = $hostState.NetBiosName
@@ -192,54 +193,67 @@ Function Get-SecurityAlerts {
                     } else {
                         $hostInfo += "/null"
                     }
-                    
-                    $hostDetails += $hostInfo
+
+                    $hostDetails.Add($hostInfo)
                 }
                 $affectedHosts = $hostDetails -join "; "
             }
 
-            $sourceURLs = ($_.SourceMaterials) -join "; "
-            
-            $cloudApps = ($_.CloudAppStates | ForEach-Object { "$($_.Name): $($_.InstanceName)" }) -join "; "
-            $comments = ($_.Comments | ForEach-Object { 
-                if ($_.CreatedBy.User.DisplayName) {
-                    "$($_.Comment) - $($_.CreatedBy.User.DisplayName)" 
-                } else {
-                    $_.Comment
+            $sourceURLs = if ($alert.SourceMaterials) { ($alert.SourceMaterials -join "; ") } else { "" }
+
+            $cloudApps = ""
+            if ($alert.CloudAppStates -and $alert.CloudAppStates.Count -gt 0) {
+                $cloudAppList = [System.Collections.Generic.List[string]]::new()
+                foreach ($cloudApp in $alert.CloudAppStates) {
+                    $cloudAppList.Add("$($cloudApp.Name): $($cloudApp.InstanceName)")
                 }
-            }) -join "; "
-            
-            [PSCustomObject]@{
-                Id = $_.Id
-                Title = $_.Title
-                Category = $_.Category
-                Severity = $_.Severity
-                Status = $_.Status
-                CreatedDateTime = $_.CreatedDateTime
-                EventDateTime = $_.EventDateTime
-                LastModifiedDateTime = $_.LastModifiedDateTime
-                AssignedTo = $_.AssignedTo
-                Description = $_.Description
-                DetectionSource = $_.DetectionSource
+                $cloudApps = $cloudAppList -join "; "
+            }
+
+            $comments = ""
+            if ($alert.Comments -and $alert.Comments.Count -gt 0) {
+                $commentList = [System.Collections.Generic.List[string]]::new()
+                foreach ($comment in $alert.Comments) {
+                    if ($comment.CreatedBy.User.DisplayName) {
+                        $commentList.Add("$($comment.Comment) - $($comment.CreatedBy.User.DisplayName)")
+                    } else {
+                        $commentList.Add($comment.Comment)
+                    }
+                }
+                $comments = $commentList -join "; "
+            }
+
+            $formattedAlerts.Add([PSCustomObject]@{
+                Id = $alert.Id
+                Title = $alert.Title
+                Category = $alert.Category
+                Severity = $alert.Severity
+                Status = $alert.Status
+                CreatedDateTime = $alert.CreatedDateTime
+                EventDateTime = $alert.EventDateTime
+                LastModifiedDateTime = $alert.LastModifiedDateTime
+                AssignedTo = $alert.AssignedTo
+                Description = $alert.Description
+                DetectionSource = $alert.DetectionSource
                 AffectedUser = $affectedUsers
                 AffectedHost = $affectedHosts
-                AzureTenantId = $_.AzureTenantId
-                AzureSubscriptionId = $_.AzureSubscriptionId
-                Confidence = $_.Confidence
-                ActivityGroupName = $_.ActivityGroupName
-                ClosedDateTime = $_.ClosedDateTime
-                Feedback = $_.Feedback
-                LastEventDateTime = $_.LastEventDateTime
+                AzureTenantId = $alert.AzureTenantId
+                AzureSubscriptionId = $alert.AzureSubscriptionId
+                Confidence = $alert.Confidence
+                ActivityGroupName = $alert.ActivityGroupName
+                ClosedDateTime = $alert.ClosedDateTime
+                Feedback = $alert.Feedback
+                LastEventDateTime = $alert.LastEventDateTime
                 SourceURL = $sourceURLs
                 CloudAppStates = $cloudApps
                 Comments = $comments
-                Tags = ($_.Tags -join ", ")
-                Vendor = $_.VendorInformation.Vendor
-                Provider = $_.VendorInformation.Provider
-                SubProvider = $_.VendorInformation.SubProvider
-                ProviderVersion = $_.VendorInformation.ProviderVersion
-                IncidentIds = ($_.IncidentIds -join ", ")
-            }
+                Tags = if ($alert.Tags) { ($alert.Tags -join ", ") } else { "" }
+                Vendor = $alert.VendorInformation.Vendor
+                Provider = $alert.VendorInformation.Provider
+                SubProvider = $alert.VendorInformation.SubProvider
+                ProviderVersion = $alert.VendorInformation.ProviderVersion
+                IncidentIds = if ($alert.IncidentIds) { ($alert.IncidentIds -join ", ") } else { "" }
+            })
         }
 
         $formattedAlerts | Export-Csv -Path $script:outputFile -NoTypeInformation -Encoding $Encoding

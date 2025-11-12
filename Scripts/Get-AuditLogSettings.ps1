@@ -25,11 +25,11 @@ function Get-MailboxAuditStatus {
     Standard: Normal operational logging
     Debug: Verbose logging for debugging purposes
     Default: Standard
-    
+
     .EXAMPLE
     Get-MailboxAuditStatus
     Retrieves audit status for all mailboxes and exports to a CSV file in the default directory.
-        
+
     .EXAMPLE
     Get-MailboxAuditStatus -OutputDir C:\Temp -Encoding UTF32
     Retrieves audit status and saves the output to C:\Temp with UTF-32 encoding.
@@ -71,7 +71,7 @@ function Get-MailboxAuditStatus {
             Write-LogFile -Message "[DEBUG]   AuditDisabled property: $orgConfig" -Level Debug
             Write-LogFile -Message "[DEBUG]   Organization-wide auditing enabled: $($summary.OrgWideAuditingEnabled)" -Level Debug
         }
-        
+
         if ($orgConfig) {
             Write-LogFile -Message "[WARNING] Organization-wide auditing is disabled!" -Level Minimal -Color "Red"
         } else {
@@ -135,15 +135,15 @@ function Get-MailboxAuditStatus {
 
     try {
         Write-LogFile -Message "[INFO] Attempting bulk retrieval of audit bypass associations..." -Level Standard
-        $bypassAssociations = Get-MailboxAuditBypassAssociation -ResultSize Unlimited -WarningAction SilentlyContinue | 
-            Select-Object Identity, AuditBypassEnabled | 
+        $bypassAssociations = Get-MailboxAuditBypassAssociation -ResultSize Unlimited -WarningAction SilentlyContinue |
+            Select-Object Identity, AuditBypassEnabled |
             Where-Object { $_.AuditBypassEnabled -eq $true }
-        
+
         if ($isDebugEnabled) {
             Write-LogFile -Message "[DEBUG] Bulk bypass retrieval completed:" -Level Debug
             Write-LogFile -Message "[DEBUG]   Bypass associations found: $($bypassAssociations.Count)" -Level Debug
         }
-        
+
         foreach ($bypass in $bypassAssociations) {
             if ($null -ne $bypass.Identity) {
                 $bypassLookup[$bypass.Identity] = $True
@@ -178,7 +178,7 @@ function Get-MailboxAuditStatus {
                 try {
                     $bypass = Get-MailboxAuditBypassAssociation -Identity $mbx.UserPrincipalName -WarningAction SilentlyContinue | Select-Object Identity, AuditBypassEnabled
                     if ($bypass -and $bypass.Identity) {
-                        $bypassLookup[$bypass.Identity] = [bool]$bypass.AuditBypassEnabled 
+                        $bypassLookup[$bypass.Identity] = [bool]$bypass.AuditBypassEnabled
                     }
                     if ($isDebugEnabled -and $bypass.AuditBypassEnabled) {
                             Write-LogFile -Message "[DEBUG]     Individual bypass found: $($mbx.UserPrincipalName)" -Level Debug
@@ -192,7 +192,7 @@ function Get-MailboxAuditStatus {
                     continue
                 }
             }
-            
+
             $processed = [Math]::Min($i + $batchSize, $mailboxes.Count)
             $percentage = [math]::Round(($processed / $mailboxes.Count) * 100, 2)
             Write-LogFile -Message "[INFO] Processed bypass status: $processed/$($mailboxes.Count) mailboxes ($percentage%)" -Level Standard
@@ -220,22 +220,22 @@ function Get-MailboxAuditStatus {
         }
 
          # Sort the audit actions for each category
-         $ownerActions = if ($mailbox.AuditOwner) { 
-            ($mailbox.AuditOwner | Sort-Object) -join ', ' 
-        } else { 
-            '' 
+         $ownerActions = if ($mailbox.AuditOwner) {
+            ($mailbox.AuditOwner | Sort-Object) -join ', '
+        } else {
+            ''
         }
-        
-        $delegateActions = if ($mailbox.AuditDelegate) { 
-            ($mailbox.AuditDelegate | Sort-Object) -join ', ' 
-        } else { 
-            '' 
+
+        $delegateActions = if ($mailbox.AuditDelegate) {
+            ($mailbox.AuditDelegate | Sort-Object) -join ', '
+        } else {
+            ''
         }
-        
-        $adminActions = if ($mailbox.AuditAdmin) { 
-            ($mailbox.AuditAdmin | Sort-Object) -join ', ' 
-        } else { 
-            '' 
+
+        $adminActions = if ($mailbox.AuditAdmin) {
+            ($mailbox.AuditAdmin | Sort-Object) -join ', '
+        } else {
+            ''
         }
 
         $defaultAuditSet = if ($mailbox.DefaultAuditSet) {
@@ -257,8 +257,8 @@ function Get-MailboxAuditStatus {
             DelegateAuditActionsCount = if ($mailbox.AuditDelegate) { $mailbox.AuditDelegate.Count } else { 0 }
             AdminAuditActions = $adminActions
             AdminAuditActionsCount = if ($mailbox.AuditAdmin) { $mailbox.AuditAdmin.Count } else { 0 }
-            EffectiveAuditState = if ($summary.OrgWideAuditingEnabled -and -not $bypassStatus) { 
-                "Enabled (Organization Policy)" 
+            EffectiveAuditState = if ($summary.OrgWideAuditingEnabled -and -not $bypassStatus) {
+                "Enabled (Organization Policy)"
             } elseif ($bypassStatus) {
                 "Bypassed"
             } else {
@@ -287,7 +287,7 @@ function Get-MailboxAuditStatus {
     }
 
     $summary.ProcessingTime = (Get-Date) - $summary.StartTime
-    
+
     if ($summary.OrgWideAuditingEnabled) {
         Write-LogFile -Message "  [!] Organization-wide auditing overrides individual mailbox settings" -Level Standard
         Write-LogFile -Message "  [!] Default actions are automatically logged for all non-bypassed mailboxes" -Level Standard
@@ -295,4 +295,3 @@ function Get-MailboxAuditStatus {
 
     Write-Summary -Summary $summaryData -Title "Mailbox Audit Status Summary"
 }
-    

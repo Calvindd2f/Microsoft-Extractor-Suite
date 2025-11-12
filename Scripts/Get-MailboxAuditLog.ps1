@@ -5,7 +5,7 @@ function Get-MailboxAuditLog
     Get mailbox audit log entries.
 
     .DESCRIPTION
-    Get mailbox audit log entries for all or a specific user account. 
+    Get mailbox audit log entries for all or a specific user account.
 	The output will be written to: Output\MailboxAuditLog\
 
 	.PARAMETER UserIds
@@ -38,7 +38,7 @@ function Get-MailboxAuditLog
     Minimal: Critical errors only
     Standard: Normal operational logging
     Default: Standard
-    
+
 	.EXAMPLE
     Get-MailboxAuditLog
 	Get all available mailbox audit log entries for all user accounts
@@ -111,7 +111,7 @@ function Get-MailboxAuditLogLegacy
     Get mailbox audit log entries using the legacy Search-MailboxAuditlog method.
 
     .DESCRIPTION
-    Get mailbox audit log entries for specific a user account. 
+    Get mailbox audit log entries for specific a user account.
 	The output will be written to: Output\MailboxAuditLog\
 
 	.PARAMETER UserIds
@@ -138,7 +138,7 @@ function Get-MailboxAuditLogLegacy
     Standard: Normal operational logging
     Debug: Verbose logging for debugging purposes
     Default: Standard
-    
+
 	.EXAMPLE
     Get-MailboxAuditLogLegacy
 	Get all available mailbox audit log entries for all user accounts
@@ -180,47 +180,47 @@ function Get-MailboxAuditLogLegacy
     }
 
     Write-LogFile -Message "[INFO] Running Get-MailboxAuditLogLegacy" -Level Minimal -Color "Green"
-	
+
 	StartDate
 	EndDate
 
 	if (($null -eq $UserIds) -Or ($UserIds -eq ""))  {
         Write-LogFile -Message "[INFO] No users provided.. Getting the MailboxAuditLog for all users" -Level Standard -Color "Yellow"
-		Get-mailbox -resultsize unlimited |
-		ForEach-Object {
+		$mailboxes = Get-mailbox -resultsize unlimited
+		foreach ($mailbox in $mailboxes) {
 			$date = Get-Date -Format "yyyyMMddHHmm"
-			$outputFile = "$OutputDir\$($date)-mailboxAuditLog-$($_.UserPrincipalName).csv"
+			$outputFile = "$OutputDir\$($date)-mailboxAuditLog-$($mailbox.UserPrincipalName).csv"
 
-            Write-LogFile -Message "[INFO] Collecting the MailboxAuditLog for $($_.UserPrincipalName)" -Level Standard
-			$result = Search-MailboxAuditlog -Identity $_.UserPrincipalName -LogonTypes Delegate,Admin,Owner -StartDate $script:StartDate -EndDate $script:EndDate -ShowDetails -ResultSize 250000 
+            Write-LogFile -Message "[INFO] Collecting the MailboxAuditLog for $($mailbox.UserPrincipalName)" -Level Standard
+			$result = Search-MailboxAuditlog -Identity $mailbox.UserPrincipalName -LogonTypes Delegate,Admin,Owner -StartDate $script:StartDate -EndDate $script:EndDate -ShowDetails -ResultSize 250000
 			$result | export-csv -NoTypeInformation -Path $outputFile -Encoding $Encoding
-			
+
             Write-LogFile -Message "[INFO] Output is written to: $outputFile" -Level Standard -Color "Green"
 		}
 	}
 
 	elseif ($UserIds -match ",") {
-		$UserIds.Split(",") | Foreach {
-			$user = $_
+		$userList = $UserIds.Split(",")
+		foreach ($user in $userList) {
 			$date = Get-Date -Format "yyyyMMddHHmm"
 			$outputFile = "$OutputDir\$($date)-mailboxAuditLog-$($user).csv"
 
             Write-LogFile -Message "[INFO] Collecting the MailboxAuditLog for $user" -Level Standard
-			$result = Search-MailboxAuditlog -Identity $user -LogonTypes Delegate,Admin,Owner -StartDate $script:StartDate -EndDate $script:EndDate -ShowDetails -ResultSize 250000 
+			$result = Search-MailboxAuditlog -Identity $user -LogonTypes Delegate,Admin,Owner -StartDate $script:StartDate -EndDate $script:EndDate -ShowDetails -ResultSize 250000
 			$result | export-csv -NoTypeInformation -Path $outputFile -Encoding $Encoding
-			
+
             Write-LogFile -Message "[INFO] Output is written to: $outputFile" -Level Standard -Color "Green"
 		}
 	}
 
-	else {		
+	else {
 		$date = Get-Date -Format "yyyyMMddHHmm"
 		$outputFile = "$OutputDir\$($date)-mailboxAuditLog-$($UserIds).csv"
 
         Write-LogFile -Message "[INFO] Collecting the MailboxAuditLog for $UserIds" -Level Standard
-		$result = Search-MailboxAuditlog -Identity $UserIds -LogonTypes Delegate,Admin,Owner -StartDate $script:StartDate -EndDate $script:EndDate -ShowDetails -ResultSize 250000 
+		$result = Search-MailboxAuditlog -Identity $UserIds -LogonTypes Delegate,Admin,Owner -StartDate $script:StartDate -EndDate $script:EndDate -ShowDetails -ResultSize 250000
 		$result | export-csv -NoTypeInformation -Path $outputFile -Encoding $Encoding
-		
+
         Write-LogFile -Message "[INFO] Output is written to: $outputFile" -Level Standard -Color "Green"
-	} 
+	}
 }

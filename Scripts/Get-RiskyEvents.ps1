@@ -1,7 +1,7 @@
 function Get-RiskyUsers {
 <#
     .SYNOPSIS
-    Retrieves the risky users. 
+    Retrieves the risky users.
 
     .DESCRIPTION
     Retrieves the risky users from the Entra ID Identity Protection, which marks an account as being at risk based on the pattern of activity for the account.
@@ -25,15 +25,15 @@ function Get-RiskyUsers {
     Standard: Normal operational logging
     Debug: Verbose logging for debugging purposes
     Default: Standard
-    
+
     .EXAMPLE
     Get-RiskyUsers
     Retrieves all risky users.
-    
+
     .EXAMPLE
     Get-RiskyUsers -Encoding utf32
     Retrieves all risky users and exports the output to a CSV file with UTF-32 encoding.
-        
+
     .EXAMPLE
     Get-RiskyUsers -OutputDir C:\Windows\Temp
     Retrieves all risky users and saves the output to the C:\Windows\Temp folder.
@@ -59,12 +59,12 @@ function Get-RiskyUsers {
         $userString = ($UserIds -join "-").Substring(0, [Math]::Min(50, ($UserIds -join "-").Length))
         $filePostfix = "RiskyUsers-$userString"
     }
-    
+
     Init-OutputDir -Component "RiskyEvents" -FilePostfix $filePostfix -CustomOutputDir $OutputDir
     $requiredScopes = @("IdentityRiskEvent.Read.All","IdentityRiskyUser.Read.All")
     $graphAuth = Get-GraphAuthType -RequiredScopes $RequiredScopes
 
-    $results = @()
+    $results = [System.Collections.Generic.List[object]]::new()
     $count = 0
     $riskSummary = @{
         High = 0
@@ -76,9 +76,8 @@ function Get-RiskyUsers {
         Remediated = 0
         Dismissed = 0
     }
-    
+
     try {
-        $results = @()
         $baseUri = "https://graph.microsoft.com/v1.0/identityProtection/riskyUsers"
 
         if ($UserIds) {
@@ -90,16 +89,16 @@ function Get-RiskyUsers {
                 $encodedUserId = [System.Web.HttpUtility]::UrlEncode($userId)
                 $uri = "$baseUri`?`$filter=userPrincipalName eq '$encodedUserId'"
                 Write-LogFile -Message "[INFO] Retrieving risky user for UPN: $userId" -Level Standard
-        
+
                 try {
                     $response = Invoke-MgGraphRequest -Method GET -Uri $uri
-        
+
                     if ($isDebugEnabled) {
                         Write-LogFile -Message "[DEBUG]   Response received:" -Level Debug
                         Write-LogFile -Message "[DEBUG]     Value count: $($response.value.Count)" -Level Debug
                         Write-LogFile -Message "[DEBUG]     Has @odata.nextLink: $($null -ne $response.'@odata.nextLink')" -Level Debug
                     }
-        
+
                     if ($response.value -and $response.value.Count -gt 0) {
                         if ($isDebugEnabled) {
                             Write-LogFile -Message "[DEBUG]   Found $($response.value.Count) risky user records" -Level Debug
@@ -124,7 +123,7 @@ function Get-RiskyUsers {
                                 Write-LogFile -Message "[DEBUG]       Risk Detail: $($user.RiskDetail)" -Level Debug
                                 Write-LogFile -Message "[DEBUG]       Last Updated: $($user.RiskLastUpdatedDateTime)" -Level Debug
                             }
-                            $results += [PSCustomObject]@{
+                            $results.Add([PSCustomObject]@{
                                 Id                          = $user.Id
                                 IsDeleted                   = $user.IsDeleted
                                 IsProcessing                = $user.IsProcessing
@@ -135,9 +134,9 @@ function Get-RiskyUsers {
                                 UserDisplayName             = $user.UserDisplayName
                                 UserPrincipalName           = $user.UserPrincipalName
                                 AdditionalProperties = $user.AdditionalProperties -join ", "
-                            }
-                            
-                            if ($user.RiskLevel) { 
+                            })
+
+                            if ($user.RiskLevel) {
                                 switch ($user.RiskLevel.ToLower()) {
                                     "high" { $riskSummary.High++ }
                                     "medium" { $riskSummary.Medium++ }
@@ -203,7 +202,7 @@ function Get-RiskyUsers {
                             Write-LogFile -Message "[DEBUG]       Risk Level: $($user.RiskLevel)" -Level Debug
                             Write-LogFile -Message "[DEBUG]       Risk State: $($user.RiskState)" -Level Debug
                         }
-                        $results += [PSCustomObject]@{
+                        $results.Add([PSCustomObject]@{
                             Id                          = $user.Id
                             IsDeleted                   = $user.IsDeleted
                             IsProcessing                = $user.IsProcessing
@@ -214,9 +213,9 @@ function Get-RiskyUsers {
                             UserDisplayName             = $user.UserDisplayName
                             UserPrincipalName           = $user.UserPrincipalName
                             AdditionalProperties        = $user.AdditionalProperties -join ", "
-                        }
+                        })
 
-                        if ($user.RiskLevel) { 
+                        if ($user.RiskLevel) {
                             switch ($user.RiskLevel.ToLower()) {
                                 "high" { $riskSummary.High++ }
                                 "medium" { $riskSummary.Medium++ }
@@ -248,7 +247,7 @@ function Get-RiskyUsers {
     if ($results.Count -gt 0) {
         $results | Export-Csv -Path $script:outputFile -NoTypeInformation -Encoding $Encoding
         Write-LogFile -Message "[INFO] A total of $count Risky Users found" -Level Standard
-        
+
         $summary = [ordered]@{
             "Risk Levels" = [ordered]@{
                 "Total Risky Users" = $count
@@ -297,19 +296,19 @@ function Get-RiskyDetections {
     Standard: Normal operational logging
     Debug: Verbose logging for debugging purposes
     Default: Standard
-        
+
     .EXAMPLE
     Get-RiskyDetections
     Retrieves all the risky detections.
-    
+
     .EXAMPLE
     Get-RiskyDetections -Encoding utf32
     Retrieves the risky detections and exports the output to a CSV file with UTF-32 encoding.
-        
+
     .EXAMPLE
     Get-RiskyDetections -OutputDir C:\Windows\Temp
     Retrieves the risky detections and saves the output to the C:\Windows\Temp folder.
-    
+
     .EXAMPLE
     Get-RiskyDetections -UserIds "user-id-1","user-id-2"
     Retrieves risky detections for the specified User IDs.
@@ -336,11 +335,11 @@ function Get-RiskyDetections {
     $requiredScopes = @("IdentityRiskEvent.Read.All","IdentityRiskyUser.Read.All")
     $graphAuth = Get-GraphAuthType -RequiredScopes $RequiredScopes
 
-    $results = @()
+    $results = [System.Collections.Generic.List[object]]::new()
     $count = 0
     $riskSummary = @{
         High = 0
-        Medium = 0 
+        Medium = 0
         Low = 0
         AtRisk = 0
         NotAtRisk = 0
@@ -398,7 +397,7 @@ function Get-RiskyDetections {
                                 Write-LogFile -Message "[DEBUG]       IP Address: $($detection.IPAddress)" -Level Debug
                                 Write-LogFile -Message "[DEBUG]       Location: $($detection.Location.City), $($detection.Location.CountryOrRegion)" -Level Debug
                             }
-                            $results += [PSCustomObject]@{
+                            $results.Add([PSCustomObject]@{
                                 Activity = $detection.Activity
                                 ActivityDateTime = $detection.ActivityDateTime
                                 AdditionalInfo = $detection.AdditionalInfo
@@ -422,7 +421,7 @@ function Get-RiskyDetections {
                                 UserId = $detection.UserId
                                 UserPrincipalName = $detection.UserPrincipalName
                                 AdditionalProperties = $detection.AdditionalProperties -join ", "
-                            }
+                            })
 
                             if ($detection.RiskLevel) { $riskSummary[$detection.RiskLevel]++ }
                             if ($detection.RiskState -eq "atRisk") { $riskSummary.AtRisk++ }
