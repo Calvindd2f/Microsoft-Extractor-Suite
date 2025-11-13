@@ -12,11 +12,11 @@ BeforeAll {
     # Import the module
     $modulePath = Join-Path $PSScriptRoot '..' 'Microsoft-Extractor-Suite.psm1'
     Import-Module $modulePath -Force -ErrorAction Stop
-    
+
     # Create test output directory
     $script:TestOutputDir = Join-Path $TestDrive 'TestOutput'
     New-Item -ItemType Directory -Path $script:TestOutputDir -Force | Out-Null
-    
+
     # Create merged subdirectory
     $script:TestMergedDir = Join-Path $script:TestOutputDir 'Merged'
     New-Item -ItemType Directory -Path $script:TestMergedDir -Force | Out-Null
@@ -36,7 +36,7 @@ Describe 'StreamReader Resource Management' {
             # (e.g., file locked by another process, or invalid path)
             # Note: This is difficult to test without actual file system manipulation
             # The code should handle null reader in finally block
-            
+
             # For now, verify the pattern exists in code
             $moduleContent = Get-Content -Path (Join-Path $PSScriptRoot '..' 'Microsoft-Extractor-Suite.psm1') -Raw
             $moduleContent | Should -Match '\$reader = \$null'
@@ -59,10 +59,10 @@ Describe 'StreamReader Resource Management' {
 {"test":"data1"}
 {"test":"data2"}
 '@ | Set-Content -Path $jsonl1 -Encoding UTF8
-            
+
             # Act
             { Merge-OutputFiles -OutputDir $script:TestOutputDir -OutputType JSONL -MergedFileName 'merged.jsonl' } | Should -Not -Throw
-            
+
             # Assert
             $mergedFile = Join-Path $script:TestMergedDir 'merged.jsonl'
             Test-Path $mergedFile | Should -Be $true

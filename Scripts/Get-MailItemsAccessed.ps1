@@ -116,9 +116,6 @@ Function Get-Sessions {
         }
 
         Write-LogFile -Message "=== Starting Session Collection ===" -Color "Cyan" -Level Standard
-    }
-
-    process {
 
         if ($UserIds -And !$IP) {
             try {
@@ -384,6 +381,13 @@ Function Get-Sessions {
 
             Write-Summary -Summary $summaryData -Title "Session Analysis Summary"
         }
+    }
+
+    process {
+        # Process block intentionally left empty - function does not accept pipeline input
+    }
+
+    end {
     }
 }
 

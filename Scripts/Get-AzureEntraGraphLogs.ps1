@@ -197,9 +197,7 @@ function Get-GraphEntraSignInLogs {
 		else {
 			$eventTypesToProcess.AddRange($EventTypes)
 		}
-	}
 
-	process {
 		foreach ($eventType in $eventTypesToProcess) {
 			$currentEventType = $eventTypeMapping[$eventType]
 			Write-LogFile -Message "[INFO] Acquiring the $($currentEventType.displayName) sign-in logs" -Level Standard -Color "Cyan"
@@ -235,9 +233,9 @@ function Get-GraphEntraSignInLogs {
 			}
 
 			$eventTypeSummary = @{
-				EventType = $currentEventType.displayName
+				EventType   = $currentEventType.displayName
 				RecordCount = 0
-				Files = 0
+				Files       = 0
 			}
 
 			try {
@@ -256,8 +254,8 @@ function Get-GraphEntraSignInLogs {
 						}
 						catch {
 							if (($_.Exception.Message -like "*Skip token is null*" -or
-								$_.Exception.Message -like "*token*expired*" -or
-								$_.Exception.Message -like "*Bad Request*") -and
+									$_.Exception.Message -like "*token*expired*" -or
+									$_.Exception.Message -like "*Bad Request*") -and
 								$tokenRetryCount -lt $maxTokenRetries) {
 
 								$tokenRetryCount++
@@ -307,7 +305,7 @@ function Get-GraphEntraSignInLogs {
 							if ($Output -eq "JSON" ) {
 								$sw.WriteLine(($responseJson.value | ConvertTo-Json -Depth 100))
 							}
-							elseif ($Output -eq "SOF-ELK"){
+							elseif ($Output -eq "SOF-ELK") {
 								foreach ($item in $responseJson.value) {
 									$sw.WriteLine(($item | ConvertTo-Json -Depth 100 -Compress))
 								}
@@ -344,7 +342,8 @@ function Get-GraphEntraSignInLogs {
 						Merge-OutputFiles -OutputDir $eventTypeDir -OutputType "JSON" -MergedFileName "SignInLogs-$($currentEventType.filename)-Combined.json"
 					}
 					elseif ($Output -eq "SOF-ELK") {
-					Merge-OutputFiles -OutputDir $eventTypeDir -OutputType "SOF-ELK" -MergedFileName "SignInLogs-$($currentEventType.filename)-Combined.json"				}
+						Merge-OutputFiles -OutputDir $eventTypeDir -OutputType "SOF-ELK" -MergedFileName "SignInLogs-$($currentEventType.filename)-Combined.json"
+     }
 				}
 
 				Write-LogFile -Message "`nSummary for $($currentEventType.displayName):" -Color "Cyan" -Level Standard
@@ -363,6 +362,10 @@ function Get-GraphEntraSignInLogs {
 				throw
 			}
 		}
+	}
+
+	process {
+		# Process block intentionally left empty - function does not accept pipeline input
 	}
 
 	end {
@@ -454,9 +457,9 @@ function Get-GraphEntraAuditLogs {
 		[string]$Encoding = "UTF8",
 		[switch]$MergeOutput,
 		[string[]]$UserIds,
-        [switch]$All,
-        [ValidateSet('None', 'Minimal', 'Standard', 'Debug')]
-        [string]$LogLevel = 'Standard'
+		[switch]$All,
+		[ValidateSet('None', 'Minimal', 'Standard', 'Debug')]
+		[string]$LogLevel = 'Standard'
 	)
 
 	begin {
@@ -464,10 +467,10 @@ function Get-GraphEntraAuditLogs {
 		Init-Logging
 		Init-OutputDir -Component "EntraID" -SubComponent "AuditLogs" -FilePostfix "AuditLogs" -CustomOutputDir $OutputDir
 		$summary = @{
-			TotalRecords = 0
-			StartTime = Get-Date
+			TotalRecords   = 0
+			StartTime      = Get-Date
 			ProcessingTime = $null
-			TotalFiles = 0
+			TotalFiles     = 0
 		}
 
 		Write-LogFile -Message "=== Starting Audit Log Collection ===" -Color "Cyan" -Level Standard
@@ -514,9 +517,7 @@ function Get-GraphEntraAuditLogs {
 			Write-LogFile -Message "[DEBUG]   Filter query (decoded): $filterQuery" -Level Debug
 			Write-LogFile -Message "[DEBUG]   Full API URL: $apiUrl" -Level Debug
 		}
-	}
 
-	process {
 		try {
 			Do {
 				$retryCount = 0
@@ -610,6 +611,10 @@ function Get-GraphEntraAuditLogs {
 			}
 			throw
 		}
+	}
+
+	process {
+		# Process block intentionally left empty - function does not accept pipeline input
 	}
 
 	end {

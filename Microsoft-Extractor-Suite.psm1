@@ -103,6 +103,7 @@ function Write-LogFile {
         [string]$Message,
         [string]$Color,
         [switch]$NoNewLine,
+        [switch]$NoTimestamp,
         [LogLevel]$Level = [LogLevel]::Standard
     )
 
@@ -140,10 +141,10 @@ function Write-LogFile {
     }
 
     if ($NoNewLine) {
-        [Console]::Write($Message)
+        [Console]::Write($logMessage)
     }
     else {
-        [Console]::WriteLine($Message)
+        [Console]::WriteLine($logMessage)
     }
 
     [Console]::ResetColor()

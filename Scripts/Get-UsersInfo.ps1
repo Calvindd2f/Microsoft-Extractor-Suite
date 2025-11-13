@@ -55,9 +55,6 @@ function Get-Users {
         $requiredScopes = @("User.Read.All")
         $null = Get-GraphAuthType -RequiredScopes $RequiredScopes
         Write-LogFile -Message "=== Starting Users Collection ===" -Color "Cyan" -Level Standard
-    }
-
-    process {
 
     try {
         $selectobjects = "UserPrincipalName","DisplayName","Id","CompanyName","Department","JobTitle","City","Country","Identities","UserType","LastPasswordChangeDateTime","AccountEnabled","CreatedDateTime","CreationType","ExternalUserState","ExternalUserStateChangeDateTime","SignInActivity","OnPremisesSyncEnabled"
@@ -176,6 +173,10 @@ function Get-Users {
     }
     }
 
+    process {
+        # Process block intentionally left empty - function does not accept pipeline input
+    }
+
     end {
     }
 }
@@ -247,9 +248,6 @@ Function Get-AdminUsers {
         $inactiveAdminCount = 0
         $inactiveThreshold = (Get-Date).AddDays(-30)
         $inactiveAdmins = [System.Collections.Generic.List[string]]::new()
-    }
-
-    process {
 
     try {
         if ($isDebugEnabled) {
@@ -430,6 +428,10 @@ Function Get-AdminUsers {
         }
         throw
     }
+    }
+
+    process {
+        # Process block intentionally left empty - function does not accept pipeline input
     }
 
     end {

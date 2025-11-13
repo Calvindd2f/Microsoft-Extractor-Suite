@@ -181,8 +181,8 @@ function Get-MailboxAuditLogLegacy
 
     Write-LogFile -Message "[INFO] Running Get-MailboxAuditLogLegacy" -Level Minimal -Color "Green"
 
-	StartDate
-	EndDate
+	StartDate -Quiet
+	EndDate -Quiet
 
 	if (($null -eq $UserIds) -Or ($UserIds -eq ""))  {
         Write-LogFile -Message "[INFO] No users provided.. Getting the MailboxAuditLog for all users" -Level Standard -Color "Yellow"

@@ -272,9 +272,7 @@ function Get-UAL {
 				Write-LogFile -Message "[DEBUG] No record types specified, using wildcard (*)" -Level Debug
 			}
 		}
-	}
 
-	process {
 		$maxRetries = 3
 		$baseDelay = 3
 
@@ -784,6 +782,10 @@ function Get-UAL {
 				}
 			}
 		}
+	}
+
+	process {
+		# Process block intentionally left empty - function does not accept pipeline input
 	}
 
 	end {
