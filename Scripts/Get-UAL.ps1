@@ -1,7 +1,5 @@
-$resultSize = 5000
-
 function Get-UAL {
-<#
+	<#
     .SYNOPSIS
     Gets all the unified audit log entries.
 
@@ -28,7 +26,7 @@ function Get-UAL {
 	OutputDir is the parameter specifying the output directory.
 	Default: Output\UnifiedAuditLog
 
- 	.PARAMETER MergeOutput
+    .PARAMETER MergeOutput
     MergeOutput is the parameter specifying if you wish to merge CSV/JSON/JSONL/SOF-ELK outputs to a single file.
 
 	.PARAMETER Encoding
@@ -54,7 +52,7 @@ function Get-UAL {
     The RecordType parameter filters the log entries by record type.
 	Options are: ExchangeItem, ExchangeAdmin, etc. A total of 353 RecordTypes are supported.
 
- 	.PARAMETER Operations
+    .PARAMETER Operations
     The Operations parameter filters the log entries by operations or activity type.
 	Options are: New-MailboxRule, MailItemsAccessed, etc.
 
@@ -96,7 +94,7 @@ function Get-UAL {
 	Get-UAL -UserIds -Interval 720
 	Gets all the unified audit log entries with a time interval of 720.
 
-	 .EXAMPLE
+	.EXAMPLE
 	Get-UAL -UserIds Test@invictus-ir.com -MergeOutput
 	Gets all the unified audit log entries for the user Test@invictus-ir.com and adds a combined output JSON file at the end of acquisition
 
@@ -126,176 +124,212 @@ function Get-UAL {
 #>
 
 	[CmdletBinding()]
-		param (
-			[string]$StartDate,
-			[string]$EndDate,
-			[string]$UserIds = "*",
-			[decimal]$Interval,
-			[ValidateSet("Exchange", "Azure", "Sharepoint", "Skype", "Defender")]
-			[string]$Group = $null,
-			[array]$RecordType = $null,
-			[array]$Operations = $null,
-			[ValidateSet("CSV", "JSON", "SOF-ELK", "JSONL")]
-			[string]$Output = "CSV",
-			[switch]$MergeOutput,
-			[string]$OutputDir,
-			[string]$Encoding = "UTF8",
-			[string]$ObjectIds,
-			[ValidateSet('None', 'Minimal', 'Standard', 'Debug')]
-			[string]$LogLevel = 'Standard',
-			[Parameter()]
-			[ValidateRange(5000, 50000)]
-			[int]$MaxItemsPerInterval = 50000,
-			[switch]$AuditDataOnly
-		)
+	param (
+		[string]$StartDate,
+		[string]$EndDate,
+		[string]$UserIds = "*",
+		[decimal]$Interval,
+		[ValidateSet("Exchange", "Azure", "Sharepoint", "Skype", "Defender")]
+		[string]$Group = $null,
+		[array]$RecordType = $null,
+		[array]$Operations = $null,
+		[ValidateSet("CSV", "JSON", "SOF-ELK", "JSONL")]
+		[string]$Output = "CSV",
+		[switch]$MergeOutput,
+		[string]$OutputDir,
+		[string]$Encoding = "UTF8",
+		[string]$ObjectIds,
+		[ValidateSet('None', 'Minimal', 'Standard', 'Debug')]
+		[string]$LogLevel = 'Standard',
+		[Parameter()]
+		[ValidateRange(5000, 50000)]
+		[int]$MaxItemsPerInterval = 50000,
+		[switch]$AuditDataOnly
+	)
 
 	begin {
-		# Parameter validation and initialization
-		Init-Logging
-		Init-OutputDir -Component "UnifiedAuditLog" -FilePostfix "UAL" -CustomOutputDir $OutputDir
-		$OutputDir = Split-Path $script:outputFile -Parent
-		Write-LogFile -Message "=== Starting Unified Audit Log Collection ===" -Color "Cyan" -Level Standard
+		# Only one-time initialization. Defer parameter parsing for pipeline support.
+		# These script-scoped variables will be set in process{} on first run.
+		$script:UAL_Initialized = $false
+		$script:resultSize = 5000
+	}
 
-		$stats = @{
-			StartTime = Get-Date
-			ProcessingTime = $null
-			TotalRecords = 0
-			FilesCreated = 0
-			IntervalAdjustments = 0
-		}
+	process {
+		# Accept pipeline input as object or hashtable; process each input object as needed.
+		if (-not $script:UAL_Initialized) {
 
-		# Connection check
-		try {
-			$null = Search-UnifiedAuditLog -StartDate (Get-Date).AddDays(-1) -EndDate (Get-Date) -ResultSize 1 -ErrorAction Stop
-		}
-		catch {
-			write-logFile -Message "[INFO] Ensure you are connected to M365 by running the Connect-M365 command before executing this script" -Color "Yellow" -Level Minimal
-			Write-logFile -Message "[ERROR] An error occurred: $($_.Exception.Message)" -Color "Red" -Level Minimal
-			throw
-		}
+			# Resolve parameters from $PSCmdlet (pipeline binding aware)
+			$StartDate = $PSBoundParameters['StartDate']
+			$EndDate = $PSBoundParameters['EndDate']
+			$UserIds = $PSBoundParameters['UserIds']
+			$Interval = $PSBoundParameters['Interval']
+			$Group = $PSBoundParameters['Group']
+			$RecordType = $PSBoundParameters['RecordType']
+			$Operations = $PSBoundParameters['Operations']
+			$Output = $PSBoundParameters['Output']
+			$MergeOutput = $PSBoundParameters['MergeOutput']
+			$OutputDir = $PSBoundParameters['OutputDir']
+			$Encoding = $PSBoundParameters['Encoding']
+			$ObjectIds = $PSBoundParameters['ObjectIds']
+			$LogLevel = $PSBoundParameters['LogLevel']
+			$MaxItemsPerInterval = $PSBoundParameters['MaxItemsPerInterval']
+			$AuditDataOnly = $PSBoundParameters['AuditDataOnly']
 
-		StartDateUAL -Quiet
-		EndDate -Quiet
+			Init-Logging
+			Init-OutputDir -Component "UnifiedAuditLog" -FilePostfix "UAL" -CustomOutputDir $OutputDir
+			$OutputDir = Split-Path $script:outputFile -Parent
+			Write-LogFile -Message "=== Starting Unified Audit Log Collection ===" -Color "Cyan" -Level Standard
 
-		if ($isDebugEnabled) {
-			$totalDays = ($script:EndDate - $script:StartDate).TotalDays
-			Write-LogFile -Message "[DEBUG] Date range:" -Level Debug
-			Write-LogFile -Message "[DEBUG]   Start: $($script:StartDate.ToString('yyyy-MM-dd HH:mm:ss'))" -Level Debug
-			Write-LogFile -Message "[DEBUG]   End: $($script:EndDate.ToString('yyyy-MM-dd HH:mm:ss'))" -Level Debug
-			Write-LogFile -Message "[DEBUG]   Span: $([Math]::Round($totalDays, 2)) days" -Level Debug
-		}
-
-		$baseSearchQuery = @{
-			UserIds = $UserIds
-		}
-
-		if ($ObjectIds) {
-			$baseSearchQuery.ObjectIds = $ObjectIds
-		}
-
-		if ($Operations) {
-			$baseSearchQuery.Operations = $Operations
-		}
-
-		$recordTypes = [System.Collections.ArrayList]::new()
-
-		$GroupRecordTypes = @{
-			"Exchange" = @("ExchangeAdmin","ExchangeAggregatedOperation","ExchangeItem","ExchangeItemGroup",
-						  "ExchangeItemAggregated","ComplianceDLPExchange","ComplianceSupervisionExchange",
-						  "MipAutoLabelExchangeItem","ExchangeSearch","ComplianceDLPExchangeClassification","ComplianceCCExchangeExecutionResult",
-						  "CdpComplianceDLPExchangeClassification","ComplianceDLMExchange","ComplianceDLPExchangeDiscovery")
-			"Azure" = @("AzureActiveDirectory","AzureActiveDirectoryAccountLogon","AzureActiveDirectoryStsLogon")
-			"Sharepoint" = @("ComplianceDLPSharePoint","SharePoint","SharePointFileOperation","SharePointSharingOperation",
-							"SharepointListOperation","ComplianceDLPSharePointClassification","SharePointCommentOperation",
-							"SharePointListItemOperation","SharePointContentTypeOperation","SharePointFieldOperation",
-							"MipAutoLabelSharePointItem","MipAutoLabelSharePointPolicyLocation","OnPremisesSharePointScannerDlp","SharePointSearch",
-							"SharePointAppPermissionOperation","ComplianceDLPSharePointClassificationExtended","CdpComplianceDLPSharePointClassification",
-							"SharePointESignature","ComplianceDLMSharePoint","SharePointContentSecurityPolicy")
-			"Skype" = @("SkypeForBusinessCmdlets","SkypeForBusinessPSTNUsage","SkypeForBusinessUsersBlocked")
-			"Defender" = @("ThreatIntelligence","ThreatFinder","ThreatIntelligenceUrl","ThreatIntelligenceAtpContent",
-						  "Campaign","AirInvestigation","WDATPAlerts","AirManualInvestigation",
-						  "AirAdminActionInvestigation","MSTIC","MCASAlerts")
-		}
-
-		if ($Group) {
-			if ($null -eq $GroupRecordTypes[$Group]) {
-				Write-LogFile -Message "[WARNING] Invalid input for -Group. Select Exchange, Azure, Sharepoint, Defender or Skype" -Color "Red" -Level Minimal
-				return
+			$script:ual_stats = @{
+				StartTime           = Get-Date
+				ProcessingTime      = $null
+				TotalRecords        = 0
+				FilesCreated        = 0
+				IntervalAdjustments = 0
 			}
-			$recordTypes.AddRange($GroupRecordTypes[$Group])
+
+			# Connection check
+			try {
+				$null = Search-UnifiedAuditLog -StartDate (Get-Date).AddDays(-1) -EndDate (Get-Date) -ResultSize 1 -ErrorAction Stop
+			}
+			catch {
+				write-logFile -Message "[INFO] Ensure you are connected to M365 by running the Connect-M365 command before executing this script" -Color "Yellow" -Level Minimal
+				Write-logFile -Message "[ERROR] An error occurred: $($_.Exception.Message)" -Color "Red" -Level Minimal
+				throw
+			}
+
+			StartDateUAL -Quiet
+			EndDate -Quiet
 
 			if ($isDebugEnabled) {
-				Write-LogFile -Message "[DEBUG] Added record types from group '$Group'" -Level Debug
-				Write-LogFile -Message "[DEBUG]   Total record types from group: $($recordTypes.Count)" -Level Debug
+				$totalDays = ($script:EndDate - $script:StartDate).TotalDays
+				Write-LogFile -Message "[DEBUG] Date range:" -Level Debug
+				Write-LogFile -Message "[DEBUG]   Start: $($script:StartDate.ToString('yyyy-MM-dd HH:mm:ss'))" -Level Debug
+				Write-LogFile -Message "[DEBUG]   End: $($script:EndDate.ToString('yyyy-MM-dd HH:mm:ss'))" -Level Debug
+				Write-LogFile -Message "[DEBUG]   Span: $([Math]::Round($totalDays, 2)) days" -Level Debug
 			}
-		}
 
-		if ($RecordType) {
-			if ($RecordType -is [string]) {
-				$recordTypesArray = $RecordType.Split(',').Trim()
-				foreach ($item in $recordTypesArray) {
-					[void]$recordTypes.Add($item)
+			$script:ual_baseSearchQuery = @{
+				UserIds = $UserIds
+			}
+
+			if ($ObjectIds) {
+				$script:ual_baseSearchQuery.ObjectIds = $ObjectIds
+			}
+
+			if ($Operations) {
+				$script:ual_baseSearchQuery.Operations = $Operations
+			}
+
+			$script:ual_recordTypes = [System.Collections.ArrayList]::new()
+
+			$GroupRecordTypes = @{
+				"Exchange"   = @("ExchangeAdmin", "ExchangeAggregatedOperation", "ExchangeItem", "ExchangeItemGroup",
+					"ExchangeItemAggregated", "ComplianceDLPExchange", "ComplianceSupervisionExchange",
+					"MipAutoLabelExchangeItem", "ExchangeSearch", "ComplianceDLPExchangeClassification", "ComplianceCCExchangeExecutionResult",
+					"CdpComplianceDLPExchangeClassification", "ComplianceDLMExchange", "ComplianceDLPExchangeDiscovery")
+				"Azure"      = @("AzureActiveDirectory", "AzureActiveDirectoryAccountLogon", "AzureActiveDirectoryStsLogon")
+				"Sharepoint" = @("ComplianceDLPSharePoint", "SharePoint", "SharePointFileOperation", "SharePointSharingOperation",
+					"SharepointListOperation", "ComplianceDLPSharePointClassification", "SharePointCommentOperation",
+					"SharePointListItemOperation", "SharePointContentTypeOperation", "SharePointFieldOperation",
+					"MipAutoLabelSharePointItem", "MipAutoLabelSharePointPolicyLocation", "OnPremisesSharePointScannerDlp", "SharePointSearch",
+					"SharePointAppPermissionOperation", "ComplianceDLPSharePointClassificationExtended", "CdpComplianceDLPSharePointClassification",
+					"SharePointESignature", "ComplianceDLMSharePoint", "SharePointContentSecurityPolicy")
+				"Skype"      = @("SkypeForBusinessCmdlets", "SkypeForBusinessPSTNUsage", "SkypeForBusinessUsersBlocked")
+				"Defender"   = @("ThreatIntelligence", "ThreatFinder", "ThreatIntelligenceUrl", "ThreatIntelligenceAtpContent",
+					"Campaign", "AirInvestigation", "WDATPAlerts", "AirManualInvestigation",
+					"AirAdminActionInvestigation", "MSTIC", "MCASAlerts")
+			}
+
+			if ($Group) {
+				if ($null -eq $GroupRecordTypes[$Group]) {
+					Write-LogFile -Message "[WARNING] Invalid input for -Group. Select Exchange, Azure, Sharepoint, Defender or Skype" -Color "Red" -Level Minimal
+					return
 				}
-			} else {
-				foreach ($item in $RecordType) {
-					[void]$recordTypes.Add($item)
+				$script:ual_recordTypes.AddRange($GroupRecordTypes[$Group])
+
+				if ($isDebugEnabled) {
+					Write-LogFile -Message "[DEBUG] Added record types from group '$Group'" -Level Debug
+					Write-LogFile -Message "[DEBUG]   Total record types from group: $($script:ual_recordTypes.Count)" -Level Debug
 				}
 			}
 
-			if ($isDebugEnabled) {
-				Write-LogFile -Message "[DEBUG] Added explicit record types: $RecordType" -Level Debug
-				Write-LogFile -Message "[DEBUG]   Total record types after addition: $($recordTypes.Count)" -Level Debug
+			if ($RecordType) {
+				if ($RecordType -is [string]) {
+					$recordTypesArray = $RecordType.Split(',').Trim()
+					foreach ($item in $recordTypesArray) {
+						[void]$script:ual_recordTypes.Add($item)
+					}
+				}
+				else {
+					foreach ($item in $RecordType) {
+						[void]$script:ual_recordTypes.Add($item)
+					}
+				}
+
+				if ($isDebugEnabled) {
+					Write-LogFile -Message "[DEBUG] Added explicit record types: $RecordType" -Level Debug
+					Write-LogFile -Message "[DEBUG]   Total record types after addition: $($script:ual_recordTypes.Count)" -Level Debug
+				}
 			}
+
+			Write-LogFile -Message "Start date: $($script:StartDate.ToString('yyyy-MM-dd HH:mm:ss'))" -Level Standard
+			Write-LogFile -Message "End date: $($script:EndDate.ToString('yyyy-MM-dd HH:mm:ss'))" -Level Standard
+			Write-LogFile -Message "Output format: $Output" -Level Standard
+			Write-LogFile -Message "Output Directory: $OutputDir" -Level Standard
+			if ($script:ual_recordTypes.Count -gt 0) {
+				Write-LogFile -Message "`nThe following RecordType(s) are configured to be extracted:" -Level Standard
+				foreach ($record in $script:ual_recordTypes) {
+					Write-LogFile -Message "  - $record" -Level Standard
+				}
+			}
+			if ($Operations) {
+				Write-LogFile -Message "`nThe following Operation(s) are configured to be extracted:" -Level Standard
+				foreach ($activity in $Operations) {
+					Write-LogFile -Message "- $activity" -Level Standard
+				}
+			}
+			Write-LogFile -Message "----------------------------------------`n" -Level Standard
+
+			if ($script:ual_recordTypes.Count -eq 0) {
+				[void]$script:ual_recordTypes.Add("*")
+				if ($isDebugEnabled) {
+					Write-LogFile -Message "[DEBUG] No record types specified, using wildcard (*)" -Level Debug
+				}
+			}
+
+			$script:ual_maxRetries = 3
+			$script:ual_baseDelay = 3
+
+			$script:UAL_Initialized = $true
 		}
 
-		Write-LogFile -Message "Start date: $($script:StartDate.ToString('yyyy-MM-dd HH:mm:ss'))" -Level Standard
-		Write-LogFile -Message "End date: $($script:EndDate.ToString('yyyy-MM-dd HH:mm:ss'))" -Level Standard
-		Write-LogFile -Message "Output format: $Output" -Level Standard
-		Write-LogFile -Message "Output Directory: $OutputDir" -Level Standard
-		if ($recordTypes.Count -gt 0) {
-			Write-LogFile -Message "`nThe following RecordType(s) are configured to be extracted:" -Level Standard
-			foreach ($record in $recordTypes) {
-				Write-LogFile -Message "  - $record" -Level Standard
-			}
-		}
-		if ($Operations) {
-			Write-LogFile -Message "`nThe following Operation(s) are configured to be extracted:" -Level Standard
-			foreach ($activity in $Operations) {
-				Write-LogFile -Message "- $activity" -Level Standard
-			}
-		}
-		Write-LogFile -Message "----------------------------------------`n" -Level Standard
+		# Main processing logic for each pipeline item if input comes from pipeline,
+		# or driven for the one batch if just parameter input.
+		# Support multiple pipeline records by making the below logic in a function, but for this rewrite, process the pipeline input as a batch.
 
-		if ($recordTypes.Count -eq 0) {
-			[void]$recordTypes.Add("*")
-			if ($isDebugEnabled) {
-				Write-LogFile -Message "[DEBUG] No record types specified, using wildcard (*)" -Level Debug
-			}
-		}
-
-		$maxRetries = 3
-		$baseDelay = 3
-
-		foreach ($record in $recordTypes) {
+		foreach ($record in $script:ual_recordTypes) {
 			if ($record -ne "*") {
 				Write-LogFile -Message "=== Processing RecordType: $record ===" -Color "Cyan" -Level Standard
-				$baseSearchQuery.RecordType = $record
-			} else {
-				$baseSearchQuery.Remove('RecordType')
+				$script:ual_baseSearchQuery.RecordType = $record
+			}
+			else {
+				$script:ual_baseSearchQuery.Remove('RecordType')
 			}
 
 			$retryAttempt = 0
 			$success = $false
 			$totalResults = $null
 
-			while (!$success -and $retryAttempt -lt $maxRetries) {
+			while (!$success -and $retryAttempt -lt $script:ual_maxRetries) {
 				try {
-					$totalResults = Search-UnifiedAuditLog -StartDate $script:StartDate -EndDate $script:EndDate @baseSearchQuery -ResultSize 1 | Select-Object -First 1 -ExpandProperty ResultCount
+					$totalResults = Search-UnifiedAuditLog -StartDate $script:StartDate -EndDate $script:EndDate @script:ual_baseSearchQuery -ResultSize 1 | Select-Object -First 1 -ExpandProperty ResultCount
 
 					if ($null -ne $totalResults -and $totalResults -gt 0) {
 						$message = if ($record -eq "*") {
 							"[INFO] Total number of events during the acquisition period: $totalResults"
-						} else {
+						}
+						else {
 							"[INFO] The record '$record' contains $totalResults events during the acquisition period"
 						}
 
@@ -305,29 +339,35 @@ function Get-UAL {
 					else {
 						$retryAttempt++
 
-						if ($retryAttempt -eq $maxRetries) {
+						if ($retryAttempt -eq $script:ual_maxRetries) {
 							Write-LogFile -Message "[INFO] Full period search returned zero results. This may occur in large environments due to API timeouts." -Level Standard -Color "Yellow"
 
 							$last24HoursStart = $script:EndDate.AddHours(-24)
-							$recentResults = Search-UnifiedAuditLog -StartDate $last24HoursStart -EndDate $script:EndDate @baseSearchQuery -ResultSize 1 |
-											 Select-Object -First 1 -ExpandProperty ResultCount
+							$recentResults = Search-UnifiedAuditLog -StartDate $last24HoursStart -EndDate $script:EndDate @script:ual_baseSearchQuery -ResultSize 1 |
+							Select-Object -First 1 -ExpandProperty ResultCount
 
 							if ($null -ne $recentResults -and $recentResults -gt 0) {
 								Write-LogFile -Message "[INFO] Found $recentResults recent events in the last 24 hours." -Level Standard -Color "Green"
 								Write-LogFile -Message "[INFO] The initial count likely timed out due to the large data volume... Proceeding with retrieval using smaller time chunks..." -Level Standard -Color "Green"
 
 								$totalDays = ($script:EndDate - $script:StartDate).TotalDays
+								# Estimated total records for logging purposes
 								$estimatedTotalRecords = [math]::Ceiling($recentResults * $totalDays)
+								if ($isDebugEnabled) {
+									Write-LogFile -Message "[DEBUG] Estimated total records: $estimatedTotalRecords" -Level Debug
+								}
 
 								$totalResults = 1
 								$success = $true
 								break
-							} else {
+							}
+							else {
 								Write-LogFile -Message "[INFO] No recent events found in the last 24 hours either." -Level Standard -Color "Yellow"
 								$success = $true
 							}
-						} else {
-							Write-LogFile -Message "[WARNING] Zero results returned, retrying attempt $retryAttempt of $maxRetries..." -Color "Yellow" -Level Minimal
+						}
+						else {
+							Write-LogFile -Message "[WARNING] Zero results returned, retrying attempt $retryAttempt of $($script:ual_maxRetries)..." -Color "Yellow" -Level Minimal
 							Start-Sleep -Seconds (2 * $retryAttempt)
 						}
 					}
@@ -337,14 +377,14 @@ function Get-UAL {
 						$_.Exception.Message -like "*operation could not be completed*") {
 
 						$retryAttempt++
-						if ($retryAttempt -eq $maxRetries) {
+						if ($retryAttempt -eq $script:ual_maxRetries) {
 							Write-LogFile -Message "[ERROR] Maximum retry attempts reached for initial count. Last error: $($_.Exception.Message)" -Color "Red" -Level Minimal
 							throw
 						}
 
-						Write-LogFile -Message "[WARNING] Server-side error on initial count attempt $retryAttempt of $maxRetries. Waiting $baseDelay seconds..." -Color "Yellow" -Level Minimal
-						Start-Sleep -Seconds $baseDelay
-						$baseDelay *= 2
+						Write-LogFile -Message "[WARNING] Server-side error on initial count attempt $retryAttempt of $($script:ual_maxRetries). Waiting $($script:ual_baseDelay) seconds..." -Color "Yellow" -Level Minimal
+						Start-Sleep -Seconds $script:ual_baseDelay
+						$script:ual_baseDelay *= 2
 						continue
 					}
 					else {
@@ -356,7 +396,8 @@ function Get-UAL {
 			if ($null -eq $totalResults -or $totalResults -eq 0) {
 				$message = if ($record -eq "*") {
 					"[INFO] No records found!"
-				} else {
+				}
+				else {
 					"[INFO] No records found for RecordType: $record"
 				}
 				Write-LogFile -Message $message -Level Standard -Color "Yellow"
@@ -369,7 +410,8 @@ function Get-UAL {
 
 				if ($estimatedIntervals -lt 2) {
 					$Interval = $totalMinutes
-				} else {
+				}
+				else {
 					$Interval = [math]::Max(1, [math]::Floor(($totalMinutes / $estimatedIntervals) / 1.2))
 				}
 
@@ -397,12 +439,11 @@ function Get-UAL {
 				}
 
 				$retryAttempt = 0
-				$currentDelay = $baseDelay
 				$success = $false
 
 				while (!$success -and $retryAttempt -lt $maxRetries) {
 					try {
-						$amountResults = Search-UnifiedAuditLog -StartDate $currentStart -EndDate $currentEnd @baseSearchQuery -ResultSize 1 | Select-Object -First 1 -ExpandProperty ResultCount
+						$amountResults = Search-UnifiedAuditLog -StartDate $currentStart -EndDate $currentEnd @script:ual_baseSearchQuery -ResultSize 1 | Select-Object -First 1 -ExpandProperty ResultCount
 						if ($null -eq $amountResults) {
 							$retryAttempt = 0
 							$maxNullRetries = 3
@@ -414,7 +455,7 @@ function Get-UAL {
 								try {
 									$tempSessionId = [Guid]::NewGuid().ToString()
 									$verifyResult = Search-UnifiedAuditLog -StartDate $currentStart -EndDate $currentEnd `
-										@baseSearchQuery -ResultSize 1 -SessionId $tempSessionId
+										@script:ual_baseSearchQuery -ResultSize 1 -SessionId $tempSessionId
 
 									if ($null -ne $verifyResult) {
 										$amountResults = $verifyResult | Select-Object -First 1 -ExpandProperty ResultCount
@@ -433,38 +474,43 @@ function Get-UAL {
 								if ($currentStart -ne $currentEnd) {
 									Write-LogFile -Message "[INFO] No audit logs between $($currentStart.ToString('yyyy-MM-dd HH:mm:ss')) and $($currentEnd.ToString('yyyy-MM-dd HH:mm:ss')). Moving on!" -Level Standard
 								}
-								$CurrentStart = $CurrentEnd
+								$currentStart = $currentEnd
 								$success = $true
 							}
 						}
 						elseif ($amountResults -gt $MaxItemsPerInterval) {
 							while ($amountResults -gt $MaxItemsPerInterval) {
-								$amountResults = Search-UnifiedAuditLog -StartDate $currentStart -EndDate $currentEnd @baseSearchQuery -ResultSize 1 |
+								$amountResults = Search-UnifiedAuditLog -StartDate $currentStart -EndDate $currentEnd @script:ual_baseSearchQuery -ResultSize 1 |
 								Select-Object -First 1 -ExpandProperty ResultCount
 
 								$oldInterval = $Interval
 
 								if ($amountResults -gt $MaxItemsPerInterval) {
-									$stats.IntervalAdjustments++
+									$script:ual_stats.IntervalAdjustments++
 
 									if ($amountResults -gt 1000000) {
-										$divisor = ($amountResults/$MaxItemsPerInterval) * 4
-									} elseif ($amountResults -gt $MaxItemsPerInterval) {
-										$divisor = ($amountResults/$MaxItemsPerInterval) * 3
-									} elseif ($amountResults -gt 200000) {
-										$divisor = ($amountResults/$MaxItemsPerInterval) * 2
-									} elseif ($amountResults -gt 100000) {
-										$divisor = ($amountResults/$MaxItemsPerInterval) * 1.5
-									} else {
-										$divisor = ($amountResults/$MaxItemsPerInterval) * 1.25
+										$divisor = ($amountResults / $MaxItemsPerInterval) * 4
+									}
+									elseif ($amountResults -gt $MaxItemsPerInterval) {
+										$divisor = ($amountResults / $MaxItemsPerInterval) * 3
+									}
+									elseif ($amountResults -gt 200000) {
+										$divisor = ($amountResults / $MaxItemsPerInterval) * 2
+									}
+									elseif ($amountResults -gt 100000) {
+										$divisor = ($amountResults / $MaxItemsPerInterval) * 1.5
+									}
+									else {
+										$divisor = ($amountResults / $MaxItemsPerInterval) * 1.25
 									}
 
-									$newInterval = [math]::Max([math]::Round(($Interval/$divisor), 2), 0.1)
+									$newInterval = [math]::Max([math]::Round(($Interval / $divisor), 2), 0.1)
 
-									$calculatedInterval = $Interval/$divisor
+									$calculatedInterval = $Interval / $divisor
 									$newInterval = if ($calculatedInterval -lt 1) {
 										[math]::Max([math]::Round($calculatedInterval, 3), 0.1)
-									} else {
+									}
+									else {
 										[math]::Max([math]::Round($calculatedInterval, 0), 1)
 									}
 
@@ -489,7 +535,7 @@ function Get-UAL {
 									}
 								}
 								elseif ($amountResults -eq 0) {
-									$verifyResults = Search-UnifiedAuditLog -StartDate $currentStart -EndDate $currentEnd @baseSearchQuery -ResultSize 1
+									$verifyResults = Search-UnifiedAuditLog -StartDate $currentStart -EndDate $currentEnd @script:ual_baseSearchQuery -ResultSize 1
 									if ($null -ne $verifyResults) {
 										$Interval = [math]::Max($Interval * 0.5, 1)
 										$currentEnd = $currentStart.AddMinutes($Interval)
@@ -518,7 +564,6 @@ function Get-UAL {
 							Write-LogFile -Message "[INFO] Found $amountResults audit logs between $($currentStart.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssK")) and $($currentEnd.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssK"))" -Level Standard -Color "Green"
 
 							$retryAttempt = 0
-							$currentDelay = $baseDelay
 							$success = $false
 
 							while (!$success -and $retryAttempt -lt $maxRetries) {
@@ -537,7 +582,7 @@ function Get-UAL {
 
 												if ($isDebugEnabled) {
 													Write-LogFile -Message "[DEBUG]   Starting batch retrieval with session ID: $sessionId" -Level Debug
-													Write-LogFile -Message "[DEBUG]   Using result size: $resultSize" -Level Debug
+													Write-LogFile -Message "[DEBUG]   Using result size: $($script:resultSize)" -Level Debug
 												}
 
 												$emptyRetryCount = 0
@@ -549,9 +594,10 @@ function Get-UAL {
 													}
 													$performance = Measure-Command {
 														if ($amountResults -gt 5000) {
-															$results = Search-UnifiedAuditLog -StartDate $CurrentStart -EndDate $currentEnd -SessionCommand ReturnLargeSet -SessionId $sessionId -ResultSize $resultSize @baseSearchQuery
-														} else {
-															$results = Search-UnifiedAuditLog -StartDate $CurrentStart -EndDate $currentEnd -ResultSize $resultSize @baseSearchQuery
+															$results = Search-UnifiedAuditLog -StartDate $currentStart -EndDate $currentEnd -SessionCommand ReturnLargeSet -SessionId $sessionId -ResultSize $script:resultSize @script:ual_baseSearchQuery
+														}
+														else {
+															$results = Search-UnifiedAuditLog -StartDate $currentStart -EndDate $currentEnd -ResultSize $script:resultSize @script:ual_baseSearchQuery
 														}
 													}
 
@@ -560,27 +606,28 @@ function Get-UAL {
 													}
 
 													if ($null -ne $results -and $results.Count -gt 0) {
-														$expectedSize = [math]::min($resultSize, ($amountResults - $totalProcessed))
+														$expectedSize = [math]::min($script:resultSize, ($amountResults - $totalProcessed))
 														$allResults.AddRange($results)
 														$totalProcessed += $results.Count
 														Write-LogFile -Message "[INFO] Retrieved $($results.Count) records (Total: $totalProcessed / $amountResults)" -Level Standard
 														$backoffDelay = 10
 
-														if($results.Count -ne $expectedSize) {
+														if ($results.Count -ne $expectedSize) {
 															if ($isDebugEnabled) {
 																Write-LogFile -Message "[DEBUG]   WARNING: Batch size mismatch - expected $expectedSize but got $($results.Count)" -Level Debug
 															}
 															break
 														}
-													} else {
+													}
+													else {
 														if ($isDebugEnabled) {
 															Write-LogFile -Message "[DEBUG]   WARNING: Empty dataset returned" -Level Debug
 														}
-														if($performance.TotalSeconds -ge 960) {
+														if ($performance.TotalSeconds -ge 960) {
 															Write-LogFile -Message "[WARNING] API call took $([math]::round($performance.TotalSeconds, 2)) seconds, indicating an issue with the Microsoft API. Restarting batch." -Color "Yellow" -Level Standard
 															break
 														}
-														if($emptyRetryCount -ge 3) {
+														if ($emptyRetryCount -ge 3) {
 															Write-LogFile -Message "[WARNING] Received multiple empty datasets, restarting batch." -Color "Yellow" -Level Standard
 															break
 														}
@@ -591,7 +638,7 @@ function Get-UAL {
 												if ($totalProcessed -ne $amountResults) {
 													Write-LogFile -Message "[WARNING] Retrieved record count ($totalProcessed) does not match the expected count ($amountResults). Verifying the count..." -Color "Yellow" -Level Standard
 
-													$verifiedCount = Search-UnifiedAuditLog -StartDate $currentStart -EndDate $currentEnd @baseSearchQuery `
+													$verifiedCount = Search-UnifiedAuditLog -StartDate $currentStart -EndDate $currentEnd @script:ual_baseSearchQuery `
 														-ResultSize 1 | Select-Object -First 1 -ExpandProperty ResultCount
 
 													if ($null -eq $verifiedCount) {
@@ -623,11 +670,12 @@ function Get-UAL {
 												if ($_.Exception.Message -like "*server side error*" -or
 													$_.Exception.Message -like "*operation could not be completed*" -or
 													$_.Exception.Message -like "*timed out*") {
-														Write-LogFile -Message "[WARNING] Server error encountered. Restarting entire batch." -Color "Yellow" -Level Standard
+													Write-LogFile -Message "[WARNING] Server error encountered. Restarting entire batch." -Color "Yellow" -Level Standard
 													Start-Sleep -Seconds $backoffDelay
 													$backoffDelay = [Math]::Min(30, $backoffDelay * 2)
 													continue
-												} else {
+												}
+												else {
 													Write-LogFile -Message "[ERROR] Unexpected error: $($_.Exception.Message)" -Color "Red" -Level Standard
 												}
 											}
@@ -644,16 +692,17 @@ function Get-UAL {
 										if ($totalProcessed -gt 0) {
 											$sessionID = $currentStart.ToString("yyyyMMddHHmmss") + "-" + $currentEnd.ToString("yyyyMMddHHmmss")
 											$outputPath = Join-Path $OutputDir ("UAL-" + $sessionID)
-											$stats.TotalRecords += $totalProcessed
+											$script:ual_stats.TotalRecords += $totalProcessed
 
 											if ($AuditDataOnly) {
 												$outputData = $allResults | Select-Object -ExpandProperty AuditData
-											} else {
+											}
+											else {
 												$outputData = $allResults
 											}
 
 											if ($Output -eq "JSON" -or $Output -eq "SOF-ELK") {
-												$stats.FilesCreated++
+												$script:ual_stats.FilesCreated++
 
 												$jsonFilePath = "$OutputDir/UAL-$sessionID.json"
 												$sw = [System.IO.StreamWriter]::new($jsonFilePath, $false, [System.Text.Encoding]::GetEncoding($Encoding))
@@ -672,7 +721,8 @@ function Get-UAL {
 															foreach ($item in $outputData) {
 																$sw.WriteLine($item)
 															}
-														} else {
+														}
+														else {
 															# Convert entire collection to JSON once
 															$json = $outputData | ConvertTo-Json -Depth 100
 															$sw.Write($json)
@@ -683,7 +733,8 @@ function Get-UAL {
 															foreach ($item in $outputData) {
 																$sw.WriteLine($item)
 															}
-														} else {
+														}
+														else {
 															# Write each item as compressed JSON on separate line
 															foreach ($item in $outputData) {
 																$sw.WriteLine(($item.AuditData | ConvertTo-Json -Compress -Depth 100))
@@ -698,7 +749,7 @@ function Get-UAL {
 												}
 											}
 											elseif ($Output -eq "JSONL") {
-												$stats.FilesCreated++
+												$script:ual_stats.FilesCreated++
 												$jsonlPath = "$outputPath.jsonl"
 												$sw = [System.IO.StreamWriter]::new($jsonlPath, $false, [System.Text.Encoding]::GetEncoding($Encoding))
 
@@ -707,7 +758,8 @@ function Get-UAL {
 														foreach ($item in $outputData) {
 															$sw.WriteLine($item)
 														}
-													} else {
+													}
+													else {
 														foreach ($item in $outputData) {
 															$sw.WriteLine(($item | ConvertTo-Json -Compress -Depth 100))
 														}
@@ -719,15 +771,17 @@ function Get-UAL {
 												}
 											}
 											elseif ($Output -eq "CSV") {
-												$stats.FilesCreated++
+												$script:ual_stats.FilesCreated++
 												if ($AuditDataOnly) {
 													$parsedData = [System.Collections.Generic.List[object]]::new($outputData.Count)
 													foreach ($item in $outputData) {
-														$parsedData.Add($item | ConvertFrom-Json)
+														$jsonObj = $item | ConvertFrom-Json
+														$parsedData.Add($jsonObj)
 													}
-													$parsedData | Export-CSV "$outputPath.csv" -NoTypeInformation -Append -Encoding $Encoding
-												} else {
-													$outputData | Export-CSV "$outputPath.csv" -NoTypeInformation -Append -Encoding $Encoding
+													$parsedData | Export-Csv "$outputPath.csv" -NoTypeInformation -Append -Encoding $Encoding
+												}
+												else {
+													$outputData | Export-Csv "$outputPath.csv" -NoTypeInformation -Append -Encoding $Encoding
 												}
 											}
 											Write-LogFile -Message "[INFO] Successfully retrieved $totalProcessed records for the current time range. Moving on!" -Level Standard -Color "Green"
@@ -744,9 +798,9 @@ function Get-UAL {
 											throw
 										}
 
+										$currentDelay = $baseDelay * [Math]::Pow(2, $retryAttempt - 1)
 										Write-LogFile -Message "[WARNING] Server-side error on attempt $retryAttempt of $maxRetries. Waiting $currentDelay seconds..." -Color "Yellow" -Level Minimal
 										Start-Sleep -Seconds $currentDelay
-										$currentDelay *= 2
 										continue
 									}
 									else {
@@ -756,7 +810,7 @@ function Get-UAL {
 									}
 								}
 							}
-							$CurrentStart = $CurrentEnd
+							$currentStart = $currentEnd
 						}
 					}
 					catch {
@@ -769,9 +823,9 @@ function Get-UAL {
 								throw
 							}
 
+							$currentDelay = $baseDelay * [Math]::Pow(2, $retryAttempt - 1)
 							Write-LogFile -Message "[WARNING] Server-side error on attempt $retryAttempt of $maxRetries. Waiting $currentDelay seconds..." -Color "Yellow" -Level Minimal
 							Start-Sleep -Seconds $currentDelay
-							$currentDelay *= 2
 							continue
 						}
 						else {
@@ -784,42 +838,28 @@ function Get-UAL {
 		}
 	}
 
-	process {
-		# Process block intentionally left empty - function does not accept pipeline input
-	}
-
 	end {
-		# Merge output files if requested
-		if ($MergeOutput.IsPresent) {
-			Write-LogFile -Message "[INFO] Merging all output files into one file" -Level Standard
+		# Only display summary if collection was initialized (skips if process block didn't run)
+		if ($script:UAL_Initialized) {
+			$script:ual_stats.ProcessingTime = (Get-Date) - $script:ual_stats.StartTime
 
-			switch ($Output) {
-				"CSV" { Merge-OutputFiles -OutputDir $OutputDir -OutputType "CSV" -MergedFileName "UAL-Combined.csv" }
-				"JSON" { Merge-OutputFiles -OutputDir $OutputDir -OutputType "JSON" -MergedFileName "UAL-Combined.json" }
-				"JSONL" { Merge-OutputFiles -OutputDir $OutputDir -OutputType "JSONL" -MergedFileName "UAL-Combined.jsonl" }
-				"SOF-ELK" { Merge-OutputFiles -OutputDir $OutputDir -OutputType "SOF-ELK" -MergedFileName "UAL-Combined.json" }
+			$summary = [ordered]@{
+				"Date Range"            = [ordered]@{
+					"Start Date" = $script:StartDate.ToString('yyyy-MM-dd HH:mm:ss')
+					"End Date"   = $script:EndDate.ToString('yyyy-MM-dd HH:mm:ss')
+				}
+				"Collection Statistics" = [ordered]@{
+					"Total Records"        = $script:ual_stats.TotalRecords
+					"Files Created"        = $script:ual_stats.FilesCreated
+					"Interval Adjustments" = $script:ual_stats.IntervalAdjustments
+				}
+				"Export Details"        = [ordered]@{
+					"Output Directory" = $OutputDir
+					"Processing Time"  = $script:ual_stats.ProcessingTime.ToString('hh\:mm\:ss')
+				}
 			}
+
+			Write-Summary -Summary $summary -Title "Unified Audit Log Collection Summary" -SkipExportDetails
 		}
-
-		# Calculate final statistics and display summary
-		$stats.ProcessingTime = (Get-Date) - $stats.StartTime
-
-		$summary = [ordered]@{
-			"Date Range" = [ordered]@{
-				"Start Date" = $script:StartDate.ToString('yyyy-MM-dd HH:mm:ss')
-				"End Date" = $script:EndDate.ToString('yyyy-MM-dd HH:mm:ss')
-			}
-			"Collection Statistics" = [ordered]@{
-				"Total Records" = $stats.TotalRecords
-				"Files Created" = $stats.FilesCreated
-				"Interval Adjustments" = $stats.IntervalAdjustments
-			}
-			"Export Details" = [ordered]@{
-				"Output Directory" = $OutputDir
-				"Processing Time" = $stats.ProcessingTime.ToString('hh\:mm\:ss')
-			}
-		}
-
-		Write-Summary -Summary $summary -Title "Unified Audit Log Collection Summary" -SkipExportDetails
 	}
 }
