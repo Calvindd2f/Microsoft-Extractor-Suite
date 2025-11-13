@@ -143,5 +143,9 @@ You must sign-in to Microsoft 365 or Azure depending on your use case before run
 - `Disconnect-Azure` - Disconnect from Azure/Entra ID
 - `Disconnect-AzureAZ` - Disconnect from Az module session
 
+## Performance
+
+The module has been optimized for handling large datasets (100MB+). See [Performance Documentation](docs/PERFORMANCE.md) for details on optimizations and benchmark results.
+
 ## Related Projects
 To enhance your analysis, consider exploring the [Microsoft-Analyzer-Suite](https://github.com/LETHAL-FORENSICS/Microsoft-Analyzer-Suite) developed by LETHAL FORENSICS. This suite offers a collection of PowerShell scripts specifically designed for analyzing Microsoft 365 and Microsoft Entra ID data, which can be extracted using the Microsoft-Extractor-Suite.

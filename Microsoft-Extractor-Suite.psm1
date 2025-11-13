@@ -413,18 +413,72 @@ function Merge-OutputFiles {
             <note>The above pipeline chain will bring tears on moderately big tenants...</note>
             #>
             $csvFiles = Get-ChildItem $OutputDir -Filter *.csv
+            if ($csvFiles.Count -eq 0) {
+                Write-LogFile -Message "[WARNING] No CSV files found in the specified directory: $OutputDir" -Color Yellow
+                return
+            }
+
             $wroteHeader = $false
+            $headerColumns = $null
+            $filesProcessed = 0
+            $totalRows = 0
+
             foreach ($csvFile in $csvFiles) {
-                $rows = Import-Csv -Path $csvFile.FullName
-                if (-not $wroteHeader -and $rows) {
-                    $rows | Export-Csv $mergedPath -NoTypeInformation -Encoding UTF8
-                    $wroteHeader = $true
+                try {
+                    # Check if file is empty or has no content
+                    if ($csvFile.Length -eq 0) {
+                        Write-LogFile -Message "[WARNING] Empty CSV file skipped: $($csvFile.Name)" -Color Yellow
+                        continue
+                    }
+
+                    $rows = Import-Csv -Path $csvFile.FullName -Encoding UTF8 -ErrorAction Stop
+                    
+                    # Validate that rows were imported successfully
+                    if ($null -eq $rows) {
+                        Write-LogFile -Message "[WARNING] Failed to import CSV file (null result): $($csvFile.Name)" -Color Yellow
+                        continue
+                    }
+
+                    # Check if file has any data rows (not just header)
+                    if ($rows.Count -eq 0) {
+                        Write-LogFile -Message "[WARNING] CSV file contains no data rows: $($csvFile.Name)" -Color Yellow
+                        continue
+                    }
+
+                    # Validate column consistency on first file with data
+                    if (-not $wroteHeader) {
+                        $headerColumns = ($rows[0].PSObject.Properties | Select-Object -ExpandProperty Name | Sort-Object)
+                        $rows | Export-Csv $mergedPath -NoTypeInformation -Encoding UTF8
+                        $wroteHeader = $true
+                        $totalRows += $rows.Count
+                        $filesProcessed++
+                    }
+                    else {
+                        # Verify column order matches (warn if different but still process)
+                        $currentColumns = ($rows[0].PSObject.Properties | Select-Object -ExpandProperty Name | Sort-Object)
+                        $columnsMatch = Compare-Object -ReferenceObject $headerColumns -DifferenceObject $currentColumns
+                        
+                        if ($columnsMatch) {
+                            Write-LogFile -Message "[WARNING] Column mismatch detected in $($csvFile.Name). Columns will be reordered to match header." -Color Yellow -Level Debug
+                        }
+
+                        $rows | Export-Csv $mergedPath -NoTypeInformation -Encoding UTF8 -Append
+                        $totalRows += $rows.Count
+                        $filesProcessed++
+                    }
                 }
-                elseif ($rows) {
-                    $rows | Export-Csv $mergedPath -NoTypeInformation -Encoding UTF8 -Append
+                catch {
+                    Write-LogFile -Message "[WARNING] Failed to process CSV file $($csvFile.Name): $($_.Exception.Message)" -Color Yellow
+                    continue
                 }
             }
-            Write-LogFile -Message "[INFO] CSV files merged into $mergedPath"
+
+            if ($filesProcessed -gt 0) {
+                Write-LogFile -Message "[INFO] CSV files merged: $filesProcessed file(s) with $totalRows total rows into $mergedPath"
+            }
+            else {
+                Write-LogFile -Message "[WARNING] No valid CSV data found to merge" -Color Yellow
+            }
         }
         'SOF-ELK' {
 
@@ -482,25 +536,26 @@ function Merge-OutputFiles {
             $mergedLines = [System.Collections.Generic.List[string]]::new()
             foreach ($file in $jsonlFiles) {
                 Write-LogFile -Message "[DEBUG] Processing JSONL file: $($file.Name)" -Level Debug
+                $reader = $null
                 try {
                     $reader = [System.IO.StreamReader]::new($file.FullName)
-                    try {
-                        while (-not $reader.EndOfStream) {
-                            $line = $reader.ReadLine()
-                            if (-not [string]::IsNullOrWhiteSpace($line)) {
-                                $trimmedLine = $line.Trim()
-                                if ($trimmedLine.Length -gt 0) {
-                                    $mergedLines.Add($trimmedLine)
-                                }
+                    while (-not $reader.EndOfStream) {
+                        $line = $reader.ReadLine()
+                        if (-not [string]::IsNullOrWhiteSpace($line)) {
+                            $trimmedLine = $line.Trim()
+                            if ($trimmedLine.Length -gt 0) {
+                                $mergedLines.Add($trimmedLine)
                             }
                         }
-                    }
-                    finally {
-                        $reader.Dispose()
                     }
                 }
                 catch {
                     Write-LogFile -Message "[WARNING] Failed to process file $($file.Name): $($_.Exception.Message)" -Color Yellow
+                }
+                finally {
+                    if ($null -ne $reader) {
+                        $reader.Dispose()
+                    }
                 }
             }
 
@@ -525,36 +580,37 @@ function Merge-OutputFiles {
 
             foreach ($file in $tsvFiles) {
                 Write-LogFile -Message "[DEBUG] Processing TSV file: $($file.Name)" -Level Debug
+                $reader = $null
                 try {
                     $reader = [System.IO.StreamReader]::new($file.FullName)
-                    try {
-                        $isFirstLine = $true
-                        while (-not $reader.EndOfStream) {
-                            $line = $reader.ReadLine()
-                            if ([string]::IsNullOrWhiteSpace($line)) {
-                                continue
-                            }
-
-                            if ($isFirstLine) {
-                                $isFirstLine = $false
-                                if (-not $headersWritten) {
-                                    $allRows.Add($line)
-                                    $headersWritten = $true
-                                }
-                                # Skip header if we've already written it
-                            }
-                            else {
-                                $allRows.Add($line)
-                                $totalRows++
-                            }
+                    $isFirstLine = $true
+                    while (-not $reader.EndOfStream) {
+                        $line = $reader.ReadLine()
+                        if ([string]::IsNullOrWhiteSpace($line)) {
+                            continue
                         }
-                    }
-                    finally {
-                        $reader.Dispose()
+
+                        if ($isFirstLine) {
+                            $isFirstLine = $false
+                            if (-not $headersWritten) {
+                                $allRows.Add($line)
+                                $headersWritten = $true
+                            }
+                            # Skip header if we've already written it
+                        }
+                        else {
+                            $allRows.Add($line)
+                            $totalRows++
+                        }
                     }
                 }
                 catch {
                     Write-LogFile -Message "[WARNING] Failed to process TSV file $($file.Name): $($_.Exception.Message)" -Color Yellow
+                }
+                finally {
+                    if ($null -ne $reader) {
+                        $reader.Dispose()
+                    }
                 }
             }
 
@@ -610,6 +666,32 @@ if ($script:CheckForUpdates -or $script:UpdateToLatestVersion) {
 
         Write-LogFile -Message "[INFO] Updating from version $currentVersion to $latestVersion..." -Color Yellow
 
+        # Create backup before update
+        $backupCreated = $false
+        $backupPath = $null
+        $currentModulePath = $null
+        
+        try {
+            # Get current module installation path
+            $installedModule = Get-InstalledModule -Name $moduleName -ErrorAction Stop
+            $currentModulePath = $installedModule.InstalledLocation
+            
+            if ($currentModulePath -and (Test-Path $currentModulePath)) {
+                # Create backup directory with timestamp
+                $backupDir = Join-Path $env:TEMP "Microsoft-Extractor-Suite-Backup-$([DateTime]::Now.ToString('yyyyMMdd-HHmmss'))"
+                $backupPath = Join-Path $backupDir (Split-Path $currentModulePath -Leaf)
+                
+                Write-LogFile -Message "[INFO] Creating backup of current version to: $backupDir" -Color Cyan
+                New-Item -ItemType Directory -Path $backupDir -Force | Out-Null
+                Copy-Item -Path $currentModulePath -Destination $backupPath -Recurse -Force -ErrorAction Stop
+                $backupCreated = $true
+                Write-LogFile -Message "[INFO] Backup created successfully" -Color Green
+            }
+        }
+        catch {
+            Write-LogFile -Message "[WARNING] Failed to create backup: $($_.Exception.Message). Proceeding with update anyway..." -Color Yellow
+        }
+
         try {
             # avoid elevation requirements by checking if you ran as admin or not and choosing the appropriate scope
             if ([System.Security.Principal.WindowsIdentity]::GetCurrent().Groups -contains 'S-1-5-32-544') {
@@ -617,7 +699,17 @@ if ($script:CheckForUpdates -or $script:UpdateToLatestVersion) {
             } else {
                 $public:scope = "AllUsers"
             }
+            
             Update-Module -Name $moduleName -Repository PSGallery -Force -Scope $public:scope -ErrorAction Stop
+            
+            # Verify update succeeded
+            $updatedModule = Get-InstalledModule -Name $moduleName -ErrorAction Stop
+            $installedVersion = [Version]$updatedModule.Version.ToString()
+            
+            if ($installedVersion -ne $latestVersion) {
+                throw "Update verification failed: Expected version $latestVersion but found $installedVersion"
+            }
+            
             Write-LogFile -Message "[INFO] Successfully updated $moduleName to version $latestVersion" -Color Green
 
             # Attempt reload - note: binary modules will require session restart
@@ -631,7 +723,15 @@ if ($script:CheckForUpdates -or $script:UpdateToLatestVersion) {
                     Remove-Module -Name $moduleName -Force -ErrorAction SilentlyContinue
                     Start-Sleep -Milliseconds 500  # brief pause to allow cleanup
                     Import-Module -Name $moduleName -Force -ErrorAction Stop
-                    Write-LogFile -Message "[INFO] Module reloaded successfully" -Color Green
+                    
+                    # Verify module loaded correctly
+                    $reloadedModule = Get-Module -Name $moduleName -ErrorAction Stop
+                    if ($reloadedModule) {
+                        Write-LogFile -Message "[INFO] Module reloaded successfully" -Color Green
+                    }
+                    else {
+                        throw "Module reload verification failed"
+                    }
                 }
                 else {
                     Write-LogFile -Message "[WARNING] Module may need manual reload. Restart your PowerShell session or run: Import-Module $moduleName -Force" -Color Yellow
@@ -639,12 +739,49 @@ if ($script:CheckForUpdates -or $script:UpdateToLatestVersion) {
             }
             else {
                 Import-Module -Name $moduleName -Force -ErrorAction Stop
-                Write-LogFile -Message "[INFO] Module imported successfully" -Color Green
+                
+                # Verify module imported correctly
+                $importedModule = Get-Module -Name $moduleName -ErrorAction Stop
+                if ($importedModule) {
+                    Write-LogFile -Message "[INFO] Module imported successfully" -Color Green
+                }
+                else {
+                    throw "Module import verification failed"
+                }
+            }
+            
+            # Clean up backup on successful update
+            if ($backupCreated -and $backupPath -and (Test-Path (Split-Path $backupPath -Parent))) {
+                Write-LogFile -Message "[INFO] Update successful. Backup can be found at: $(Split-Path $backupPath -Parent)" -Level Debug
             }
         }
         catch {
             $errorMsg = "Failed to update module: $($_.Exception.Message)"
             Write-LogFile -Message "[ERROR] $errorMsg" -Color Red
+            
+            # Attempt rollback if backup exists
+            if ($backupCreated -and $backupPath -and $currentModulePath -and (Test-Path $backupPath)) {
+                Write-LogFile -Message "[INFO] Attempting to rollback to previous version..." -Color Yellow
+                try {
+                    # Remove failed update
+                    if (Test-Path $currentModulePath) {
+                        Remove-Item -Path $currentModulePath -Recurse -Force -ErrorAction SilentlyContinue
+                    }
+                    
+                    # Restore from backup
+                    Copy-Item -Path $backupPath -Destination $currentModulePath -Recurse -Force -ErrorAction Stop
+                    Write-LogFile -Message "[INFO] Rollback successful. Previous version restored from backup." -Color Green
+                    Write-LogFile -Message "[INFO] Backup location: $(Split-Path $backupPath -Parent)" -Color Cyan
+                }
+                catch {
+                    Write-LogFile -Message "[ERROR] Rollback failed: $($_.Exception.Message)" -Color Red
+                    Write-LogFile -Message "[INFO] Manual restoration may be required. Backup location: $(Split-Path $backupPath -Parent)" -Color Yellow
+                }
+            }
+            else {
+                Write-LogFile -Message "[INFO] No backup available for rollback. Manual update may be required." -Color Yellow
+            }
+            
             Write-LogFile -Message "[INFO] You may need to manually update using: Update-Module -Name $moduleName -Force" -Color Yellow
             return
         }
