@@ -13,7 +13,7 @@ Function StartDateMTL {
 		$script:StartDate = $startDate -as [datetime]
 		if (!$startDate -and -not $Quiet) {
 			write-LogFile -Message "[WARNING] Not A valid start date and time, make sure to use YYYY-MM-DD" -Color "Red"
-		} 
+		}
 	}
 }
 
@@ -30,7 +30,7 @@ function EndDateMTL {
 	else {
 		$script:EndDate = $endDate -as [datetime]
 		if (!$endDate -and -not $Quiet) {
-			write-LogFile -Message "[WARNING] Not A valid end date and time, make sure to use YYYY-MM-DD" -Color "Red"} 
+			write-LogFile -Message "[WARNING] Not A valid end date and time, make sure to use YYYY-MM-DD" -Color "Red"}
 	}
 }
 
@@ -43,7 +43,7 @@ function Get-MessageTraceLog
     .DESCRIPTION
     Collects the trace messages as they pass through the cloud-based organization.
 	Only 10 days of history is available. Output is saved in: Output\MessageTrace\
-	
+
 	.PARAMETER UserIds
     UserIds is the UserIds parameter filtering the log entries by the account of the user who performed the actions.
 
@@ -74,7 +74,7 @@ function Get-MessageTraceLog
 	.EXAMPLE
     Get-MessageTraceLog
 	Collects the trace messages for all users.
-    
+
     .EXAMPLE
     Get-MessageTraceLog -UserIds HR@invictus-ir.com
 	Collects the trace messages for the user HR@invictus-ir.com.
@@ -101,7 +101,7 @@ function Get-MessageTraceLog
         [ValidateSet('None', 'Minimal', 'Standard', 'Debug')]
         [string]$LogLevel = 'Standard'
 	)
-	
+
 	Init-Logging
 	Write-LogFile -Message "=== Starting Message Trace Log Collection ===" -Color "Cyan" -Level Standard
 	StartDateMTL -Quiet
@@ -115,32 +115,30 @@ function Get-MessageTraceLog
 
     Init-OutputDir -Component "MessageTrace" -FilePostfix $filePostfix -CustomOutputDir $OutputDir
 	$OutputDir = Split-Path $script:outputFile -Parent
-	
+
     $summary = @{
         StartTime = Get-Date
         ProcessingTime = $null
     }
 
-	
+
 	if ($isDebugEnabled) {
 		Write-LogFile -Message "[DEBUG] Date processing complete:" -Level Debug
 		Write-LogFile -Message "[DEBUG]   Processed StartDate: $($script:StartDate)" -Level Debug
 		Write-LogFile -Message "[DEBUG]   Processed EndDate: $($script:EndDate)" -Level Debug
 		Write-LogFile -Message "[DEBUG]   Date range span: $(($script:EndDate - $script:StartDate).TotalDays) days" -Level Debug
-	}	
+	}
 
 	if (($null -eq $UserIds) -Or ($UserIds -eq "")) {
         Write-LogFile -Message "[INFO] No users provided. Getting the Message Trace Log for all users between $($script:StartDate.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssK")) and $($script:EndDate.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssK"))" -Color "Yellow" -Level Standard
-        Retrieve-MessageTrace -StartDate $script:StartDate -endDate $script:EndDate -OutputFile $script:outputFile 
+        Retrieve-MessageTrace -StartDate $script:StartDate -endDate $script:EndDate -OutputFile $script:outputFile
     } else {
         if($UserIds -match "\*"){
             Write-LogFile -Message "[INFO] An entire domain has been provided, retrieving all messages between $($script:StartDate.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssK")) and $($script:EndDate.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssK"))" -Color "Yellow" -Level Standard
         }
         $users = $UserIds.Split(",")
 
-        $users | foreach {
-            $user = $_
-
+        foreach ($user in $users) {
 			if ($isDebugEnabled) {
                 Write-LogFile -Message "[DEBUG] Processing user: '$user'" -Level Debug
                 Write-LogFile -Message "[DEBUG] Output file path: '$outputFile'" -Level Debug
@@ -215,7 +213,7 @@ function Retrieve-MessageTrace {
         $searchParams.StartDate = $currentStart
         $searchParams.EndDate = $currentEnd
         $resultCount = 5000
-		
+
         while($resultCount -ge 5000) {
             $results = Get-MessageTraceV2 @searchParams
             $resultCount = $results.Count

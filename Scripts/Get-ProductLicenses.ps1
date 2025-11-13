@@ -49,10 +49,10 @@ Function Get-Licenses {
         }
 
         $results = $licenses | ForEach-Object {
-             $servicePlanNames = $_.ServicePlans.ServicePlanName -join '; '
-             $servicePlansForChecks = $_.ServicePlans.ServicePlanName
+            $servicePlanNames = $_.ServicePlans.ServicePlanName -join '; '
+            $servicePlansForChecks = $_.ServicePlans.ServicePlanName
 
-             if ($isDebugEnabled) {
+            if ($isDebugEnabled) {
                 Write-LogFile -Message "[DEBUG]   Service Plans Count: $($_.ServicePlans.Count)" -Level Debug
                 Write-LogFile -Message "[DEBUG]   Service Plans: $($servicePlansForChecks -join ', ')" -Level Debug
             }
@@ -64,8 +64,8 @@ Function Get-Licenses {
                 Scope            = $_.AppliesTo
                 Units            = $_.ConsumedUnits
                 Retention        = if ($_.SkuPartNumber -match "E5") { "365 days" }
-                                  elseif ($_.SkuPartNumber -match "E3") { "180 days" }
-                                  else { "90 days" }
+                                elseif ($_.SkuPartNumber -match "E3") { "180 days" }
+                                else { "90 days" }
                 E3               = if ($_.SkuPartNumber -in @("M365ENTERPRISE", "ENTERPRISEPACK", "STANDARD_EDU")) { "Yes" } else { "No" }
                 E5               = if ($_.SkuPartNumber -in @("SPE_E5", "ENTERPRISEPREMIUM")) { "Yes" } else { "No" }
                 P1               = if ($servicePlansForChecks -contains "AAD_PREMIUM") { "Yes" } else { "No" }
@@ -81,8 +81,8 @@ Function Get-Licenses {
         Write-LogFile -Message "[INFO] License information saved to: $script:outputFile" -Color "Green" -Level Standard
         Write-LogFile -Message "`nLicense Information:" -Color "Cyan" -Level Standard
 
-        return $results | 
-            Sort-Object -Property Units -Descending | 
+        return $results |
+            Sort-Object -Property Units -Descending |
             Format-Table -Property @(
                 @{Label = "License Name"; Expression = {$_.Sku}; Width = 30},
                 @{Label = "Status"; Expression = {$_.Status}; Width = 10},
@@ -206,7 +206,7 @@ Function Get-LicenseCompatibility {
         }
 
         $recommendations = @()
-        
+
         if (-not $global:e5Present) {
             $recommendations += "- Consider E5 license for full feature access and extended retention"
         }
@@ -232,7 +232,7 @@ Function Get-LicenseCompatibility {
         }
         throw
     }
-}     
+}
 
 Function Get-EntraSecurityDefaults {
 <#
@@ -245,7 +245,7 @@ Function Get-EntraSecurityDefaults {
     .PARAMETER OutputDir
     OutputDir is the parameter specifying the output directory.
     Default: Output\Licenses
-    
+
     .PARAMETER LogLevel
     Specifies the level of logging:
     None: No logging
@@ -352,7 +352,7 @@ Function Get-EntraSecurityDefaults {
 
         Write-LogFile -Message "`nCheck Summary:" -Color "Cyan" -Level Standard
         Write-LogFile -Message ($result | Format-List | Out-String).Trim() -Level Standard
-        
+
         Write-LogFile -Message "`nOutput Files:" -Color "Cyan" -Level Standard
         Write-LogFile -Message "- Results exported to: $script:outputFile" -Color "Green" -Level Standard
     } catch {
@@ -471,9 +471,9 @@ Function Get-LicensesByUser {
             TotalAssignments = ($results | Where-Object { $_.SkuPartNumber -ne "None" } | Measure-Object).Count
         }
 
-        $licenseDistribution = $results | 
-            Where-Object { $_.SkuPartNumber -ne "None" } | 
-            Group-Object SkuPartNumber | 
+        $licenseDistribution = $results |
+            Where-Object { $_.SkuPartNumber -ne "None" } |
+            Group-Object SkuPartNumber |
             Sort-Object Count -Descending
 
         Write-LogFile -Message "`nUser License Summary:" -Color "Cyan" -Level Standard
@@ -499,4 +499,3 @@ Function Get-LicensesByUser {
         throw
     }
 }
-        

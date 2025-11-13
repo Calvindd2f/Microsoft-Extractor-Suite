@@ -1,5 +1,5 @@
 Function Get-Email {
-<#
+    <#
     .SYNOPSIS
     Get a specific email.
 
@@ -24,8 +24,8 @@ Function Get-Email {
     The inputFile parameter specifies the .txt file containing multiple Internet Message Identifiers. You can include multiple Internet Message Identifiers in the file. Ensure each ID is placed on a new line.
 
     .PARAMETER attachment
-    The attachment parameter specifies whether the attachment should be saved or not. 
-    Default: False 
+    The attachment parameter specifies whether the attachment should be saved or not.
+    Default: False
 
     .PARAMETER LogLevel
     Specifies the level of logging:
@@ -34,22 +34,22 @@ Function Get-Email {
     Standard: Normal operational logging
     Debug: Verbose logging for debugging purposes
     Default: Standard
-    
+
     .EXAMPLE
-    Get-Email -userIds fortunahodan@bonacu.onmicrosoft.com -internetMessageId "<d6f15b97-e3e3-4871-adb2-e8d999d51f34@az.westeurope.microsoft.com>" 
+    Get-Email -userIds fortunahodan@bonacu.onmicrosoft.com -internetMessageId "<d6f15b97-e3e3-4871-adb2-e8d999d51f34@az.westeurope.microsoft.com>"
     Retrieves an email from fortunahodan@bonacu.onmicrosoft.com with the internet message identifier <d6f15b97-e3e3-4871-adb2-e8d999d51f34@az.westeurope.microsoft.com> to a eml file.
-    
+
     .EXAMPLE
     Get-Email -userIds fortunahodan@bonacu.onmicrosoft.com -internetMessageId "<d6f15b97-e3e3-4871-adb2-e8d999d51f34@az.westeurope.microsoft.com>" -attachment
     Retrieves an email and the attachment from fortunahodan@bonacu.onmicrosoft.com with the internet message identifier <d6f15b97-e3e3-4871-adb2-e8d999d51f34@az.westeurope.microsoft.com> to a eml file.
-        
+
     .EXAMPLE
     Get-Email -userIds fortunahodan@bonacu.onmicrosoft.com -internetMessageId "<d6f15b97-e3e3-4871-adb2-e8d999d51f34@az.westeurope.microsoft.com>" -OutputDir C:\Windows\Temp
     Retrieves an email and saves it to C:\Windows\Temp folder.
 #>
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory=$true)]$userIds,
+        [Parameter(Mandatory = $true)]$userIds,
         [string]$internetMessageId,
         [ValidateSet("eml", "txt")]
         [string]$Output = "eml",
@@ -58,32 +58,33 @@ Function Get-Email {
         [string]$inputFile,
         [ValidateSet('None', 'Minimal', 'Standard', 'Debug')]
         [string]$LogLevel = 'Standard'
-    ) 
+    )
 
     Init-Logging
     Init-OutputDir -Component "Email Export" -FilePostfix "EmailExport" -CustomOutputDir $OutputDir
     $outputDir = Split-Path $script:outputFile -Parent
 
     $summary = @{
-        TotalProcessed = 0
-        SuccessfulDownloads = 0
-        FailedDownloads = 0
-        DuplicatesFound = 0
+        TotalProcessed       = 0
+        SuccessfulDownloads  = 0
+        FailedDownloads      = 0
+        DuplicatesFound      = 0
         AttachmentsProcessed = 0
-        StartTime = Get-Date
-        ProcessingTime = $null
-        Errors = @()
+        StartTime            = Get-Date
+        ProcessingTime       = $null
+        Errors               = [System.Collections.Generic.List[string]]::new()
     }
 
     Write-LogFile -Message "=== Starting Email Export ===" -Color "Cyan" -Level Standard
     $requiredScopes = @("Mail.Readwrite")
     $graphAuth = Get-GraphAuthType -RequiredScopes $RequiredScopes
-    
-    $fileCounter = 1 
+
+    $fileCounter = 1
     $processedMessages = @{}
-    $duplicateMessages = @()
-    $notCollected = @()
-    $ProgressPreference = 'SilentlyContinue' 
+
+    $duplicateMessages = [System.Collections.Generic.List[object]]::new()
+    $notCollected = [System.Collections.Generic.List[string]]::new()
+    $ProgressPreference = 'SilentlyContinue'
 
     if ($inputFile) {
         if ($isDebugEnabled) {
@@ -103,9 +104,9 @@ Function Get-Email {
             }
             return
         }
-    
+
         foreach ($id in $internetMessageIds) {
-            $summary.TotalProcessed++ 
+            $summary.TotalProcessed++
             $id = $id.Trim()
             Write-LogFile -Message "[INFO] Processing Internet Message ID: $id" -Level Standard
 
@@ -115,14 +116,14 @@ Function Get-Email {
                 Write-LogFile -Message "[DEBUG]   Trimmed ID: '$($id)'" -Level Debug
                 Write-LogFile -Message "[DEBUG]   Progress: $($summary.TotalProcessed) of $($internetMessageIds.Count)" -Level Debug
             }
-           
+
             try {
                 $getMessage = Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/v1.0/users/$userIds/messages?filter=internetMessageId eq '$id'"
                 $message = $getMessage.value[0]
 
                 if ($null -eq $message) {
                     Write-LogFile -Message "[WARNING] No message found for Internet Message ID: $($id). This might happen when the email is removed from the mailbox." -Level Minimal -Color "Yellow"
-                    $notCollected += $id
+                    $notCollected.Add($id)
                     $summary.FailedDownloads++
 
                     if ($isDebugEnabled) {
@@ -144,11 +145,11 @@ Function Get-Email {
                 }
 
                 if ($processedMessages.ContainsKey($messageId)) {
-                    $duplicateMessages += @{
-                        'MessageId' = $messageId
-                        'FirstInternetMessageId' = $processedMessages[$messageId]
-                        'SecondInternetMessageId' = $id
-                    }
+                    $duplicateMessages.Add([PSCustomObject]@{
+                            'MessageId'               = $messageId
+                            'FirstInternetMessageId'  = $processedMessages[$messageId]
+                            'SecondInternetMessageId' = $id
+                        })
                     $summary.DuplicatesFound++
                     Write-LogFile -Message "[INFO] Duplicate message detected! Message ID $messageId was previously processed with Internet Message ID $($processedMessages[$messageId])" -Color "Yellow" -Level Standard
 
@@ -180,7 +181,8 @@ Function Get-Email {
                         $filePath = "$outputDir\$($fileCounter.ToString('D3'))-$ReceivedDateTime-$subject.$extension"
                         $fileCounter++
                     } while (Test-Path $filePath)
-                } catch {
+                }
+                catch {
                     Write-LogFile -Message "[WARNING] Could not parse received date time, excluding from filename" -Level Standard -Color "Yellow"
                     do {
                         $filePath = "$outputDir\$($fileCounter.ToString('D3'))-$subject.$extension"
@@ -198,19 +200,19 @@ Function Get-Email {
                 $fileCounter++
 
                 Write-LogFile -Message "[SUCCESS] Saved message to: $filePath" -Color "Green" -Level Standard
-                if ($attachment.IsPresent){
+                if ($attachment.IsPresent) {
                     $attachmentProcessed = Get-Attachment -Userid $Userids -internetMessageId $id
                     if ($attachmentProcessed) {
                         $summary.AttachmentsProcessed++
                     }
                 }
-           }
-           catch {
+            }
+            catch {
                 $summary.FailedDownloads++
-                $summary.Errors += "Failed to process $id : $_"
+                $summary.Errors.Add("Failed to process $id : $_")
                 Write-LogFile -Message "[WARNING] Failed to collect message with ID '$id': $_"
                 Write-LogFile -Message "[ERROR] Failed to process message: $_" -Color "Red" -Level Minimal
-                $notCollected += $id
+                $notCollected.Add($id)
 
                 if ($isDebugEnabled) {
                     Write-LogFile -Message "[DEBUG] Message processing error details:" -Level Debug
@@ -220,7 +222,7 @@ Function Get-Email {
                     Write-LogFile -Message "[DEBUG]   Stack trace: $($_.ScriptStackTrace)" -Level Debug
                     Write-LogFile -Message "[DEBUG]   Total failures so far: $($summary.FailedDownloads)" -Level Debug
                 }
-           }
+            }
         }
     }
     else {
@@ -228,9 +230,9 @@ Function Get-Email {
             write-LogFile -Message "[ERROR] Either internetMessageId or inputFile must be provided." -Level Minimal -Color "Red"
             return
         }
-    
+
         try {
-            $summary.TotalProcessed++ 
+            $summary.TotalProcessed++
             $getMessage = Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/v1.0/users/$userIds/messages?filter=internetMessageId eq '$internetMessageId'"
             $message = $getMessage.value[0]
 
@@ -288,7 +290,7 @@ Function Get-Email {
                 }
             }
 
-            if ($attachment.IsPresent){
+            if ($attachment.IsPresent) {
                 $attachmentProcessed = Get-Attachment -Userid $Userids -internetMessageId $internetMessageId
                 if ($attachmentProcessed) {
                     $summary.AttachmentsProcessed++
@@ -297,7 +299,7 @@ Function Get-Email {
         }
         catch {
             $summary.FailedDownloads++
-            $summary.Errors += "Failed to process $internetMessageId : $_"
+            $summary.Errors.Add("Failed to process $internetMessageId : $_")
             Write-LogFile -Message "[WARNING] The 'Mail.Readwrite' is an application-level permission, requiring an application-based connection through the 'Connect-MgGraph' command for its use." -Color "Yellow" -Level Minimal
             Write-LogFile -Message "[ERROR] An error occurred: $($_.Exception.Message)" -Level Minimal -Color "Red"
 
@@ -309,16 +311,16 @@ Function Get-Email {
                 Write-LogFile -Message "[DEBUG]   Stack trace: $($_.ScriptStackTrace)" -Level Debug
             }
             return
-        }  
+        }
     }
 
     $summary.ProcessingTime = (Get-Date) - $summary.StartTime
     $summaryData = [ordered]@{
         "Processing Statistics" = [ordered]@{
             "Total Messages Processed" = $summary.TotalProcessed
-            "Successfully Downloaded" = $summary.SuccessfulDownloads
-            "Failed Downloads" = $summary.FailedDownloads
-            "Duplicates Found" = $summary.DuplicatesFound
+            "Successfully Downloaded"  = $summary.SuccessfulDownloads
+            "Failed Downloads"         = $summary.FailedDownloads
+            "Duplicates Found"         = $summary.DuplicatesFound
         }
     }
 
@@ -345,10 +347,10 @@ Function Get-Email {
     Write-Summary -Summary $summaryData -Title "Email Export Summary"
     Write-LogFile -Message "`nNote: Emails saved to: $outputDir" -Level Standard
 }
-    
-    
+
+
 Function Get-Attachment {
-<#
+    <#
     .SYNOPSIS
     Get a specific attachment.
 
@@ -373,25 +375,25 @@ Function Get-Attachment {
     Default: Standard
 
     .EXAMPLE
-    Get-Attachment -userIds fortunahodan@bonacu.onmicrosoft.com -internetMessageId "<d6f15b97-e3e3-4871-adb2-e8d999d51f34@az.westeurope.microsoft.com>" 
+    Get-Attachment -userIds fortunahodan@bonacu.onmicrosoft.com -internetMessageId "<d6f15b97-e3e3-4871-adb2-e8d999d51f34@az.westeurope.microsoft.com>"
     Retrieves the attachment from fortunahodan@bonacu.onmicrosoft.com with the internet message identifier <d6f15b97-e3e3-4871-adb2-e8d999d51f34@az.westeurope.microsoft.com>.
-    
+
     .EXAMPLE
     Get-Attachment -userIds fortunahodan@bonacu.onmicrosoft.com -internetMessageId "<d6f15b97-e3e3-4871-adb2-e8d999d51f34@az.westeurope.microsoft.com>" -OutputDir C:\Windows\Temp
     Retrieves an attachment and saves it to C:\Windows\Temp folder.
 #>
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory=$true)]$userIds,
-        [Parameter(Mandatory=$true)]$internetMessageId,
+        [Parameter(Mandatory = $true)]$userIds,
+        [Parameter(Mandatory = $true)]$internetMessageId,
         [string]$OutputDir,
         [ValidateSet('None', 'Minimal', 'Standard', 'Debug')]
         [string]$LogLevel = 'Standard'
     )
 
-   Init-Logging
-   Init-OutputDir -Component "Email Export" -SubComponent "Attachments" -FilePostfix "Attachments" -CustomOutputDir $OutputDir
-   $outputDir = Split-Path $script:outputFile -Parent
+    Init-Logging
+    Init-OutputDir -Component "Email Export" -SubComponent "Attachments" -FilePostfix "Attachments" -CustomOutputDir $OutputDir
+    $outputDir = Split-Path $script:outputFile -Parent
 
     try {
         $getMessage = Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/v1.0/users/$userIds/messages?filter=internetMessageId eq '$internetMessageId'" -ErrorAction stop
@@ -408,19 +410,19 @@ Function Get-Attachment {
     $ReceivedDateTime = $getMessage.value.ReceivedDateTime.ToString("yyyyMMdd_HHmmss")
     $subject = $getMessage.value.Subject
 
-    if ($hasAttachment -eq "True"){
+    if ($hasAttachment -eq "True") {
         Write-LogFile -Message "[INFO] Processing attachments for message: $internetMessageId" -Color "Green" -Level Standard
         $response = Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/v1.0/users/$userIds/messages/$messageId/attachments"
         Write-LogFile -Message "[INFO] Found $($response.value.Count) attachment(s) for email: $internetMessageId" -Level Standard
 
-        foreach ($attachment in $response.value){
+        foreach ($attachment in $response.value) {
             $filename = $attachment.Name
-        
+
             Write-logFile -Message "[INFO] Name: $filename" -Level Standard
             Write-logFile -Message "[INFO] Size: $($attachment.Size)" -Level Standard
 
-            $uri = "https://graph.microsoft.com/v1.0/users/$userIds/messages/$messageId/attachments/$($attachment.Id)/\$value" 
-            $response = Invoke-MgGraphRequest -Method Get -Uri $uri 
+            $uri = "https://graph.microsoft.com/v1.0/users/$userIds/messages/$messageId/attachments/$($attachment.Id)/\$value"
+            $response = Invoke-MgGraphRequest -Method Get -Uri $uri
 
             $filename = $filename -replace '[\\/:*?"<>|]', '_'
             $filePath = Join-Path $outputDir "$ReceivedDateTime-$subject-$filename"
@@ -431,7 +433,8 @@ Function Get-Attachment {
             # Check PowerShell version and use appropriate parameter
             if ($PSVersionTable.PSVersion.Major -ge 6) {
                 Set-Content -Path $filePath -Value $decoded -AsByteStream
-            } else {
+            }
+            else {
                 Set-Content -Path $filePath -Value $decoded -Encoding Byte
             }
 
@@ -444,10 +447,10 @@ Function Get-Attachment {
         return $false
     }
 }
-    
-    
+
+
 Function Show-Email {
-<#
+    <#
     .SYNOPSIS
     Show a specific email in the PowerShell Window.
 
@@ -458,19 +461,27 @@ Function Show-Email {
     None: No logging
     Minimal: Critical errors only
     Standard: Normal operational logging
+    Debug: Verbose
     Default: Standard
+
+    .PARAMETER Prettier
+    If specified, formats the email output cleanly for investigation, showing only the essentials.
 
     .EXAMPLE
     Show-Email -userIds {userId} -internetMessageId {InternetMessageId}
     Show a specific email in the PowerShell Window.
-    
+
+    .EXAMPLE
+    Show-Email -userIds {userId} -internetMessageId {InternetMessageId} -Prettier
+    Show a prettified/essential version of a specific email in the PowerShell Window.
 #>
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory=$true)]$userIds,
-        [Parameter(Mandatory=$true)]$internetMessageId,
+        [Parameter(Mandatory = $true)]$userIds,
+        [Parameter(Mandatory = $true)]$internetMessageId,
         [ValidateSet('None', 'Minimal', 'Standard', 'Debug')]
-        [string]$LogLevel = 'Standard'
+        [string]$LogLevel = 'Standard',
+        [switch]$Prettier
     )
 
     Init-Logging
@@ -481,7 +492,6 @@ Function Show-Email {
     Write-logFile -Message "[INFO] Running Show-Email" -Color "Green" -Level Standard
 
     try {
-
         $message = Invoke-MgGraphRequest -Method GET -Uri "https://graph.microsoft.com/v1.0/users/$userIds/messages?filter=internetMessageId eq '$internetMessageId'" -ErrorAction stop
     }
     catch {
@@ -490,6 +500,66 @@ Function Show-Email {
         throw
     }
 
+    # Handle "prettier" output
+    if ($Prettier) {
+        if ($message.Value.Count -eq 0) {
+            Write-Host "No email found for Internet Message Id: $internetMessageId" -ForegroundColor Yellow
+            return
+        }
+        foreach ($msg in $message.Value) {
+            $received = $msg.ReceivedDateTime
+            $subject = $msg.Subject
+            $from = $msg.From?.EmailAddress?.Address
+            $to = ($msg.ToRecipients | ForEach-Object { $_.EmailAddress?.Address }) -join "; "
+            $cc = ($msg.CcRecipients | ForEach-Object { $_.EmailAddress?.Address }) -join "; "
+            $bcc = ($msg.BccRecipients | ForEach-Object { $_.EmailAddress?.Address }) -join "; "
+            $hasAttachments = $msg.HasAttachments
+            $internetId = $msg.InternetMessageId
+
+            # Get the plain text body if available, else the preview, else fallback
+            $bodyContent = $null
+            if ($msg.Body?.ContentType -eq 'text') {
+                $bodyContent = $msg.Body.Content
+            } elseif ($msg.BodyPreview) {
+                $bodyContent = $msg.BodyPreview
+            } elseif ($msg.Body?.Content) {
+                # still show HTML code if that's all we have
+                $bodyContent = $msg.Body.Content
+            } else {
+                $bodyContent = "<No body available>"
+            }
+
+            Write-Host ("─" * 70)
+            Write-Host ("Subject       : " + $subject) -ForegroundColor Cyan
+            Write-Host ("From          : " + $from)
+            Write-Host ("To            : " + $to)
+            if ($cc)  { Write-Host ("Cc            : " + $cc) }
+            if ($bcc) { Write-Host ("Bcc           : " + $bcc) }
+            Write-Host ("Received      : " + $received)
+            Write-Host ("InternetMsgId : " + $internetId)
+            if ($hasAttachments) {
+                Write-Host ("Attachments   : " + $msg.Attachments.Count + " (see message in mailbox for details)")
+            }
+            Write-Host ("─" * 70)
+            # Only show first 40 lines or first 2000 chars for very long bodies
+            if ($bodyContent) {
+                $lines = $bodyContent -split '(\r?\n)'
+                if ($lines.Count -gt 40) {
+                    Write-Host ($lines[0..39] -join "`n")
+                    Write-Host "`n...Body truncated (use without -Prettier to see full message as object)..." -ForegroundColor Yellow
+                }
+                elseif ($bodyContent.Length -gt 2000) {
+                    Write-Host ($bodyContent.Substring(0,2000)) -ForegroundColor White
+                    Write-Host "`n...Body truncated (use without -Prettier to see full message as object)..." -ForegroundColor Yellow
+                }
+                else {
+                    Write-Host $bodyContent -ForegroundColor White
+                }
+            }
+            Write-Host ("─" * 70)
+        }
+        return
+    }
+
     $message.Value
 }
-            

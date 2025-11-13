@@ -4,7 +4,7 @@ Function Get-UALGraph {
     Gets all the unified audit log entries.
 
     .DESCRIPTION
-    Makes it possible to extract all unified audit data out of a Microsoft 365 environment. 
+    Makes it possible to extract all unified audit data out of a Microsoft 365 environment.
     The output will be written to: Output\UnifiedAuditLog\
 
     .PARAMETER UserIds
@@ -31,7 +31,7 @@ Function Get-UALGraph {
     Default: JSON
 
     .PARAMETER Output
-    Output is the parameter specifying the CSV, JSON, JSONL, or SOF-ELK output type. 
+    Output is the parameter specifying the CSV, JSON, JSONL, or SOF-ELK output type.
     Note: JSONL format is only supported by specific functions (Get-AdminAuditLog, Get-AllEvidence, Get-AzureDirectoryActivityLogs, Get-UAL, Get-UALGraph).
     Other tasks automatically use JSON format regardless of this setting.
     Default: JSON
@@ -65,7 +65,7 @@ Function Get-UALGraph {
 
     .PARAMETER IPAddress
     The IP address parameter is used to filter the logs by specifying the desired IP address.
-    
+
     .PARAMETER SearchName
     Specifies the name of the search query. This parameter is required.
 
@@ -74,24 +74,24 @@ Function Get-UALGraph {
     When set to True, splits output into multiple files based on MaxEventsPerFile.
     Default: If not specified, outputs to a single file.
 
-    .PARAMETER ObjectIDs 
+    .PARAMETER ObjectIDs
     Exact data returned depends on the service in the current `@odatatype.microsoft.graph.security.auditLogQuery` record.
     For Exchange admin audit logging, the name of the object modified by the cmdlet.
-    For SharePoint activity, the full URL path name of the file or folder accessed by a user. 
+    For SharePoint activity, the full URL path name of the file or folder accessed by a user.
     For Microsoft Entra activity, the name of the user account that was modified.|
-    
+
     .EXAMPLE
-    Get-UALGraph -searchName Test 
+    Get-UALGraph -searchName Test
     Gets all the unified audit log entries.
-    
+
     .EXAMPLE
     Get-UALGraph -searchName Test -UserIds Test@invictus-ir.com
     Gets all the unified audit log entries for the user Test@invictus-ir.com.
-    
+
     .EXAMPLE
     Get-UALGraph -searchName Test -startDate "2025-03-10T09:28:56Z" -endDate "2025-03-20T09:28:56Z" -Service Exchange
     Retrieves audit log data for the specified time range March 10, 2025 to March 20, 2025 and filters the results to include only events related to the Exchange service.
-    
+
     .EXAMPLE
     Get-UALGraph -searchName Test -startDate "2025-03-01" -endDate "2025-03-10" -IPAddress 182.74.242.26
     Retrieve audit log data for the specified time range March 1, 2025 to March 10, 2025 and filter the results to include only entries associated with the IP address 182.74.242.26.
@@ -123,356 +123,386 @@ Function Get-UALGraph {
         [switch]$SplitFiles
     )
 
-    Init-OutputDir -Component "UnifiedAuditLog" -FilePostfix $searchName -CustomOutputDir $OutputDir
-    Init-Logging
+    begin {
+        # Initialize output directory and logging
+        Init-OutputDir -Component "UnifiedAuditLog" -FilePostfix $searchName -CustomOutputDir $OutputDir
+        Init-Logging
 
-    $summary = @{
-        TotalRecords = 0
-        ProcessedRecords = 0
-        ExportedFiles = 0
-        StartTime = Get-Date
-        ProcessingTime = $null
-        SearchId = ""
+        $summary = @{
+            TotalRecords = 0
+            ProcessedRecords = 0
+            ExportedFiles = 0
+            StartTime = Get-Date
+            ProcessingTime = $null
+            SearchId = ""
+        }
+
+        $requiredScopes = @("AuditLogsQuery.Read.All")
+        $graphAuth = Get-GraphAuthType -RequiredScopes $RequiredScopes
+        $outputDirPath = Split-Path $script:outputFile -Parent
+
+        Write-LogFile -Message "=== Starting Microsoft Graph Audit Log Retrieval ===" -Color "Cyan" -Level Standard
+
+        StartDate -Quiet
+        EndDate -Quiet
+
+        $dateRange = "$($script:StartDate.ToString('yyyy-MM-dd HH:mm:ss')) to $($script:EndDate.ToString('yyyy-MM-dd HH:mm:ss'))"
+        Write-LogFile -Message "Analysis Period: $dateRange" -Level Standard
+        Write-LogFile -Message "Output Directory: $outputDirPath" -Level Standard
+        Write-LogFile -Message "Output format: $Output" -Level Standard
+        Write-LogFile -Message "----------------------------------------`n" -Level Standard
+
+        $body = @{
+            "@odata.type" = "#microsoft.graph.security.auditLogQuery"
+            displayName = $searchName
+            filterStartDateTime = $script:startDate
+            filterEndDateTime = $script:endDate
+            recordTypeFilters = $RecordType
+            keywordFilter = $Keyword
+            serviceFilter = $Service
+            operationFilters = $Operations
+            userPrincipalNameFilters = $UserIds
+            ipAddressFilters = $IPAddress
+            objectIdFilters = $ObjectIDs
+            administrativeUnitIdFilters = @()
+            status = ""
+        } | ConvertTo-Json
     }
 
-    $requiredScopes = @("AuditLogsQuery.Read.All")
-    $graphAuth = Get-GraphAuthType -RequiredScopes $RequiredScopes
-    $outputDirPath = Split-Path $script:outputFile -Parent
-
-    Write-LogFile -Message "=== Starting Microsoft Graph Audit Log Retrieval ===" -Color "Cyan" -Level Standard
-    
-    StartDate -Quiet
-    EndDate -Quiet
-
-    $dateRange = "$($script:StartDate.ToString('yyyy-MM-dd HH:mm:ss')) to $($script:EndDate.ToString('yyyy-MM-dd HH:mm:ss'))"
-    Write-LogFile -Message "Analysis Period: $dateRange" -Level Standard
-    Write-LogFile -Message "Output Directory: $outputDirPath" -Level Standard
-    Write-LogFile -Message "Output format: $Output" -Level Standard
-    Write-LogFile -Message "----------------------------------------`n" -Level Standard
-
-    $body = @{
-        "@odata.type" = "#microsoft.graph.security.auditLogQuery"
-        displayName = $searchName
-        filterStartDateTime = $script:startDate
-        filterEndDateTime = $script:endDate
-        recordTypeFilters = $RecordType
-        keywordFilter = $Keyword
-        serviceFilter = $Service
-        operationFilters = $Operations
-        userPrincipalNameFilters = $UserIds
-        ipAddressFilters = $IPAddress
-        objectIdFilters = $ObjectIDs
-        administrativeUnitIdFilters = @()
-        status = ""
-    } | ConvertTo-Json
-
-    try {
-        
-        if ($isDebugEnabled) {
-            Write-LogFile -Message "[DEBUG] Initiating Graph API audit log query..." -Level Debug
-            $createPerformance = Measure-Command {
+    process {
+        try {
+            if ($isDebugEnabled) {
+                Write-LogFile -Message "[DEBUG] Initiating Graph API audit log query..." -Level Debug
+                $createPerformance = Measure-Command {
+                    $response = Invoke-MgGraphRequest -Method POST -Uri "https://graph.microsoft.com/beta/security/auditLog/queries" -Body $body -ContentType "application/json"
+                }
+                Write-LogFile -Message "[DEBUG] Query creation took $([math]::round($createPerformance.TotalSeconds, 2)) seconds" -Level Debug
+            } else {
                 $response = Invoke-MgGraphRequest -Method POST -Uri "https://graph.microsoft.com/beta/security/auditLog/queries" -Body $body -ContentType "application/json"
             }
-            Write-LogFile -Message "[DEBUG] Query creation took $([math]::round($createPerformance.TotalSeconds, 2)) seconds" -Level Debug
-        } else {
-            $response = Invoke-MgGraphRequest -Method POST -Uri "https://graph.microsoft.com/beta/security/auditLog/queries" -Body $body -ContentType "application/json"
-        }
-        
-        $scanId = $response.id
-        $summary.SearchId = $scanId
-        write-logFile -Message "[INFO] A new Unified Audit Log search has started with the name: $searchName and ID: $scanId." -Color "Green" -Level Minimal
-    
-        if ($isDebugEnabled) {
-            Write-LogFile -Message "[DEBUG] Search created successfully:" -Level Debug
-            Write-LogFile -Message "[DEBUG]   Search ID: $scanId" -Level Debug
-            Write-LogFile -Message "[DEBUG]   Response status: $($response.status)" -Level Debug
-        }
 
-        Start-Sleep -Seconds 10
-        $apiUrl = "https://graph.microsoft.com/beta/security/auditLog/queries/$scanId"
+            $scanId = $response.id
+            $summary.SearchId = $scanId
+            write-logFile -Message "[INFO] A new Unified Audit Log search has started with the name: $searchName and ID: $scanId." -Color "Green" -Level Minimal
 
-        write-logFile -Message "[INFO] Waiting for the scan to start..." -Level Standard
-        $lastStatus = ""
-        do {
-            $response = Invoke-MgGraphRequest -Method Get -Uri $apiUrl -ContentType 'application/json'
-            $status = $response.status
-            if ($status -ne $lastStatus) {
-                $lastStatus = $status
+            if ($isDebugEnabled) {
+                Write-LogFile -Message "[DEBUG] Search created successfully:" -Level Debug
+                Write-LogFile -Message "[DEBUG]   Search ID: $scanId" -Level Debug
+                Write-LogFile -Message "[DEBUG]   Response status: $($response.status)" -Level Debug
             }
-            Start-Sleep -Seconds 5
-        } while ($status -ne "succeeded" -and $status -ne "running")
-        if ($status -eq "running") {
-            write-logFile -Message "[INFO] Unified Audit Log search has started... This can take a while..." -Level Standard
+
+            Start-Sleep -Seconds 10
+            $apiUrl = "https://graph.microsoft.com/beta/security/auditLog/queries/$scanId"
+
+            write-logFile -Message "[INFO] Waiting for the scan to start..." -Level Standard
+            $lastStatus = ""
             do {
                 $response = Invoke-MgGraphRequest -Method Get -Uri $apiUrl -ContentType 'application/json'
                 $status = $response.status
                 if ($status -ne $lastStatus) {
-                    if ($isDebugEnabled -and $status -ne $lastStatus) {
-                        Write-LogFile -Message "[DEBUG] Status changed to: $status" -Level Debug
-                    }
-                    write-logFile -Message "[INFO] Unified Audit Log search is still running. Waiting..." -Level Standard
                     $lastStatus = $status
                 }
                 Start-Sleep -Seconds 5
-            } while ($status -ne "succeeded")
-        }
-       write-logFile -Message "[INFO] Unified Audit Log search complete." -Level Minimal
-    }
-    catch {
-        Write-logFile -Message "[ERROR] An error occurred: $($_.Exception.Message)" -Color "Red" -Level Minimal
-        if ($isDebugEnabled) {
-            Write-LogFile -Message "[DEBUG] Error details:" -Level Debug
-            Write-LogFile -Message "[DEBUG]   Exception type: $($_.Exception.GetType().Name)" -Level Debug
-            Write-LogFile -Message "[DEBUG]   Error message: $($_.Exception.Message)" -Level Debug
-            Write-LogFile -Message "[DEBUG]   Stack trace: $($_.ScriptStackTrace)" -Level Debug
-        }
-        throw
-    }
-
-    try {
-        write-logFile -Message "[INFO] Collecting scan results from api (this may take a while)" -Level Standard
-        $date = [datetime]::Now.ToString('yyyyMMddHHmmss') 
-
-        $fileCounter = 1
-        $currentFileEvents = 0
-        $totalEvents = 0
-        $outputFileBase = "$($date)-$searchName-UnifiedAuditLog"
-
-        if ($SplitFiles) {
-            if ($Output -eq "JSON") {
-                $outputFilePath = "$outputFileBase-part$fileCounter.json"
-                $filePath = Join-Path -Path $outputDirPath -ChildPath $outputFilePath
-                "[" | Out-File -FilePath $filePath -Encoding $Encoding
-                $firstRecordInFile = $true
-            } 
-            elseif ($Output -eq "CSV") {
-                $outputFilePath = "$outputFileBase-part$fileCounter.csv"
-                $filePath = Join-Path -Path $outputDirPath -ChildPath $outputFilePath
-                $csvCollection = @()
-            }
-            elseif ($Output -eq "JSONL") {
-                $outputFilePath = "$outputFileBase-part$fileCounter.jsonl"
-                $filePath = Join-Path -Path $outputDirPath -ChildPath $outputFilePath
-                $firstRecordInFile = $true
-            }
-            elseif ($Output -eq "SOF-ELK") {
-                $outputFilePath = "$outputFileBase-part$fileCounter.json"
-                $filePath = Join-Path -Path $outputDirPath -ChildPath $outputFilePath
-            }
-        } 
-        else {
-            if ($Output -eq "JSON") {
-                $outputFilePath = "$outputFileBase.json"
-                $filePath = Join-Path -Path $outputDirPath -ChildPath $outputFilePath
-                "[" | Out-File -FilePath $filePath -Encoding $Encoding
-                $firstRecordInFile = $true
-            }
-            elseif ($Output -eq "CSV") {
-                $outputFilePath = "$outputFileBase.csv"
-                $filePath = Join-Path -Path $outputDirPath -ChildPath $outputFilePath
-                $csvCollection = @()
-            }
-            elseif ($Output -eq "JSONL") {
-                $outputFilePath = "$outputFileBase.jsonl"
-                $filePath = Join-Path -Path $outputDirPath -ChildPath $outputFilePath
-                $firstRecordInFile = $true
-            }
-            elseif ($Output -eq "SOF-ELK") {
-                $outputFilePath = "$outputFileBase.json"
-                $filePath = Join-Path -Path $outputDirPath -ChildPath $outputFilePath
-            }
-        }
-
-        if ($isDebugEnabled) {
-            Write-LogFile -Message "[DEBUG] Starting data collection:" -Level Debug
-            Write-LogFile -Message "[DEBUG]   Split files: $SplitFiles" -Level Debug
-            Write-LogFile -Message "[DEBUG]   Max events per file: $MaxEventsPerFile" -Level Debug
-            Write-LogFile -Message "[DEBUG]   Initial file path: $filePath" -Level Debug
-        }
-
-        $apiUrl = "https://graph.microsoft.com/beta/security/auditLog/queries/$scanId/records"
-        Write-LogFile -Message "[INFO] Starting to collect records..." -Level Standard
-
-        Do {
-            $maxRetries = 3
-            $retryCount = 0
-            $success = $false
-            $response = $null
-
-            while (-not $success -and $retryCount -lt $maxRetries) {
-                try {
-                    if ($isDebugEnabled) {
-                        Write-LogFile -Message "[DEBUG] Attempting to fetch records batch (attempt $($retryCount + 1))" -Level Debug
-                        Write-LogFile -Message "[DEBUG] API URL: $apiUrl" -Level Debug
-                    }
-                    $response = Invoke-MgGraphRequest -Method Get -Uri $apiUrl -ContentType "application/json; odata.metadata=minimal; odata.streaming=true;" -OutputType Json
-                    $success = $true
-                    if ($isDebugEnabled) {
-                        Write-LogFile -Message "[DEBUG] Successfully retrieved batch data" -Level Debug
-                    }
-                }
-                catch {
-                    $retryCount++
-                    $errorMessage = $_.Exception.Message
-
-                    if ($isDebugEnabled) {
-                        Write-LogFile -Message "[DEBUG] Error details:" -Level Debug
-                        Write-LogFile -Message "[DEBUG]   Exception type: $($_.Exception.GetType().Name)" -Level Debug
-                        Write-LogFile -Message "[DEBUG]   Error message: $errorMessage" -Level Debug
-                        Write-LogFile -Message "[DEBUG]   Retry count: $retryCount of $maxRetries" -Level Debug
-                    }
-                    
-                    
-                    if ($retryCount -lt $maxRetries) {
-                        $waitTime = 30 * $retryCount
-                        Write-LogFile -Message "[WARNING] Error: $errorMessage. Retry $retryCount of $maxRetries. Waiting $waitTime seconds before retrying..." -Color "Yellow" -Level Standard
-                        Start-Sleep -Seconds $waitTime
-                        
-                        try {
-                            $graphAuth = Get-GraphAuthType -RequiredScopes $RequiredScopes
-                            Write-LogFile -Message "[INFO] Successfully refreshed Graph API connection." -Level Standard
+            } while ($status -ne "succeeded" -and $status -ne "running")
+            if ($status -eq "running") {
+                write-logFile -Message "[INFO] Unified Audit Log search has started... This can take a while..." -Level Standard
+                do {
+                    $response = Invoke-MgGraphRequest -Method Get -Uri $apiUrl -ContentType 'application/json'
+                    $status = $response.status
+                    if ($status -ne $lastStatus) {
+                        if ($isDebugEnabled -and $status -ne $lastStatus) {
+                            Write-LogFile -Message "[DEBUG] Status changed to: $status" -Level Debug
                         }
-                        catch {
-                            Write-LogFile -Message "[WARNING] Failed to refresh credentials: $($_.Exception.Message)" -Level Standard
-                        }
+                        write-logFile -Message "[INFO] Unified Audit Log search is still running. Waiting..." -Level Standard
+                        $lastStatus = $status
                     }
-                    else {
-                        Write-LogFile -Message "[ERROR] Failed after $maxRetries attempts: $errorMessage" -Color "Red" -Level Minimal
-                        throw $_  
-                    }
-                }
+                    Start-Sleep -Seconds 5
+                } while ($status -ne "succeeded")
             }
+           write-logFile -Message "[INFO] Unified Audit Log search complete." -Level Minimal
+        }
+        catch {
+            Write-logFile -Message "[ERROR] An error occurred: $($_.Exception.Message)" -Color "Red" -Level Minimal
+            if ($isDebugEnabled) {
+                Write-LogFile -Message "[DEBUG] Error details:" -Level Debug
+                Write-LogFile -Message "[DEBUG]   Exception type: $($_.Exception.GetType().Name)" -Level Debug
+                Write-LogFile -Message "[DEBUG]   Error message: $($_.Exception.Message)" -Level Debug
+                Write-LogFile -Message "[DEBUG]   Stack trace: $($_.ScriptStackTrace)" -Level Debug
+            }
+            throw
+        }
 
-            $responseJson = $response | ConvertFrom-Json 
+        try {
+            write-logFile -Message "[INFO] Collecting scan results from api (this may take a while)" -Level Standard
+            $date = [datetime]::Now.ToString('yyyyMMddHHmmss')
 
-            if ($responseJson.value -and $responseJson.value.Count -gt 0) {
-                $batchCount = $responseJson.value.Count
-                $totalEvents += $batchCount
+            $fileCounter = 1
+            $currentFileEvents = 0
+            $totalEvents = 0
+            $outputFileBase = "$($date)-$searchName-UnifiedAuditLog"
 
-                if ($isDebugEnabled) {
-                    Write-LogFile -Message "[DEBUG] Processing batch: $batchCount records (Total: $totalEvents)" -Level Debug
-                    Write-LogFile -Message "[DEBUG] Current file events: $currentFileEvents" -Level Debug
-                }
+            $csvCollection = [System.Collections.Generic.List[object]]::new()
+            $filePath = $null
+            $firstRecordInFile = $true
+            $sw = $null
 
+            if ($SplitFiles) {
                 if ($Output -eq "JSON") {
-                    foreach ($record in $responseJson.value) {
-                        if ($SplitFiles -and $currentFileEvents -ge $MaxEventsPerFile) {
-                            "]" | Out-File -FilePath $filePath -Append -Encoding $Encoding
-                            Write-LogFile -Message "[INFO] File complete: $outputFilePath ($currentFileEvents events)" -Level Standard
-                            
-                            $fileCounter++
-                            $summary.ExportedFiles++
-                            $currentFileEvents = 0
-                            
-                            $outputFilePath = "$outputFileBase-part$fileCounter.json"
-                            $filePath = Join-Path -Path $outputDirPath -ChildPath $outputFilePath
-                            "[" | Out-File -FilePath $filePath -Encoding $Encoding
-                            $firstRecordInFile = $true
-                        }
-
-                        if (-not $firstRecordInFile) {
-                            "," | Out-File -FilePath $filePath -Append -Encoding $Encoding -NoNewline
-                        } else {
-                            $firstRecordInFile = $false
-                        }
-                        "`r`n" | Out-File -FilePath $filePath -Append -Encoding $Encoding -NoNewline
-
-                        $record | ConvertTo-Json -Depth 100 | Out-File -FilePath $filePath -Append -Encoding $Encoding -NoNewline
-
-                        $currentFileEvents++
-                        $summary.ProcessedRecords++
-                    }
+                    $outputFilePath = "$outputFileBase-part$fileCounter.json"
+                    $filePath = Join-Path -Path $outputDirPath -ChildPath $outputFilePath
+                    $sw = [System.IO.StreamWriter]::new($filePath, $false, [System.Text.Encoding]::GetEncoding($Encoding))
+                    $sw.WriteLine("[")
+                    $firstRecordInFile = $true
                 }
                 elseif ($Output -eq "CSV") {
-                    $csvCollection += $responseJson.value
-                    $currentFileEvents += $batchCount
-                    $summary.ProcessedRecords += $batchCount
-
-                    if ($SplitFiles -and $currentFileEvents -ge $MaxEventsPerFile) {
-                        $csvCollection | Select-Object id, createdDateTime, auditLogRecordType, operation, organizationId, userType, userId, service, objectId, userPrincipalName, clientIp, administrativeUnits, @{Name = "auditData"; Expression = { $_.auditData | ConvertTo-Json -Depth 100 } } | Export-Csv -Path $filePath -Append -Encoding $Encoding -NoTypeInformation
-                        Write-LogFile -Message "[INFO] File complete: $outputFilePath ($currentFileEvents events)" -Level Standard
-                        
-                        $fileCounter++
-                        $summary.ExportedFiles++
-                        $currentFileEvents = 0
-                        
-                        $csvCollection = @()
-                        $outputFilePath = "$outputFileBase-part$fileCounter.csv"
-                        $filePath = Join-Path -Path $OutputDir -ChildPath $outputFilePath
-                    }
+                    $outputFilePath = "$outputFileBase-part$fileCounter.csv"
+                    $filePath = Join-Path -Path $outputDirPath -ChildPath $outputFilePath
                 }
                 elseif ($Output -eq "JSONL") {
-                    foreach ($record in $responseJson.value) {
-                        if ($SplitFiles -and $currentFileEvents -ge $MaxEventsPerFile) {
-                            Write-LogFile -Message "[INFO] File complete: $outputFilePath ($currentFileEvents events)" -Level Standard
-                            
-                            $fileCounter++
-                            $summary.ExportedFiles++
-                            $currentFileEvents = 0
-
-                            $outputFilePath = "$outputFileBase-part$fileCounter.jsonl"
-                            $filePath = Join-Path -Path $outputDirPath -ChildPath $outputFilePath
-                        }
-                        if ($record.auditData) {
-                            $record.auditData | ConvertTo-Json -Compress -Depth 100 | 
-                                Out-File -Append $filePath -Encoding UTF8
-                        }
-                        "`r`n" | Out-File -FilePath $filePath -Append -Encoding UTF8
-                        $currentFileEvents++
-                        $summary.ProcessedRecords++
-                    }
+                    $outputFilePath = "$outputFileBase-part$fileCounter.jsonl"
+                    $filePath = Join-Path -Path $outputDirPath -ChildPath $outputFilePath
+                    $sw = [System.IO.StreamWriter]::new($filePath, $false, [System.Text.Encoding]::GetEncoding($Encoding))
                 }
                 elseif ($Output -eq "SOF-ELK") {
-                    foreach ($record in $responseJson.value) {
+                    $outputFilePath = "$outputFileBase-part$fileCounter.json"
+                    $filePath = Join-Path -Path $outputDirPath -ChildPath $outputFilePath
+                    $sw = [System.IO.StreamWriter]::new($filePath, $false, [System.Text.Encoding]::UTF8)
+                }
+            }
+            else {
+                if ($Output -eq "JSON") {
+                    $outputFilePath = "$outputFileBase.json"
+                    $filePath = Join-Path -Path $outputDirPath -ChildPath $outputFilePath
+                    $sw = [System.IO.StreamWriter]::new($filePath, $false, [System.Text.Encoding]::GetEncoding($Encoding))
+                    $sw.WriteLine("[")
+                    $firstRecordInFile = $true
+                }
+                elseif ($Output -eq "CSV") {
+                    $outputFilePath = "$outputFileBase.csv"
+                    $filePath = Join-Path -Path $outputDirPath -ChildPath $outputFilePath
+                }
+                elseif ($Output -eq "JSONL") {
+                    $outputFilePath = "$outputFileBase.jsonl"
+                    $filePath = Join-Path -Path $outputDirPath -ChildPath $outputFilePath
+                    $sw = [System.IO.StreamWriter]::new($filePath, $false, [System.Text.Encoding]::GetEncoding($Encoding))
+                }
+                elseif ($Output -eq "SOF-ELK") {
+                    $outputFilePath = "$outputFileBase.json"
+                    $filePath = Join-Path -Path $outputDirPath -ChildPath $outputFilePath
+                    $sw = [System.IO.StreamWriter]::new($filePath, $false, [System.Text.Encoding]::UTF8)
+                }
+            }
+
+            if ($isDebugEnabled) {
+                Write-LogFile -Message "[DEBUG] Starting data collection:" -Level Debug
+                Write-LogFile -Message "[DEBUG]   Split files: $SplitFiles" -Level Debug
+                Write-LogFile -Message "[DEBUG]   Max events per file: $MaxEventsPerFile" -Level Debug
+                Write-LogFile -Message "[DEBUG]   Initial file path: $filePath" -Level Debug
+            }
+
+            $apiUrl = "https://graph.microsoft.com/beta/security/auditLog/queries/$scanId/records"
+            Write-LogFile -Message "[INFO] Starting to collect records..." -Level Standard
+
+            Do {
+                $maxRetries = 3
+                $retryCount = 0
+                $success = $false
+                $response = $null
+
+                while (-not $success -and $retryCount -lt $maxRetries) {
+                    try {
+                        if ($isDebugEnabled) {
+                            Write-LogFile -Message "[DEBUG] Attempting to fetch records batch (attempt $($retryCount + 1))" -Level Debug
+                            Write-LogFile -Message "[DEBUG] API URL: $apiUrl" -Level Debug
+                        }
+                        $response = Invoke-MgGraphRequest -Method Get -Uri $apiUrl -ContentType "application/json; odata.metadata=minimal; odata.streaming=true;" -OutputType Json
+                        $success = $true
+                        if ($isDebugEnabled) {
+                            Write-LogFile -Message "[DEBUG] Successfully retrieved batch data" -Level Debug
+                        }
+                    }
+                    catch {
+                        $retryCount++
+                        $errorMessage = $_.Exception.Message
+
+                        if ($isDebugEnabled) {
+                            Write-LogFile -Message "[DEBUG] Error details:" -Level Debug
+                            Write-LogFile -Message "[DEBUG]   Exception type: $($_.Exception.GetType().Name)" -Level Debug
+                            Write-LogFile -Message "[DEBUG]   Error message: $errorMessage" -Level Debug
+                            Write-LogFile -Message "[DEBUG]   Retry count: $retryCount of $maxRetries" -Level Debug
+                        }
+
+
+                        if ($retryCount -lt $maxRetries) {
+                            $waitTime = 30 * $retryCount
+                            Write-LogFile -Message "[WARNING] Error: $errorMessage. Retry $retryCount of $maxRetries. Waiting $waitTime seconds before retrying..." -Color "Yellow" -Level Standard
+                            Start-Sleep -Seconds $waitTime
+
+                            try {
+                                $graphAuth = Get-GraphAuthType -RequiredScopes $RequiredScopes
+                                Write-LogFile -Message "[INFO] Successfully refreshed Graph API connection." -Level Standard
+                            }
+                            catch {
+                                Write-LogFile -Message "[WARNING] Failed to refresh credentials: $($_.Exception.Message)" -Level Standard
+                            }
+                        }
+                        else {
+                            Write-LogFile -Message "[ERROR] Failed after $maxRetries attempts: $errorMessage" -Color "Red" -Level Minimal
+                            throw $_
+                        }
+                    }
+                }
+
+                $responseJson = $response | ConvertFrom-Json
+
+                if ($responseJson.value -and $responseJson.value.Count -gt 0) {
+                    $batchCount = $responseJson.value.Count
+                    $totalEvents += $batchCount
+
+                    if ($isDebugEnabled) {
+                        Write-LogFile -Message "[DEBUG] Processing batch: $batchCount records (Total: $totalEvents)" -Level Debug
+                        Write-LogFile -Message "[DEBUG] Current file events: $currentFileEvents" -Level Debug
+                    }
+
+                    if ($Output -eq "JSON") {
+                        foreach ($record in $responseJson.value) {
+                            if ($SplitFiles -and $currentFileEvents -ge $MaxEventsPerFile) {
+                                $sw.WriteLine("]")
+                                $sw.Close()
+                                $sw.Dispose()
+                                Write-LogFile -Message "[INFO] File complete: $outputFilePath ($currentFileEvents events)" -Level Standard
+
+                                $fileCounter++
+                                $summary.ExportedFiles++
+                                $currentFileEvents = 0
+
+                                $outputFilePath = "$outputFileBase-part$fileCounter.json"
+                                $filePath = Join-Path -Path $outputDirPath -ChildPath $outputFilePath
+                                $sw = [System.IO.StreamWriter]::new($filePath, $false, [System.Text.Encoding]::GetEncoding($Encoding))
+                                $sw.WriteLine("[")
+                                $firstRecordInFile = $true
+                            }
+
+                            if (-not $firstRecordInFile) {
+                                $sw.Write(",")
+                            } else {
+                                $firstRecordInFile = $false
+                            }
+                            $sw.WriteLine()
+                            $sw.Write(($record | ConvertTo-Json -Depth 100))
+
+                            $currentFileEvents++
+                            $summary.ProcessedRecords++
+                        }
+                    }
+                    elseif ($Output -eq "CSV") {
+                        $csvCollection.AddRange($responseJson.value)
+                        $currentFileEvents += $batchCount
+                        $summary.ProcessedRecords += $batchCount
+
                         if ($SplitFiles -and $currentFileEvents -ge $MaxEventsPerFile) {
+                            $csvCollection | Select-Object id, createdDateTime, auditLogRecordType, operation, organizationId, userType, userId, service, objectId, userPrincipalName, clientIp, administrativeUnits, @{Name = "auditData"; Expression = { $_.auditData | ConvertTo-Json -Depth 100 } } | Export-Csv -Path $filePath -Append -Encoding $Encoding -NoTypeInformation
                             Write-LogFile -Message "[INFO] File complete: $outputFilePath ($currentFileEvents events)" -Level Standard
-                            
+
                             $fileCounter++
                             $summary.ExportedFiles++
                             $currentFileEvents = 0
 
-                            $outputFilePath = "$outputFileBase-part$fileCounter.json"
+                            $csvCollection = [System.Collections.Generic.List[object]]::new()
+                            $outputFilePath = "$outputFileBase-part$fileCounter.csv"
                             $filePath = Join-Path -Path $outputDirPath -ChildPath $outputFilePath
                         }
-                        if ($record.auditData) {
-                            $record.auditData | ConvertTo-Json -Compress -Depth 100 | 
-                                Out-File -Append $filePath -Encoding UTF8
+                    }
+                    elseif ($Output -eq "JSONL") {
+                        foreach ($record in $responseJson.value) {
+                            if ($SplitFiles -and $currentFileEvents -ge $MaxEventsPerFile) {
+                                $sw.Close()
+                                $sw.Dispose()
+                                Write-LogFile -Message "[INFO] File complete: $outputFilePath ($currentFileEvents events)" -Level Standard
+
+                                $fileCounter++
+                                $summary.ExportedFiles++
+                                $currentFileEvents = 0
+
+                                $outputFilePath = "$outputFileBase-part$fileCounter.jsonl"
+                                $filePath = Join-Path -Path $outputDirPath -ChildPath $outputFilePath
+                                $sw = [System.IO.StreamWriter]::new($filePath, $false, [System.Text.Encoding]::GetEncoding($Encoding))
+                            }
+                            if ($record.auditData) {
+                                $sw.WriteLine(($record.auditData | ConvertTo-Json -Compress -Depth 100))
+                            }
+                            $currentFileEvents++
+                            $summary.ProcessedRecords++
                         }
-                        $currentFileEvents++
-                        $summary.ProcessedRecords++
+                    }
+                    elseif ($Output -eq "SOF-ELK") {
+                        foreach ($record in $responseJson.value) {
+                            if ($SplitFiles -and $currentFileEvents -ge $MaxEventsPerFile) {
+                                $sw.Close()
+                                $sw.Dispose()
+                                Write-LogFile -Message "[INFO] File complete: $outputFilePath ($currentFileEvents events)" -Level Standard
+
+                                $fileCounter++
+                                $summary.ExportedFiles++
+                                $currentFileEvents = 0
+
+                                $outputFilePath = "$outputFileBase-part$fileCounter.json"
+                                $filePath = Join-Path -Path $outputDirPath -ChildPath $outputFilePath
+                                $sw = [System.IO.StreamWriter]::new($filePath, $false, [System.Text.Encoding]::UTF8)
+                            }
+                            if ($record.auditData) {
+                                $sw.WriteLine(($record.auditData | ConvertTo-Json -Compress -Depth 100))
+                            }
+                            $currentFileEvents++
+                            $summary.ProcessedRecords++
+                        }
+                    }
+
+                    if ($totalEvents % 10000 -eq 0 -or $batchCount -lt 100) {
+                        Write-LogFile -Message "[INFO] Progress: $totalEvents total events processed" -Level Standard
+                        if ($isDebugEnabled) {
+                            Write-LogFile -Message "[DEBUG] Progress details:" -Level Debug
+                            Write-LogFile -Message "[DEBUG]   Batch size: $batchCount" -Level Debug
+                            Write-LogFile -Message "[DEBUG]   Current file: $outputFilePath" -Level Debug
+                            Write-LogFile -Message "[DEBUG]   Current file events: $currentFileEvents" -Level Debug
+                        }
+                    }
+                } else {
+                    if ($totalEvents -eq 0) {
+                        Write-LogFile -Message "[INFO] No results matched your search." -Color Yellow -Level Minimal
                     }
                 }
+                $apiUrl = $responseJson.'@odata.nextLink'
+            } While ($apiUrl)
 
-                if ($totalEvents % 10000 -eq 0 -or $batchCount -lt 100) {
-                    Write-LogFile -Message "[INFO] Progress: $totalEvents total events processed" -Level Standard
-                    if ($isDebugEnabled) {
-                        Write-LogFile -Message "[DEBUG] Progress details:" -Level Debug
-                        Write-LogFile -Message "[DEBUG]   Batch size: $batchCount" -Level Debug
-                        Write-LogFile -Message "[DEBUG]   Current file: $outputFilePath" -Level Debug
-                        Write-LogFile -Message "[DEBUG]   Current file events: $currentFileEvents" -Level Debug
-                    }
+            # Close any open file handles
+            if ($currentFileEvents -gt 0) {
+                if ($Output -eq "JSON") {
+                    $sw.WriteLine()
+                    $sw.WriteLine("]")
+                    $sw.Close()
+                    $sw.Dispose()
                 }
-            } else {
-                if ($totalEvents -eq 0) {
-                    Write-LogFile -Message "[INFO] No results matched your search." -Color Yellow -Level Minimal
+                elseif ($Output -eq "CSV" -and $csvCollection.Count -gt 0) {
+                    $csvCollection | Select-Object id, createdDateTime, auditLogRecordType, operation, organizationId, userType, userId, service, objectId, userPrincipalName, clientIp, administrativeUnits, @{Name = "auditData"; Expression = { $_.auditData | ConvertTo-Json -Depth 100 } } | Export-Csv -Path $filePath -Append -Encoding $Encoding -NoTypeInformation
                 }
+                elseif ($Output -eq "JSONL" -or $Output -eq "SOF-ELK") {
+                    $sw.Close()
+                    $sw.Dispose()
+                }
+                $summary.ExportedFiles++
             }
-            $apiUrl = $responseJson.'@odata.nextLink'
-        } While ($apiUrl)
 
-        if ($currentFileEvents -gt 0) {
-            if ($Output -eq "JSON") {
-                "]" | Out-File -FilePath $filePath -Append -Encoding $Encoding
-            }
-            elseif ($Output -eq "CSV" -and $csvCollection.Count -gt 0) {
-                $csvCollection | Select-Object id, createdDateTime, auditLogRecordType, operation, organizationId, userType, userId, service, objectId, userPrincipalName, clientIp, administrativeUnits, @{Name = "auditData"; Expression = { $_.auditData | ConvertTo-Json -Depth 100 } } | Export-Csv -Path $filePath -Append -Encoding $Encoding -NoTypeInformation
-
-                
-            }
-            $summary.ExportedFiles++
+            $summary.TotalRecords = $totalEvents
         }
+        catch {
+            Write-logFile -Message "[ERROR] An error occurred: $($_.Exception.Message)" -Color "Red" -Level Minimal
+            throw
+        }
+    }
 
-        $summary.TotalRecords = $totalEvents
+    end {
+        # Calculate processing time and display summary
         $summary.ProcessingTime = (Get-Date) - $summary.StartTime
 
         $summaryOutput = [ordered]@{
@@ -501,12 +531,4 @@ Function Get-UALGraph {
 
         Write-Summary -Summary $summaryOutput -Title "Audit Log Retrieval Summary" -SkipExportDetails
     }
-    catch {
-        Write-logFile -Message "[ERROR] An error occurred: $($_.Exception.Message)" -Color "Red" -Level Minimal
-        throw
-    }
 }
-            
-            
-            
-            

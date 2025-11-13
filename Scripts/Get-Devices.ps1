@@ -4,7 +4,7 @@ function Get-Devices {
     Retrieves information about all devices registered in Entra ID.
 
     .DESCRIPTION
-    Retrieves detailed information about all devices registered in Entra ID, including device status, 
+    Retrieves detailed information about all devices registered in Entra ID, including device status,
     operating system details, trust type, and management information.
 
     .PARAMETER OutputDir
@@ -29,7 +29,7 @@ function Get-Devices {
     Standard: Normal operational logging
     Debug: Verbose logging for debugging purposes
     Default: Standard
-    
+
     .EXAMPLE
     Get-Devices
     Retrieves information about all devices and exports to a CSV file in the default directory.
@@ -37,7 +37,7 @@ function Get-Devices {
     .EXAMPLE
     Get-Devices -Output JSON
     Retrieves information about all devices and exports to a JSON file.
-        
+
     .EXAMPLE
     Get-Devices -OutputDir C:\Windows\Temp -Encoding UTF32
     Retrieves device information and saves the output to the C:\Windows\Temp folder with UTF-32 encoding.
@@ -64,7 +64,7 @@ function Get-Devices {
     Init-Logging
     Init-OutputDir -Component "Device Information" -FilePostfix "Devices" -CustomOutputDir $OutputDir
     Write-LogFile -Message "=== Starting Device Collection ===" -Color "Cyan" -Level Standard
-    
+
 	$requiredScopes = @("Application.Read.All")
     Check-GraphContext -RequiredScopes $requiredScopes
 
@@ -98,8 +98,8 @@ function Get-Devices {
         if ($UserIds) {
             $userIdList = $UserIds -split ','
             Write-LogFile -Message "[INFO] Filtering devices for user(s): $UserIds" -Level Standard
-            $filteredDevices = @()
-            
+            $filteredDevices = [System.Collections.Generic.List[object]]::new()
+
             foreach ($device in $devices) {
                 try {
                     $owners = Get-MgDeviceRegisteredOwner -DeviceId $device.Id -ErrorAction SilentlyContinue
@@ -112,27 +112,27 @@ function Get-Devices {
                         Write-LogFile -Message "[DEBUG]   Exception type: $($_.Exception.GetType().Name)" -Level Debug
                         Write-LogFile -Message "[DEBUG]   Full error: $($_.Exception.ToString())" -Level Debug
                     }
-                }    
+                }
 
                 $matchFound = $false
                 foreach ($userId in $userIdList) {
-                    if (($owners.AdditionalProperties.userPrincipalName -contains $userId) -or 
+                    if (($owners.AdditionalProperties.userPrincipalName -contains $userId) -or
                         ($users.AdditionalProperties.userPrincipalName -contains $userId)) {
                         $matchFound = $true
                         break
                     }
                 }
-                
+
                 if ($matchFound) {
-                    $filteredDevices += $device
+                    $filteredDevices.Add($device)
                 }
             }
-            
+
             $devices = $filteredDevices
             Write-LogFile -Message "[INFO] Found $($devices.Count) devices for specified users" -Level Standard
         }
 
-        $results = @()
+        $results = [System.Collections.Generic.List[object]]::new()
         $totalDevices = $devices.Count
         $summary["Device Counts"]["Total Devices"] = $totalDevices
         $current = 0
@@ -202,11 +202,11 @@ function Get-Devices {
                 OperatingSystemVersion = $device.OperatingSystemVersion
                 Manufacturer = if ($device.Manufacturer) { $device.Manufacturer } else { "" }
                 Model = if ($device.Model) { $device.Model } else { "" }
-                LastSignInDateTime = if ($device.ApproximateLastSignInDateTime) { 
-                    (Get-Date $device.ApproximateLastSignInDateTime).ToString("yyyy-MM-dd HH:mm:ss") 
+                LastSignInDateTime = if ($device.ApproximateLastSignInDateTime) {
+                    (Get-Date $device.ApproximateLastSignInDateTime).ToString("yyyy-MM-dd HH:mm:ss")
                 } else { "" }
                 TrustType = $device.TrustType
-                RegisteredOwners = $ownersList 
+                RegisteredOwners = $ownersList
                 RegisteredUsers = $usersList
                 MDMAppId = if ($device.MDMAppId) { $device.MDMAppId } else { "" }
                 OnPremisesSyncEnabled = $device.OnPremisesSyncEnabled
@@ -214,7 +214,7 @@ function Get-Devices {
                 SecurityIdentifier = if ($device.SecurityIdentifier) { $device.SecurityIdentifier } else { "" }
             }
 
-            $results += $deviceEntry
+            $results.Add($deviceEntry)
         }
 
         if ($Output -eq "CSV") {

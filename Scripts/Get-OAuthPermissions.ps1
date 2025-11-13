@@ -2,19 +2,19 @@ function Get-OAuthPermissionsGraph {
 	<#
 	.SYNOPSIS
 	Lists delegated permissions (OAuth2PermissionGrants) and application permissions (AppRoleAssignments) using Microsoft Graph API.
-	
+
 	.DESCRIPTION
 	Script to list all delegated permissions and application permissions in Azure AD using Microsoft Graph API
 	The output will be written to a CSV file.
-	
+
 	.PARAMETER OutputDir
 	outputDir is the parameter specifying the output directory.
 	Default: Output\OAuthPermissions
-	
+
 	.PARAMETER Encoding
 	Encoding is the parameter specifying the encoding of the CSV output file.
 	Default: UTF8
-	
+
 	.PARAMETER LogLevel
 	Specifies the level of logging:
 	None: No logging
@@ -23,7 +23,7 @@ function Get-OAuthPermissionsGraph {
 	Debug: Verbose logging for debugging purposes
 	Default: Standard
 	#>
-	
+
 	[CmdletBinding()]
 	param(
 		[switch] $DelegatedPermissions,
@@ -36,7 +36,7 @@ function Get-OAuthPermissionsGraph {
 
     Init-Logging
 	Write-LogFile -Message "=== Starting OAuth Permissions Collection ===" -Color "Cyan" -Level Standard
-    
+
     Init-OutputDir -Component "EntraID" -SubComponent "OAuthPermissions" -FilePostfix "OAuthPermissions" -CustomOutputDir $OutputDir
 
 	$requiredScopes = @("Application.Read.All")
@@ -54,7 +54,7 @@ function Get-OAuthPermissionsGraph {
 	$script:ObjectCache = @{}
 	function Get-CachedObject {
 		param($Id, $Type)
-		
+
 		if (-not $script:ObjectCache.ContainsKey($Id)) {
 			try {
 				if ($isDebugEnabled) {
@@ -85,7 +85,7 @@ function Get-OAuthPermissionsGraph {
 		return $script:ObjectCache[$Id]
 	}
 
-	$report = @()
+	$report = [System.Collections.Generic.List[object]]::new()
 	Write-LogFile -Message "[INFO] Retrieving all ServicePrincipal objects..." -Level Standard
 	if ($isDebugEnabled) {
 		Write-LogFile -Message "[DEBUG] Starting ServicePrincipal retrieval via Microsoft Graph..." -Level Debug
@@ -107,12 +107,12 @@ function Get-OAuthPermissionsGraph {
 	foreach ($sp in $allServicePrincipals) {
 		$script:ObjectCache[$sp.Id] = $sp
 		$cachingCounter++
-		
+
 		# Log progress every 100 service principals
 		if ($cachingCounter % 100 -eq 0) {
 			Write-LogFile -Message "[INFO] Cached $cachingCounter of $servicePrincipalCount service principals..." -Level Standard
 		}
-		
+
 		if ($isDebugEnabled -and ($cachingCounter % 50 -eq 0)) {
 			Write-LogFile -Message "[DEBUG]   Cached ServicePrincipal: $($sp.DisplayName) (Total: $cachingCounter)" -Level Debug
 		}
@@ -122,7 +122,7 @@ function Get-OAuthPermissionsGraph {
 
 	if ($DelegatedPermissions -or (-not ($DelegatedPermissions -or $ApplicationPermissions))) {
 		Write-LogFile -Message "[INFO] Processing delegated permissions..." -Level Standard
-		
+
 		if ($isDebugEnabled) {
 			Write-LogFile -Message "[DEBUG] Retrieving OAuth2PermissionGrants via Microsoft Graph..." -Level Debug
 		}
@@ -134,7 +134,7 @@ function Get-OAuthPermissionsGraph {
 		foreach ($grant in $allDelegatedGrants) {
 			$grantCounter++
 			$summary.DelegatedGrantsProcessed++
-			
+
 			$clientSp = Get-CachedObject -Id $grant.ClientId -Type 'ServicePrincipal'
 			$resourceSp = Get-CachedObject -Id $grant.ResourceId -Type 'ServicePrincipal'
 
@@ -142,7 +142,7 @@ function Get-OAuthPermissionsGraph {
 			if ($grantCounter % 25 -eq 0) {
 				Write-LogFile -Message "[INFO] Processing delegated grant $grantCounter of $($allDelegatedGrants.Count) - App: '$($clientSp.DisplayName)'" -Level Standard
 			}
-			
+
 			if ($isDebugEnabled -and ($grantCounter % 10 -eq 0)) {
 				Write-LogFile -Message "[DEBUG]   Processing grant $grantCounter of $($allDelegatedGrants.Count) for app '$($clientSp.DisplayName)'" -Level Debug
 			}
@@ -163,7 +163,7 @@ function Get-OAuthPermissionsGraph {
 						if ($isDebugEnabled -and ($summary.DelegatedCount % 25 -eq 0)) {
 							Write-LogFile -Message "[DEBUG]       Processing permission: '$scope' for app '$($clientSp.DisplayName)' (Permission $($summary.DelegatedCount))" -Level Debug
 						}
-						
+
 						$principalDisplayName = if ($grant.PrincipalId) {
 							$principal = Get-CachedObject -Id $grant.PrincipalId -Type 'User'
 							$principal.DisplayName
@@ -210,7 +210,7 @@ function Get-OAuthPermissionsGraph {
 						if ($clientSp.ServicePrincipalType -eq "ManagedIdentity") { $ServicePrincipalTypes += "Managed Identity" }
 						if ($clientSp.Tags -contains "WindowsAzureActiveDirectoryIntegratedApp") { $ServicePrincipalTypes += "Enterprise Application" }
 						$ApplicationType = $ServicePrincipalTypes -join " & "
-						
+
 						$grantDetails = [ordered]@{
 							"PermissionType"         = "Delegated"
 							"AppId"                  = $clientSp.AppId
@@ -233,17 +233,17 @@ function Get-OAuthPermissionsGraph {
 							}
 							"AppOwnerOrganizationId" = $clientSp.AppOwnerOrganizationId
 							"ApplicationStatus"      = $ApplicationStatus
-							"ApplicationVisibility"  = $ApplicationVisibility 
-							"AssignmentRequired"     = $AssignmentRequired 
-							"IsAppProxy"             = $IsAppProxy 
+							"ApplicationVisibility"  = $ApplicationVisibility
+							"AssignmentRequired"     = $AssignmentRequired
+							"IsAppProxy"             = $IsAppProxy
 							"PublisherDisplayName"   = $clientSp.VerifiedPublisher.DisplayName
 							"VerifiedPublisherId"    = $clientSp.VerifiedPublisher.VerifiedPublisherId
-							"AddedDateTime"          = $clientSp.VerifiedPublisher.AddedDateTime 
-							"SignInAudience"         = $clientSp.SignInAudience 
-							"ApplicationType"        = $ApplicationType 
+							"AddedDateTime"          = $clientSp.VerifiedPublisher.AddedDateTime
+							"SignInAudience"         = $clientSp.SignInAudience
+							"ApplicationType"        = $ApplicationType
 						}
 
-						$report += [PSCustomObject]$grantDetails
+						$report.Add([PSCustomObject]$grantDetails)
 					}
 				}
 			}
@@ -262,16 +262,16 @@ function Get-OAuthPermissionsGraph {
 		if ($isDebugEnabled) {
 			Write-LogFile -Message "[DEBUG] Processing application permissions..." -Level Debug
 		}
-		
+
 		$appCounter = 0
 		foreach ($sp in $allServicePrincipals) {
 			$appCounter++
-			
+
 			# Log progress every 25 apps
 			if ($appCounter % 25 -eq 0) {
 				Write-LogFile -Message "[INFO] Processing application permissions for app $appCounter of $servicePrincipalCount - '$($sp.DisplayName)'" -Level Standard
 			}
-			
+
 			if ($ShowProgress) {
 				Write-Progress -Activity "Retrieving application permissions..." `
 					-Status ("Checked {0}/{1} apps" -f $appCounter, $servicePrincipalCount) `
@@ -283,14 +283,14 @@ function Get-OAuthPermissionsGraph {
 			}
 
 			$appRoleAssignments = Get-MgServicePrincipalAppRoleAssignment -ServicePrincipalId $sp.Id -All
-			
+
 			if ($isDebugEnabled -and $appRoleAssignments.Count -gt 0) {
 				Write-LogFile -Message "[DEBUG]     Found $($appRoleAssignments.Count) app role assignments for $($sp.DisplayName)" -Level Debug
 			}
 
 			foreach ($assignment in $appRoleAssignments) {
 				$summary.ApplicationCount++
-				
+
 				$resourceSp = Get-CachedObject -Id $assignment.ResourceId -Type 'ServicePrincipal'
 				$appRole = $resourceSp.AppRoles | Where-Object { $_.Id -eq $assignment.AppRoleId }
 				if ($isDebugEnabled) {
@@ -363,17 +363,17 @@ function Get-OAuthPermissionsGraph {
 					"CreatedDateTime"        = $sp.AdditionalProperties.createdDateTime
 					"AppOwnerOrganizationId" = $sp.AppOwnerOrganizationId
 					"ApplicationStatus"      = $ApplicationStatus
-					"ApplicationVisibility"  = $ApplicationVisibility 
+					"ApplicationVisibility"  = $ApplicationVisibility
 					"AssignmentRequired"     = $AssignmentRequired
 					"IsAppProxy"             = $IsAppProxy
 					"PublisherDisplayName"   = $sp.VerifiedPublisher.DisplayName
 					"VerifiedPublisherId"    = $sp.VerifiedPublisher.VerifiedPublisherId
 					"AddedDateTime"          = $sp.VerifiedPublisher.AddedDateTime
-					"SignInAudience"         = $sp.SignInAudience 
+					"SignInAudience"         = $sp.SignInAudience
 					"ApplicationType"        = $ApplicationType
 				}
 
-				$report += [PSCustomObject]$grantDetails
+				$report.Add([PSCustomObject]$grantDetails)
 			}
 		}
 

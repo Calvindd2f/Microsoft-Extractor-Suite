@@ -26,7 +26,7 @@ function Get-Users {
     .PARAMETER UserIds
     UserId is the parameter specifying a single user ID or UPN to filter the results.
     Default: All users will be included if not specified.
-    
+
     .EXAMPLE
     Get-Users
     Retrieves the creation time and date of the last password change for all users.
@@ -34,10 +34,10 @@ function Get-Users {
     .EXAMPLE
     Get-Users -Encoding utf32
     Retrieves the creation time and date of the last password change for all users and exports the output to a CSV file with UTF-32 encoding.
-        
+
     .EXAMPLE
     Get-Users -OutputDir C:\Windows\Temp
-    Retrieves the creation time and date of the last password change for all users and saves the output to the C:\Windows\Temp folder.	
+    Retrieves the creation time and date of the last password change for all users and saves the output to the C:\Windows\Temp folder.
 #>
     [CmdletBinding()]
     param(
@@ -48,12 +48,13 @@ function Get-Users {
         [string]$LogLevel = 'Standard'
     )
 
-    Init-Logging
-    Init-OutputDir -Component "Users" -FilePostfix "Users" -CustomOutputDir $OutputDir
+    begin {
+        Init-Logging
+        Init-OutputDir -Component "Users" -FilePostfix "Users" -CustomOutputDir $OutputDir
 
-    $requiredScopes = @("User.Read.All")
-    $graphAuth = Get-GraphAuthType -RequiredScopes $RequiredScopes
-    Write-LogFile -Message "=== Starting Users Collection ===" -Color "Cyan" -Level Standard
+        $requiredScopes = @("User.Read.All")
+        $null = Get-GraphAuthType -RequiredScopes $RequiredScopes
+        Write-LogFile -Message "=== Starting Users Collection ===" -Color "Cyan" -Level Standard
 
     try {
         $selectobjects = "UserPrincipalName","DisplayName","Id","CompanyName","Department","JobTitle","City","Country","Identities","UserType","LastPasswordChangeDateTime","AccountEnabled","CreatedDateTime","CreationType","ExternalUserState","ExternalUserStateChangeDateTime","SignInActivity","OnPremisesSyncEnabled"
@@ -61,10 +62,10 @@ function Get-Users {
 
         if ($UserIds) {
             Write-LogFile -Message "[INFO] Filtering results for user: $UserIds" -Level Standard
-            
+
             try {
                 $mgUsers = Get-Mguser -Filter "userPrincipalName eq '$UserIds'" -select $selectobjects
-                                
+
                 if (-not $mgUsers) {
                     Write-LogFile -Message "[WARNING] User not found: $UserIds" -Color "Yellow" -Level Standard
                     $mgUsers = @()
@@ -78,26 +79,28 @@ function Get-Users {
             Write-LogFile -Message "[INFO] Found $($mgUsers.Count) users" -Level Standard
         }
 
-        $formattedUsers = $mgUsers | ForEach-Object {
-            [PSCustomObject]@{
-                UserPrincipalName = $_.UserPrincipalName
-                DisplayName = $_.DisplayName
-                Id = $_.Id
-                Department = $_.Department
-                JobTitle = $_.JobTitle
-                AccountEnabled = $_.AccountEnabled
-                CreatedDateTime = $_.CreatedDateTime
-                LastPasswordChangeDateTime = $_.LastPasswordChangeDateTime
-                UserType = $_.UserType
-                OnPremisesSyncEnabled = $_.OnPremisesSyncEnabled
-                Mail = $_.Mail
-                LastSignInDateTime = $_.SignInActivity.LastSignInDateTime
-                LastNonInteractiveSignInDateTime = $_.SignInActivity.LastNonInteractiveSignInDateTime
-                IdentityProvider = ($_.Identities | Where-Object { $_.SignInType -eq "federated" }).Issuer
-                City = $_.City
-                Country = $_.Country
-                UsageLocation = $_.UsageLocation
-            }
+        $formattedUsers = [System.Collections.Generic.List[object]]::new($mgUsers.Count)
+        foreach ($user in $mgUsers) {
+            $federatedIdentity = $user.Identities.Where({ $_.SignInType -eq "federated" }, 'First')
+            $formattedUsers.Add([PSCustomObject]@{
+                UserPrincipalName = $user.UserPrincipalName
+                DisplayName = $user.DisplayName
+                Id = $user.Id
+                Department = $user.Department
+                JobTitle = $user.JobTitle
+                AccountEnabled = $user.AccountEnabled
+                CreatedDateTime = $user.CreatedDateTime
+                LastPasswordChangeDateTime = $user.LastPasswordChangeDateTime
+                UserType = $user.UserType
+                OnPremisesSyncEnabled = $user.OnPremisesSyncEnabled
+                Mail = $user.Mail
+                LastSignInDateTime = $user.SignInActivity.LastSignInDateTime
+                LastNonInteractiveSignInDateTime = $user.SignInActivity.LastNonInteractiveSignInDateTime
+                IdentityProvider = if ($federatedIdentity) { $federatedIdentity.Issuer } else { $null }
+                City = $user.City
+                Country = $user.Country
+                UsageLocation = $user.UsageLocation
+            })
         }
 
         if ($isDebugEnabled) {
@@ -107,48 +110,52 @@ function Get-Users {
             Write-LogFile -Message "[DEBUG] Starting user analysis by creation date..." -Level Debug
         }
 
-        $date = (Get-Date).AddDays(-7)
-        $oneweekold = $mgUsers | Where-Object {
-            $_.CreatedDateTime -gt $date
+        $now = Get-Date
+        $date7 = $now.AddDays(-7)
+        $date30 = $now.AddDays(-30)
+        $date90 = $now.AddDays(-90)
+        $date180 = $now.AddDays(-180)
+        $date360 = $now.AddDays(-360)
+
+        $countOneWeek = 0
+        $countOneMonth = 0
+        $countThreeMonths = 0
+        $countSixMonths = 0
+        $countOneYear = 0
+        $countEnabled = 0
+        $countDisabled = 0
+        $countSynced = 0
+        $countGuest = 0
+
+        foreach ($user in $mgUsers) {
+            if ($user.CreatedDateTime) {
+                if ($user.CreatedDateTime -gt $date7) { $countOneWeek++ }
+                if ($user.CreatedDateTime -gt $date30) { $countOneMonth++ }
+                if ($user.CreatedDateTime -gt $date90) { $countThreeMonths++ }
+                if ($user.CreatedDateTime -gt $date180) { $countSixMonths++ }
+                if ($user.CreatedDateTime -gt $date360) { $countOneYear++ }
+            }
+            if ($user.AccountEnabled) { $countEnabled++ } else { $countDisabled++ }
+            if ($user.OnPremisesSyncEnabled) { $countSynced++ }
+            if ($user.UserType -eq "Guest") { $countGuest++ }
         }
 
-        $date = (Get-Date).AddDays(-30)
-        $onemonthold = $mgUsers | Where-Object {
-            $_.CreatedDateTime -gt $date
-        }
-
-        $date = (Get-Date).AddDays(-90)
-        $threemonthold = $mgUsers | Where-Object {
-            $_.CreatedDateTime -gt $date
-        }
-
-        $date = (Get-Date).AddDays(-180)
-        $sixmonthold = $mgUsers | Where-Object {
-            $_.CreatedDateTime -gt $date
-        }
-
-        $date = (Get-Date).AddDays(-360)
-        $OneYear = $mgUsers | Where-Object {
-            $_.CreatedDateTime -gt $date
-        }
-
-        Get-MgUser | Get-Member > $null
-        $formattedUsers  | Export-Csv -Path $script:outputFile -NoTypeInformation -Encoding $Encoding
+        $formattedUsers | Export-Csv -Path $script:outputFile -NoTypeInformation -Encoding $Encoding
 
         $summary = [ordered]@{
             "User Counts" = [ordered]@{
                 "Total Users" = $mgUsers.Count
-                "Enabled Users" = ($mgUsers | Where-Object { $_.AccountEnabled }).Count
-                "Disabled Users" = ($mgUsers | Where-Object { -not $_.AccountEnabled }).Count
-                "Synced from On-Premises" = ($mgUsers | Where-Object { $_.OnPremisesSyncEnabled }).Count
-                "Guest Users" = ($mgUsers | Where-Object { $_.UserType -eq "Guest" }).Count
+                "Enabled Users" = $countEnabled
+                "Disabled Users" = $countDisabled
+                "Synced from On-Premises" = $countSynced
+                "Guest Users" = $countGuest
             }
             "Recent Account Creation" = [ordered]@{
-                "Last 7 days" = $oneweekold.Count
-                "Last 30 days" = $onemonthold.Count
-                "Last 90 days" = $threemonthold.Count
-                "Last 6 months" = $sixmonthold.Count
-                "Last 1 year" = $OneYear.Count
+                "Last 7 days" = $countOneWeek
+                "Last 30 days" = $countOneMonth
+                "Last 90 days" = $countThreeMonths
+                "Last 6 months" = $countSixMonths
+                "Last 1 year" = $countOneYear
             }
         }
 
@@ -163,7 +170,15 @@ function Get-Users {
             Write-LogFile -Message "[DEBUG]   Stack trace: $($_.ScriptStackTrace)" -Level Debug
         }
         throw
-    }   
+    }
+    }
+
+    process {
+        # Process block intentionally left empty - function does not accept pipeline input
+    }
+
+    end {
+    }
 }
 
 Function Get-AdminUsers {
@@ -189,19 +204,19 @@ Function Get-AdminUsers {
     Standard: Normal operational logging
     Debug: Verbose logging for debugging purposes
     Default: Standard
-    
+
     .EXAMPLE
     Get-AdminUsers
     Retrieves Administrator directory roles, including the identification of users associated with each specific role.
-    
+
     .EXAMPLE
     Get-AdminUsers -Encoding utf32
     Retrieves Administrator directory roles, including the identification of users associated with each specific role and exports the output to a CSV file with UTF-32 encoding.
-        
+
     .EXAMPLE
     Get-AdminUsers -OutputDir C:\Windows\Temp
-    Retrieves Administrator directory roles, including the identification of users associated with each specific role and saves the output to the C:\Windows\Temp folder.	
-#>    
+    Retrieves Administrator directory roles, including the identification of users associated with each specific role and saves the output to the C:\Windows\Temp folder.
+#>
 
     [CmdletBinding()]
     param(
@@ -211,36 +226,28 @@ Function Get-AdminUsers {
         [string]$LogLevel = 'Standard'
     )
 
-    Init-Logging
-    Init-OutputDir -Component "Admins" -FilePostfix "AdminUsers" -CustomOutputDir $OutputDir
+    begin {
+        Init-Logging
+        Init-OutputDir -Component "Admins" -FilePostfix "AdminUsers" -CustomOutputDir $OutputDir
 
-    Write-LogFile -Message "=== Starting Admin Users Collection ===" -Color "Cyan" -Level Standard
+        Write-LogFile -Message "=== Starting Admin Users Collection ===" -Color "Cyan" -Level Standard
 
-    $requiredScopes = @("User.Read.All", "Directory.Read.All")
-    $graphAuth = Get-GraphAuthType -RequiredScopes $RequiredScopes
+        $requiredScopes = @("User.Read.All", "Directory.Read.All")
+        $null = Get-GraphAuthType -RequiredScopes $RequiredScopes
 
-    if ($isDebugEnabled) {
-        Write-LogFile -Message "[DEBUG] Graph authentication details:" -Level Debug
-        Write-LogFile -Message "[DEBUG]   Required scopes: $($requiredScopes -join ', ')" -Level Debug
-        Write-LogFile -Message "[DEBUG]   Authentication type: $($graphAuth.AuthType)" -Level Debug
-        Write-LogFile -Message "[DEBUG]   Current scopes: $($graphAuth.Scopes -join ', ')" -Level Debug
-        if ($graphAuth.MissingScopes.Count -gt 0) {
-            Write-LogFile -Message "[DEBUG]   Missing scopes: $($graphAuth.MissingScopes -join ', ')" -Level Debug
-        } else {
-            Write-LogFile -Message "[DEBUG]   Missing scopes: None" -Level Debug
+        if ($isDebugEnabled) {
+            Write-LogFile -Message "[DEBUG] Graph authentication details:" -Level Debug
+            Write-LogFile -Message "[DEBUG]   Required scopes: $($requiredScopes -join ', ')" -Level Debug
         }
-    }
 
-    Write-LogFile -Message "[INFO] Analyzing administrator roles..." -Level Standard
-    $rolesWithUsers = @()
-    $rolesWithoutUsers = @()
-    $exportedFiles = @()
-    $totalAdminCount = 0
-    $inactiveAdminCount = 0
-
-    # Track users with no recent sign-in
-    $inactiveThreshold = (Get-Date).AddDays(-30)
-    $inactiveAdmins = @()
+        Write-LogFile -Message "[INFO] Analyzing administrator roles..." -Level Standard
+        $rolesWithUsers = [System.Collections.Generic.List[string]]::new()
+        $rolesWithoutUsers = [System.Collections.Generic.List[string]]::new()
+        $exportedFiles = [System.Collections.Generic.List[string]]::new()
+        $totalAdminCount = 0
+        $inactiveAdminCount = 0
+        $inactiveThreshold = (Get-Date).AddDays(-30)
+        $inactiveAdmins = [System.Collections.Generic.List[string]]::new()
 
     try {
         if ($isDebugEnabled) {
@@ -253,17 +260,17 @@ Function Get-AdminUsers {
         } else {
             $getRoles = Get-MgDirectoryRole -all
         }
-        
+
         foreach ($role in $getRoles) {
             $roleId = $role.Id
             $roleName = $role.DisplayName
-        
+
             if ($roleName -like "*Admin*") {
                 if ($isDebugEnabled) {
                     Write-LogFile -Message "[DEBUG] Processing admin role: $roleName" -Level Debug
                     Write-LogFile -Message "[DEBUG]   Role ID: $roleId" -Level Debug
                 }
-                
+
                 if ($isDebugEnabled) {
                     $memberPerformance = Measure-Command {
                         $areThereUsers = Get-MgDirectoryRoleMember -DirectoryRoleId $roleId
@@ -274,11 +281,11 @@ Function Get-AdminUsers {
                 }
 
                 if ($null -eq $areThereUsers) {
-                    $rolesWithoutUsers += $roleName
+                    $rolesWithoutUsers.Add($roleName)
                     continue
                 }
 
-                $results = @()
+                $results = [System.Collections.Generic.List[object]]::new()
                 $count = 0
                 foreach ($user in $areThereUsers) {
                     $userid = $user.Id
@@ -295,7 +302,7 @@ Function Get-AdminUsers {
                     }
                     try {
                         $selectProperties = @(
-                        "UserPrincipalName", "DisplayName", "Id", "Department", "JobTitle", 
+                        "UserPrincipalName", "DisplayName", "Id", "Department", "JobTitle",
                         "AccountEnabled", "CreatedDateTime","SignInActivity"
                         )
 
@@ -310,7 +317,7 @@ Function Get-AdminUsers {
                                 throw
                             }
                         }
-                    
+
                         $userName = $getUserName.UserPrincipalName
                         $userObject = [PSCustomObject]@{
                             UserName = $userName
@@ -328,17 +335,17 @@ Function Get-AdminUsers {
                         if ($getUserName.SignInActivity.LastSignInDateTime) {
                             $daysSinceSignIn = (New-TimeSpan -Start $getUserName.SignInActivity.LastSignInDateTime -End (Get-Date)).Days
                             $userObject | Add-Member -MemberType NoteProperty -Name "DaysSinceLastSignIn" -Value $daysSinceSignIn
-                            
+
                             if ($getUserName.SignInActivity.LastSignInDateTime -lt $inactiveThreshold) {
                                 $inactiveAdminCount++
-                                $inactiveAdmins += "$($getUserName.DisplayName) ($userName) - $daysSinceSignIn days"
+                                $inactiveAdmins.Add("$($getUserName.DisplayName) ($userName) - $daysSinceSignIn days")
                             }
                         } else {
                             $userObject | Add-Member -MemberType NoteProperty -Name "DaysSinceLastSignIn" -Value "No sign-in data"
                             $inactiveAdminCount++
-                            $inactiveAdmins += "$($getUserName.DisplayName) ($userName) - No sign-in data"                 
+                            $inactiveAdmins.Add("$($getUserName.DisplayName) ($userName) - No sign-in data")
                         }
-                        $results += $userObject
+                        $results.Add($userObject)
                     }
                     catch {
                         Write-LogFile -Message "[WARNING] Error processing user $userid in role $roleName`: $($_.Exception.Message)" -Color "Yellow" -Level Standard
@@ -347,18 +354,18 @@ Function Get-AdminUsers {
 
                 if ($results.Count -gt 0) {
                     $totalAdminCount += $results.Count
-                    $rolesWithUsers += "$roleName ($($results.Count) users)"
-                    
+                    $rolesWithUsers.Add("$roleName ($($results.Count) users)")
+
                     $date = [datetime]::Now.ToString('yyyyMMdd')
                     $safeRoleName = $roleName -replace '[^\w\-_\.]', '_'
                     $rolePath = Split-Path $script:outputFile -Parent
                     $roleFilePath = Join-Path $rolePath "$date-$safeRoleName.csv"
 
                     $results | Export-Csv -Path $roleFilePath -NoTypeInformation -Encoding $Encoding
-                    $exportedFiles += $roleFilePath
+                    $exportedFiles.Add($roleFilePath)
                 }
                 else {
-                    $rolesWithoutUsers += $roleName
+                    $rolesWithoutUsers.Add($roleName)
                 }
             }
         }
@@ -376,8 +383,8 @@ Function Get-AdminUsers {
         # Get all individual admin role files and merge them
         $adminFiles = Get-ChildItem $outputDirPath -Filter "*Admin*.csv" -ErrorAction SilentlyContinue
         if ($adminFiles.Count -gt 0) {
-            $adminFiles | 
-                ForEach-Object { Import-Csv $_.FullName } | 
+            $adminFiles |
+                ForEach-Object { Import-Csv $_.FullName } |
                 Export-Csv $mergedFile -NoTypeInformation -Encoding $Encoding
         }
 
@@ -420,5 +427,13 @@ Function Get-AdminUsers {
             Write-LogFile -Message "[DEBUG]   Stack trace: $($_.ScriptStackTrace)" -Level Debug
         }
         throw
+    }
+    }
+
+    process {
+        # Process block intentionally left empty - function does not accept pipeline input
+    }
+
+    end {
     }
 }
